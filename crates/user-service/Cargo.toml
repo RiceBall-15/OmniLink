@@ -16,6 +16,11 @@ tracing.workspace = true
 # User service dependencies
 argon2 = { version = "0.5", features = ["password-hash"] }
 validator = { version = "0.16", features = ["derive"] }
+bcrypt = "0.15"
 
 # Internal dependencies
 common = { path = "../common" }
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockall = "0.11"
