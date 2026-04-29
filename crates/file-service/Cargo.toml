@@ -1,0 +1,21 @@
+[package]
+name = "file-service"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Workspace dependencies
+tokio.workspace = true
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+
+# File service dependencies
+bytes = "1.5"
+mime = "0.3"
+
+# Internal dependencies
+common = { path = "../common" }

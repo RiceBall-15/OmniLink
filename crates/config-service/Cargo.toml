@@ -1,0 +1,20 @@
+[package]
+name = "config-service"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Workspace dependencies
+tokio.workspace = true
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+
+# Config service dependencies
+config.workspace = true
+
+# Internal dependencies
+common = { path = "../common" }
