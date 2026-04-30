@@ -13,8 +13,8 @@ uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
 
-# Config service dependencies
-config.workspace = true
+# HTTP client for callbacks
+reqwest.workspace = true
 
 # Internal dependencies
 common = { path = "../common" }
