@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { useConversations } from '../hooks/useMessages'
+import { useConversations, useMessages, useWebSocket } from '../hooks/useMessages'
+import { MessageList } from '../components/MessageList'
 import { AuthPage } from './AuthPage'
 import './ChatPage.css'
 
@@ -9,10 +10,61 @@ export function ChatPage() {
   const { conversations, loading: conversationsLoading } = useConversations()
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [inputMessage, setInputMessage] = useState('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // WebSocket连接
+  const { connected, sendMessage: sendWsMessage } = useWebSocket(
+    import.meta.env.VITE_WS_URL || 'ws://localhost:8001',
+    (data) => {
+      console.log('收到WebSocket消息:', data)
+      // 处理新消息
+      if (data.type === 'new_message') {
+        // 刷新消息列表
+      }
+    }
+  )
+
+  // 消息管理
+  const { messages, loading: messagesLoading, sendMessage: sendApiMessage } = useMessages(
+    selectedConversation || ''
+  )
+
+  // 自动滚动到底部
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   if (!user) {
     return <AuthPage />
   }
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || !selectedConversation) return
+
+    try {
+      await sendApiMessage(inputMessage)
+      setInputMessage('')
+
+      // 通过WebSocket发送消息
+      sendWsMessage({
+        type: 'message',
+        conversationId: selectedConversation,
+        content: inputMessage,
+      })
+    } catch (error) {
+      console.error('发送消息失败:', error)
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }
+
+  const selectedConv = conversations.find((c) => c.id === selectedConversation)
 
   return (
     <div className="chat-container">
@@ -33,6 +85,9 @@ export function ChatPage() {
           <div className="user-details">
             <div className="user-name">{user.username}</div>
             <div className="user-email">{user.email}</div>
+            <div className={`connection-status ${connected ? 'online' : 'offline'}`}>
+              {connected ? '● 已连接' : '○ 未连接'}
+            </div>
           </div>
           <button className="logout-button" onClick={logout} title="退出登录">
             🚪
@@ -83,28 +138,36 @@ export function ChatPage() {
         {selectedConversation ? (
           <div className="chat-content">
             <div className="chat-header">
-              <h3>
-                {conversations.find((c) => c.id === selectedConversation)?.name}
-              </h3>
+              <h3>{selectedConv?.name || '对话'}</h3>
             </div>
+
             <div className="chat-messages">
-              {/* 消息列表将在这里渲染 */}
-              <div className="welcome-message">
-                <p>👋 开始对话吧！</p>
-                <p className="welcome-hint">这里将显示聊天消息</p>
-              </div>
+              {messagesLoading ? (
+                <div className="loading">加载消息中...</div>
+              ) : (
+                <>
+                  <MessageList messages={messages} currentUserId={user.id} />
+                  <div ref={messagesEndRef} />
+                </>
+              )}
             </div>
+
             <div className="chat-input">
-              <input
-                type="text"
-                placeholder="输入消息..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    console.log('发送消息')
-                  }
-                }}
+              <textarea
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder="输入消息... (Enter发送)"
+                rows={1}
+                className="message-textarea"
               />
-              <button className="send-button">发送</button>
+              <button
+                className="send-button"
+                onClick={handleSendMessage}
+                disabled={!inputMessage.trim()}
+              >
+                发送
+              </button>
             </div>
           </div>
         ) : (

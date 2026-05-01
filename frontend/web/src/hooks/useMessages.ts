@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import type { Conversation, Message, OnlineStatus } from '../types/message'
 import { messageService } from '../services/messageService'
+import { mockApi } from '../services/mockApi'
+
+const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true'
 
 // WebSocket连接管理
 export function useWebSocket(url: string, onMessage: (data: any) => void) {
@@ -8,6 +11,13 @@ export function useWebSocket(url: string, onMessage: (data: any) => void) {
   const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
+    // 模拟模式下不连接WebSocket
+    if (USE_MOCK_DATA) {
+      console.log('模拟模式：跳过WebSocket连接')
+      setConnected(true)
+      return
+    }
+
     const token = localStorage.getItem('token')
     const wsUrl = `${url}?token=${token}`
 
@@ -51,6 +61,11 @@ export function useWebSocket(url: string, onMessage: (data: any) => void) {
   }, [url, onMessage])
 
   const sendMessage = (data: any) => {
+    if (USE_MOCK_DATA) {
+      console.log('模拟模式：跳过WebSocket消息发送')
+      return
+    }
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data))
     }
@@ -69,9 +84,16 @@ export function useConversations() {
   }, [])
 
   const loadConversations = async () => {
-    const response = await messageService.getConversations()
-    if (response.success && response.data) {
-      setConversations(response.data)
+    if (USE_MOCK_DATA) {
+      const response = await mockApi.getConversations()
+      if (response.success && response.data) {
+        setConversations(response.data)
+      }
+    } else {
+      const response = await messageService.getConversations()
+      if (response.success && response.data) {
+        setConversations(response.data)
+      }
     }
     setLoading(false)
   }
@@ -105,14 +127,30 @@ export function useMessages(conversationId: string) {
 
   const loadMessages = async (convId: string) => {
     setLoading(true)
-    const response = await messageService.getMessages(convId)
-    if (response.success && response.data) {
-      setMessages(response.data)
+    if (USE_MOCK_DATA) {
+      const response = await mockApi.getMessages(convId)
+      if (response.success && response.data) {
+        setMessages(response.data)
+      }
+    } else {
+      const response = await messageService.getMessages(convId)
+      if (response.success && response.data) {
+        setMessages(response.data)
+      }
     }
     setLoading(false)
   }
 
   const sendMessage = async (content: string) => {
+    if (USE_MOCK_DATA) {
+      const response = await mockApi.sendMessage(conversationId, content)
+      if (response.success && response.data) {
+        setMessages([...messages, response.data])
+        return response.data
+      }
+      return null
+    }
+
     const response = await messageService.sendMessage(conversationId, content)
     if (response.success && response.data) {
       setMessages([...messages, response.data])
