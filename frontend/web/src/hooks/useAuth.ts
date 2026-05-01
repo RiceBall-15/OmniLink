@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { User } from '../types/user'
 import { userService } from '../services/userService'
-import { mockApi } from '../services/mockApi'
+import { mockApi, mockUser } from '../services/mockApi'
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true'
 

@@ -51,3 +51,27 @@ export enum OnlineStatus {
   AWAY = 'away',
   BUSY = 'busy',
 }
+
+// WebSocket 消息类型
+export enum WSMessageType {
+  CONNECT = 'connect',
+  CONNECTED = 'connected',
+  MESSAGE = 'message',
+  NEW_MESSAGE = 'new_message',
+  PING = 'ping',
+  PONG = 'pong',
+  TYPING = 'typing',
+  READ = 'read',
+  ERROR = 'error',
+}
+
+// WebSocket 消息
+export interface WSMessage {
+  type: WSMessageType
+  conversationId?: string
+  messageId?: string
+  senderId?: string
+  content?: string
+  timestamp?: number
+  data?: unknown
+}

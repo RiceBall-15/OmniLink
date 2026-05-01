@@ -57,13 +57,30 @@ omnilink/
 
 ## 快速开始
 
+### 一键部署（推荐）
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/RiceBall-15/OmniLink.git
+cd OmniLink
+
+# 2. 一键启动所有服务（包括数据库、缓存、消息队列等）
+docker compose up -d
+
+# 3. 访问应用
+# 前端: http://localhost:3000
+# API: http://localhost:8002
+# 监控: http://localhost:3001 (Grafana - admin/admin123)
+```
+
+**详细部署文档请查看 [DEPLOYMENT.md](DEPLOYMENT.md)**
+
 ### 环境要求
 
-- Rust 1.75+
-- Docker & Docker Compose
-- Node.js 18+ (前端开发)
+- **开发环境**: Docker, Node.js 18+, Rust 1.75+
+- **生产环境**: 4核8GB+, Docker Compose
 
-### 安装步骤
+### 开发模式
 
 1. 克隆项目
 ```bash

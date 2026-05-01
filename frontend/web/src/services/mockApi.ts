@@ -1,10 +1,17 @@
 import type { User, Conversation, Message, AIAssistant } from '../types'
 
+// 内置超级管理员账号（用户可登录使用）
+export const ADMIN_CREDENTIALS = {
+  username: 'admin',
+  email: 'admin@omnilink.com',
+  password: 'Admin@2026',
+}
+
 // 模拟数据（用于开发测试）
 export const mockUser: User = {
-  id: '1',
-  username: 'DemoUser',
-  email: 'demo@example.com',
+  id: 'admin-001',
+  username: 'admin',
+  email: 'admin@omnilink.com',
   avatar: undefined,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -124,15 +131,25 @@ export const mockApi = {
   // 模拟延迟
   delay: (ms: number = 500) => new Promise((resolve) => setTimeout(resolve, ms)),
 
-  // 模拟登录
+  // 模拟登录（验证内置管理员账号）
   login: async (email: string, password: string) => {
     await mockApi.delay()
+    
+    // 验证内置管理员账号
+    if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
+      return {
+        success: true,
+        data: {
+          token: 'admin-token-' + Date.now(),
+          user: mockUser,
+        },
+      }
+    }
+    
+    // 登录失败
     return {
-      success: true,
-      data: {
-        token: 'mock-token-' + Date.now(),
-        user: mockUser,
-      },
+      success: false,
+      error: { message: '账号或密码错误' },
     }
   },
 

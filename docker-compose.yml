@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # PostgreSQL
+  # PostgreSQL - 关系型数据库
   postgres:
     image: postgres:16-alpine
     container_name: omnilink-postgres
@@ -19,23 +19,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - omnilink-network
 
-  # Redis
+  # Redis - 缓存和会话存储
   redis:
     image: redis:7-alpine
     container_name: omnilink-redis
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass password
     volumes:
       - redis_data:/data
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - omnilink-network
 
-  # MongoDB
+  # MongoDB - 文档数据库（用于AI对话记录）
   mongodb:
     image: mongo:7
     container_name: omnilink-mongodb
@@ -52,30 +56,50 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - omnilink-network
 
-  # Kafka
+  # Kafka + Zookeeper - 消息队列
   kafka:
     image: confluentinc/cp-kafka:7.5
     container_name: omnilink-kafka
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
     depends_on:
       - zookeeper
     ports:
       - "9092:9092"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - omnilink-network
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5
     container_name: omnilink-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - omnilink-network
 
-  # ClickHouse
+  # ClickHouse - 分析数据库
   clickhouse:
     image: clickhouse/clickhouse-server:24
     container_name: omnilink-clickhouse
@@ -84,8 +108,15 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - omnilink-network
 
-  # MinIO
+  # MinIO - 对象存储（文件存储）
   minio:
     image: minio/minio:latest
     container_name: omnilink-minio
@@ -103,35 +134,64 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - omnilink-network
 
-  # Prometheus
+  # Prometheus - 监控指标收集
   prometheus:
     image: prom/prometheus:latest
     container_name: omnilink-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
+    depends_on:
+      - postgres
+      - redis
+      - mongodb
+    networks:
+      - omnilink-network
 
-  # Grafana
+  # Grafana - 可视化监控
   grafana:
     image: grafana/grafana:latest
     container_name: omnilink-grafana
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
     ports:
-      - "3000:3000"
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - omnilink-network
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
   mongodb_data:
+    driver: local
   clickhouse_data:
+    driver: local
   minio_data:
+    driver: local
   prometheus_data:
+    driver: local
   grafana_data:
+    driver: local
+
+networks:
+  omnilink-network:
+    driver: bridge
