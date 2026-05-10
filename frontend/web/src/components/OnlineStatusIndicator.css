@@ -1,0 +1,102 @@
+/**
+ * 在线状态指示器组件样式
+ */
+
+.online-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.online-status-indicator:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 状态点基础样式 */
+.status-dot {
+  border-radius: 50%;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+/* 在线状态 - 绿色 */
+.online-status-indicator.online .status-dot {
+  background-color: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.online-status-indicator.online .status-dot::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background-color: inherit;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* 离线状态 - 灰色 */
+.online-status-indicator.offline .status-dot {
+  background-color: #9ca3af;
+  box-shadow: 0 0 0 2px rgba(156, 163, 175, 0.2);
+}
+
+/* 忙碌状态 - 红色 */
+.online-status-indicator.busy .status-dot {
+  background-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+/* 离开状态 - 黄色 */
+.online-status-indicator.away .status-dot {
+  background-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+/* 状态文字 */
+.status-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  user-select: none;
+}
+
+/* 动画效果 */
+@keyframes pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .status-label {
+    font-size: 11px;
+  }
+}
+
+/* 暗色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .online-status-indicator:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .status-label {
+    color: #9ca3af;
+  }
+}

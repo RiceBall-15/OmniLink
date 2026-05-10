@@ -1,6 +1,6 @@
 use axum::{
-    extract::{Path, Query, State},
-    http::StatusCode,
+    extract::{Path, Query, State, FromRequestParts},
+    http::{request::Parts, StatusCode},
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -11,8 +11,32 @@ use common::auth::Claims;
 use crate::models::*;
 use crate::services::{UsageService, CostCalculator};
 
+#[derive(Clone)]
 pub struct AppState {
     pub usage_service: Arc<UsageService>,
+}
+
+/// AuthUser - 从请求扩展中提取 Claims
+pub struct AuthUser {
+    pub user_id: Uuid,
+}
+
+#[axum::async_trait]
+impl<S> FromRequestParts<S> for AuthUser
+where
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let claims = parts
+            .extensions
+            .get::<Claims>()
+            .ok_or(StatusCode::UNAUTHORIZED)?;
+        Ok(AuthUser {
+            user_id: claims.sub,
+        })
+    }
 }
 
 /// 记录Token使用请求
@@ -66,7 +90,7 @@ fn default_page_size() -> i64 { 20 }
 /// 记录Token使用
 pub async fn record_token_usage(
     State(state): State<AppState>,
-    claims: Claims,
+    auth: AuthUser,
     Json(req): Json<RecordTokenUsageRequest>,
 ) -> Result<Json<ApiResponse<TokenUsage>>, StatusCode> {
     let total_tokens = req.prompt_tokens + req.completion_tokens;
@@ -80,7 +104,7 @@ pub async fn record_token_usage(
     );
 
     let data = CreateTokenUsage {
-        user_id: claims.user_id,
+        user_id: auth.user_id,
         conversation_id: req.conversation_id,
         model_name: req.model_name,
         provider: req.provider,
@@ -102,12 +126,12 @@ pub async fn record_token_usage(
 /// 获取Token使用记录
 pub async fn get_token_usage(
     State(state): State<AppState>,
-    claims: Claims,
+    auth: AuthUser,
     Query(params): Query<PaginationParams>,
 ) -> Result<Json<ApiResponse<Vec<TokenUsage>>>, StatusCode> {
     match state
         .usage_service
-        .get_token_usage(claims.user_id, params.page, params.page_size)
+        .get_token_usage(auth.user_id, params.page, params.page_size)
         .await
     {
         Ok(usages) => Ok(Json(ApiResponse::success(usages))),
@@ -130,7 +154,7 @@ pub struct StatsQueryParams {
 /// 获取用户统计数据
 pub async fn get_user_stats(
     State(state): State<AppState>,
-    claims: Claims,
+    auth: AuthUser,
     Query(params): Query<StatsQueryParams>,
 ) -> Result<Json<ApiResponse<UsageStats>>, StatusCode> {
     // 解析日期参数
@@ -147,7 +171,7 @@ pub async fn get_user_stats(
     });
 
     let query = UsageQuery {
-        user_id: Some(claims.user_id),
+        user_id: Some(auth.user_id),
         start_date,
         end_date,
         model_name: params.model_name,
@@ -167,12 +191,12 @@ pub async fn get_user_stats(
 /// 获取API调用记录
 pub async fn get_api_calls(
     State(state): State<AppState>,
-    claims: Claims,
+    auth: AuthUser,
     Query(params): Query<PaginationParams>,
 ) -> Result<Json<ApiResponse<Vec<ApiCall>>>, StatusCode> {
     match state
         .usage_service
-        .get_api_calls(claims.user_id, params.page, params.page_size)
+        .get_api_calls(auth.user_id, params.page, params.page_size)
         .await
     {
         Ok(calls) => Ok(Json(ApiResponse::success(calls))),

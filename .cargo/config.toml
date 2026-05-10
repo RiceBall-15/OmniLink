@@ -1,10 +1,10 @@
-# Cargo镜像源配置 - 清华大学镜像
+# 使用 USTC 镜像加速
 
 [source.crates-io]
-replace-with = 'tuna'
+replace-with = "ustc"
 
-[source.tuna]
-registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
+[source.ustc]
+registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
 
 [net]
 git-fetch-with-cli = true

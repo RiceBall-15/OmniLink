@@ -21,6 +21,7 @@ export function MessageList({ messages, currentUserId }: MessageListProps) {
             key={message.id}
             message={message}
             isOwn={message.senderId === currentUserId}
+            currentUserId={currentUserId}
           />
         ))
       )}

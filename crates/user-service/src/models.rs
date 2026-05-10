@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 /// 用户注册请求
 #[derive(Debug, Deserialize, Validate)]
 pub struct RegisterRequest {
-    #[validate(length(min = 3, max = 50))]
+    #[validate(length(min = 3, max = 20))]
     pub username: String,
 
     #[validate(email)]
@@ -16,46 +16,49 @@ pub struct RegisterRequest {
     pub password: String,
 
     #[validate(length(max = 500))]
-    pub avatar_url: Option<String>,
-
-    #[validate(length(max = 500))]
-    pub bio: Option<String>,
+    pub avatar: Option<String>,
 }
 
 /// 用户登录请求
 #[derive(Debug, Deserialize, Validate)]
 pub struct LoginRequest {
-    #[validate(length(min = 1))]
-    pub email_or_username: String,
+    #[validate(email)]
+    pub email: String,
 
     #[validate(length(min = 1))]
     pub password: String,
-
-    #[validate(length(max = 100))]
-    pub device_id: String,
-
-    #[validate(length(max = 50))]
-    pub device_name: Option<String>,
 }
 
-/// 用户登录响应
+/// 用户登录响应（匹配前端类型定义）
 #[derive(Debug, Serialize)]
 pub struct LoginResponse {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub expires_in: i64,
-    pub user: UserInfo,
+    pub token: String,
+    pub user: User,
 }
 
-/// 用户信息
+/// 用户信息（匹配前端类型定义）
 #[derive(Debug, Serialize)]
-pub struct UserInfo {
-    pub id: Uuid,
+pub struct User {
+    pub id: String,
     pub username: String,
     pub email: String,
-    pub avatar_url: Option<String>,
-    pub bio: Option<String>,
-    pub created_at: DateTime<Utc>,
+    pub avatar: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+impl User {
+    /// 从数据库用户模型转换为前端用户信息
+    pub fn from_db_user(db_user: &common::models::User) -> Self {
+        Self {
+            id: db_user.id.to_string(),
+            username: db_user.username.clone(),
+            email: db_user.email.clone(),
+            avatar: db_user.avatar_url.clone(),
+            created_at: db_user.created_at.to_rfc3339(),
+            updated_at: db_user.updated_at.to_rfc3339(),
+        }
+    }
 }
 
 /// 刷新Token请求
@@ -80,10 +83,7 @@ pub struct UpdateProfileRequest {
     pub email: Option<String>,
 
     #[validate(length(max = 500))]
-    pub avatar_url: Option<String>,
-
-    #[validate(length(max = 500))]
-    pub bio: Option<String>,
+    pub avatar: Option<String>,
 }
 
 /// 修改密码请求
@@ -101,11 +101,11 @@ pub struct ChangePasswordRequest {
 pub struct DeviceInfo {
     pub id: String,
     pub user_id: Uuid,
-    pub device_name: String,
     pub device_type: String,
-    pub os_version: String,
-    pub last_active: DateTime<Utc>,
-    pub created_at: DateTime<Utc>,
+    pub device_name: String,
+    pub platform: String,
+    pub last_active_at: String,
+    pub created_at: String,
 }
 
 /// 设备列表响应

@@ -2,6 +2,15 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
+/// 会话参与者实体
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Participant {
+    pub conversation_id: Uuid,
+    pub user_id: Uuid,
+    pub role: String,
+    pub joined_at: DateTime<Utc>,
+}
+
 /// 用户实体
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct User {
@@ -26,6 +35,9 @@ pub struct Conversation {
     pub avatar_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub is_group: bool,
+    pub description: Option<String>,
+    pub last_message_at: Option<DateTime<Utc>>,
 }
 
 /// 消息实体
@@ -36,11 +48,15 @@ pub struct Message {
     pub sender_id: Uuid,
     pub sender_type: String,
     pub content_type: String,
-    pub content: serde_json::Value,
+    pub content: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
     pub status: String,
     pub reply_to: Option<Uuid>,
+    pub message_type: String,
+    pub metadata: Option<serde_json::Value>,
+    pub read_at: Option<i64>,
+    pub delivered_at: Option<i64>,
 }
 
 /// AI助手配置

@@ -79,7 +79,7 @@ impl MessageRepository {
 
         query.push_str(" ORDER BY created_at DESC LIMIT $");
         param_count += 1;
-        query.push_str(&param_count.to_string()));
+        query.push_str(&param_count.to_string());
 
         let mut query_builder = sqlx::query_as::<_, Message>(&query);
         query_builder = query_builder.bind(conversation_id);
@@ -152,6 +152,51 @@ impl MessageRepository {
         .map_err(|e| AppError::Database(e))?;
 
         Ok(())
+    }
+
+    /// 编辑消息内容
+    pub async fn update_content(&self, message_id: Uuid, new_content: &str) -> Result<Message> {
+        let now = Utc::now();
+
+        let message = sqlx::query_as::<_, Message>(
+            r#"
+            UPDATE messages
+            SET content = $1, updated_at = $2
+            WHERE id = $3
+            RETURNING *
+            "#
+        )
+        .bind(new_content)
+        .bind(now)
+        .bind(message_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e))?;
+
+        Ok(message)
+    }
+
+    /// 撤回消息（替换内容为撤回标记）
+    pub async fn recall(&self, message_id: Uuid) -> Result<Message> {
+        let now = Utc::now();
+        let recalled_content = "此消息已撤回";
+
+        let message = sqlx::query_as::<_, Message>(
+            r#"
+            UPDATE messages
+            SET content = $1, updated_at = $2
+            WHERE id = $3
+            RETURNING *
+            "#
+        )
+        .bind(recalled_content)
+        .bind(now)
+        .bind(message_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e))?;
+
+        Ok(message)
     }
 
     /// 获取未读消息数

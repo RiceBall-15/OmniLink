@@ -128,8 +128,6 @@ export function AIChat({ conversationId, assistantId }: AIChatProps) {
     }
   }
 
-  const isTyping = isStreaming || messagesLoading
-
   return (
     <div className="ai-chat">
       <div className="ai-messages">

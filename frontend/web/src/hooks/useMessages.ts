@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { Conversation, Message, OnlineStatus, WSMessage } from '../types/message'
+import type { Conversation, Message, WSMessage } from '../types/message'
+import { OnlineStatus, WSMessageType, MessageStatus } from '../types/message'
 import { messageService } from '../services/messageService'
 import { mockApi } from '../services/mockApi'
 
@@ -332,6 +333,111 @@ export function useMessages(conversationId: string) {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const lastReadRef = useRef<string | null>(null) // 用于跟踪上次标记已读的消息ID
+  const markingReadRef = useRef(false) // 防止重复标记
+
+  /**
+   * 编辑消息
+   */
+  const editMessage = useCallback(
+    async (messageId: string, content: string) => {
+      const { success, data: updatedMessage, error: err } = await safeApiCall(
+        async () => {
+          // Mock 模式下的编辑逻辑
+          const response = await mockApi.getMessages(conversationId)
+          if (response.success && response.data) {
+            const message = response.data.find((m) => m.id === messageId)
+            if (message) {
+              const updated: Message = {
+                ...message,
+                content,
+                updatedAt: new Date().toISOString(),
+              }
+              return { success: true, data: updated }
+            }
+          }
+          return { success: false, error: { message: '消息不存在' } }
+        },
+        () => messageService.editMessage(messageId, content)
+      )
+
+      if (success && updatedMessage) {
+        setMessages((prev) =>
+          prev.map((msg) => (msg.id === messageId ? updatedMessage : msg))
+        )
+        return updatedMessage
+      }
+
+      setError(err || '编辑消息失败')
+      return null
+    },
+    [conversationId]
+  )
+
+  /**
+   * 撤回消息
+   */
+  const recallMessage = useCallback(
+    async (messageId: string) => {
+      const { success, error: err } = await safeApiCall(
+        async () => ({ success: true }),
+        () => messageService.recallMessage(messageId)
+      )
+
+      if (success) {
+        // 更新消息的撤回状态而不是删除消息
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === messageId
+              ? {
+                  ...msg,
+                  isRecalled: true,
+                  recalledAt: new Date().toISOString(),
+                  content: '',
+                }
+              : msg
+          )
+        )
+        return true
+      }
+
+      setError(err || '撤回消息失败')
+      return false
+    },
+    []
+  )
+
+  /**
+   * 判断消息是否可以编辑
+   */
+  const canEditMessage = useCallback(
+    (message: Message, currentUserId: string, editTimeLimit = 2) => {
+      if (message.senderId !== currentUserId) return false
+
+      const now = Date.now()
+      const createdAt = new Date(message.createdAt).getTime()
+      const timeDiffMinutes = (now - createdAt) / (1000 * 60)
+
+      return timeDiffMinutes < editTimeLimit
+    },
+    []
+  )
+
+  /**
+   * 判断消息是否可以撤回
+   */
+  const canRecallMessage = useCallback(
+    (message: Message, currentUserId: string, recallTimeLimit = 2) => {
+      if (message.senderId !== currentUserId) return false
+
+      const now = Date.now()
+      const createdAt = new Date(message.createdAt).getTime()
+      const timeDiffMinutes = (now - createdAt) / (1000 * 60)
+
+      return timeDiffMinutes < recallTimeLimit
+    },
+    []
+  )
 
   const loadMessages = useCallback(async (convId: string) => {
     if (!convId) return
@@ -396,17 +502,102 @@ export function useMessages(conversationId: string) {
   )
 
   const markAsRead = useCallback(async () => {
-    const { success, error: err } = await safeApiCall(
-      async () => ({ success: true }),
-      () => messageService.markAsRead(conversationId)
-    )
-
-    if (!success) {
-      setError(err || '标记已读失败')
+    // 防止重复标记
+    if (markingReadRef.current) {
+      return false
     }
 
-    return success
-  }, [conversationId])
+    markingReadRef.current = true
+
+    try {
+      const { success, error: err } = await safeApiCall(
+        async () => ({ success: true }),
+        () => messageService.markAsRead(conversationId)
+      )
+
+      if (success) {
+        // 更新最后一条已读消息的ID
+        const lastMessage = messages[messages.length - 1]
+        if (lastMessage) {
+          lastReadRef.current = lastMessage.id
+        }
+      } else {
+        setError(err || '标记已读失败')
+      }
+
+      return success
+    } finally {
+      markingReadRef.current = false
+    }
+  }, [conversationId, messages])
+
+  /**
+   * 自动标记已读（滚动到底部时）
+   * @param isAtBottom 是否滚动到底部
+   */
+  const autoMarkAsRead = useCallback(
+    async (isAtBottom: boolean) => {
+      if (!isAtBottom || !conversationId || messages.length === 0) {
+        return
+      }
+
+      // 获取最后一条消息
+      const lastMessage = messages[messages.length - 1]
+
+      // 如果最后一条消息是自己发送的，不需要标记
+      // 或者如果最后一条消息已经被标记过了，不需要重复标记
+      if (lastMessage && lastReadRef.current !== lastMessage.id) {
+        // 延迟一点时间，避免频繁调用
+        setTimeout(() => {
+          markAsRead()
+        }, 300)
+      }
+    },
+    [conversationId, messages, markAsRead]
+  )
+
+  /**
+   * 处理 WebSocket 消息，更新已读状态
+   * @param wsMessage WebSocket 消息
+   * @param currentUserId 当前用户ID
+   */
+  const handleReadReceipt = useCallback(
+    (wsMessage: WSMessage, currentUserId?: string) => {
+      // 处理已读回执消息
+      if (wsMessage.type === WSMessageType.READ && wsMessage.messageId) {
+        setMessages((prev) =>
+          prev.map((msg) => {
+            // 更新对应消息的状态为已读
+            if (msg.id === wsMessage.messageId) {
+              return {
+                ...msg,
+                status: MessageStatus.READ,
+                readAt: wsMessage.timestamp ? new Date(wsMessage.timestamp).toISOString() : new Date().toISOString(),
+              }
+            }
+            return msg
+          })
+        )
+      }
+
+      // 处理消息送达状态更新
+      if (wsMessage.type === WSMessageType.MESSAGE && wsMessage.messageId) {
+        setMessages((prev) =>
+          prev.map((msg) => {
+            // 如果是自己的消息，更新状态为已送达
+            if (msg.id === wsMessage.messageId && currentUserId && msg.senderId === currentUserId) {
+              return {
+                ...msg,
+                status: MessageStatus.DELIVERED,
+              }
+            }
+            return msg
+          })
+        )
+      }
+    },
+    []
+  )
 
   useEffect(() => {
     loadMessages(conversationId)
@@ -420,7 +611,13 @@ export function useMessages(conversationId: string) {
     sendMessage,
     addMessage,
     updateMessage,
+    editMessage,
+    recallMessage,
     markAsRead,
+    autoMarkAsRead,
+    handleReadReceipt,
+    canEditMessage,
+    canRecallMessage,
   }
 }
 
@@ -429,7 +626,7 @@ export function useMessages(conversationId: string) {
  * @returns 在线状态和更新函数
  */
 export function useOnlineStatus() {
-  const [status, setStatus] = useState<OnlineStatus>('online')
+  const [status, setStatus] = useState<OnlineStatus>(OnlineStatus.ONLINE)
 
   const updateStatus = useCallback(async (newStatus: OnlineStatus) => {
     setStatus(newStatus)

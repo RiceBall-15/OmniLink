@@ -1,0 +1,85 @@
+/**
+ * 已读状态指示器组件样式
+ */
+
+.read-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  background: transparent;
+  cursor: default;
+  transition: all 0.2s ease;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+}
+
+.read-status-indicator.clickable {
+  cursor: pointer;
+}
+
+.read-status-indicator.clickable:hover {
+  background: var(--bg-tertiary);
+  transform: scale(1.1);
+}
+
+.read-status-indicator.clickable:active {
+  transform: scale(0.95);
+}
+
+/* 状态图标 */
+.status-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+  transition: all 0.2s ease;
+}
+
+/* 发送中状态 */
+.status-icon.sending {
+  animation: spin 1.5s linear infinite;
+  color: var(--text-tertiary);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 已发送状态 - 灰色单钩 */
+.read-status-indicator.sent .status-icon {
+  color: var(--text-tertiary);
+}
+
+/* 已送达状态 - 灰色双钩 */
+.read-status-indicator.delivered .status-icon {
+  color: var(--text-tertiary);
+}
+
+/* 已读状态 - 蓝色双钩 */
+.read-status-indicator.read .status-icon {
+  color: #3b82f6;
+  filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.3));
+}
+
+/* 发送失败状态 - 红色 */
+.read-status-indicator.failed .status-icon {
+  color: var(--error-color);
+}
+
+/* 响应式 */
+@media (max-width: 640px) {
+  .read-status-indicator {
+    padding: 0.125rem;
+  }
+
+  .status-icon {
+    width: 16px;
+    height: 16px;
+  }
+}

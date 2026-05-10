@@ -1,5 +1,5 @@
 import { api } from './api'
-import type { AIAssistant, AIConversation, AIMessage, AIResponse } from '../types/ai'
+import type { AIAssistant, AIChatResponse } from '../types/ai'
 
 export const aiService = {
   // 获取AI助手列表
@@ -31,7 +31,7 @@ export const aiService = {
 
   // 获取AI对话列表
   getConversations: async () => {
-    return api.get<AIConversation[]>('/ai/conversations')
+    return api.get<any[]>('/ai/conversations')
   },
 
   // 创建AI对话
@@ -39,17 +39,17 @@ export const aiService = {
     assistantId: string
     title?: string
   }) => {
-    return api.post<AIConversation>('/ai/conversations', data)
+    return api.post<any>('/ai/conversations', data)
   },
 
   // 获取AI对话消息
   getMessages: async (conversationId: string) => {
-    return api.get<AIMessage[]>(`/ai/conversations/${conversationId}/messages`)
+    return api.get<any[]>(`/ai/conversations/${conversationId}/messages`)
   },
 
   // 发送AI消息
   sendMessage: async (conversationId: string, content: string) => {
-    return api.post<AIResponse>(`/ai/conversations/${conversationId}/messages`, {
+    return api.post<AIChatResponse>(`/ai/conversations/${conversationId}/messages`, {
       content,
     })
   },

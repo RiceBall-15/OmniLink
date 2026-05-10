@@ -3,10 +3,11 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::info;
 
-use common::{auth::TokenManager, db::DatabaseManager};
+use common::db::DatabaseManager;
 use crate::services::UserService;
 use crate::handlers::*;
 use crate::middleware::auth_middleware;
+use crate::jwt::JwtManager;
 
 pub async fn run() -> anyhow::Result<()> {
     // 初始化日志
@@ -14,11 +15,11 @@ pub async fn run() -> anyhow::Result<()> {
 
     // 加载配置
     let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://im_chat:password@localhost:5432/im_chat".to_string());
+        .unwrap_or_else(|_| "postgres://im_chat:***@localhost:5432/im_chat".to_string());
     let redis_url = std::env::var("REDIS_URL")
         .unwrap_or_else(|_| "redis://:password@localhost:6379/0".to_string());
     let jwt_secret = std::env::var("JWT_SECRET")
-        .unwrap_or_else(|_| "your-secret-key-change-in-production".to_string());
+        .unwrap_or_else(|_| "your-secret-key".to_string());
 
     info!("Starting user service...");
 
@@ -27,11 +28,11 @@ pub async fn run() -> anyhow::Result<()> {
     let pool = db_manager.pg_pool().clone();
     let redis = db_manager.redis().clone();
 
-    // 初始化Token管理器
-    let token_manager = Arc::new(TokenManager::new(jwt_secret.as_bytes()));
+    // 初始化 JWT 管理器
+    let jwt_manager = Arc::new(JwtManager::new(jwt_secret.as_bytes()));
 
     // 初始化用户服务
-    let user_service = Arc::new(UserService::new(pool, redis, token_manager));
+    let user_service = Arc::new(UserService::new(pool, redis, jwt_manager));
 
     // 创建路由
     let app = create_router(user_service);
@@ -72,9 +73,7 @@ fn create_router(user_service: Arc<UserService>) -> Router {
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
-        .layer(middleware::from_fn(
-            axum::middleware::middleware::from_fn(logging_middleware)
-        ))
+        .layer(middleware::from_fn(logging_middleware))
 }
 
 async fn logging_middleware(
@@ -88,18 +87,11 @@ async fn logging_middleware(
     let response = next.run(req).await;
     let duration = start.elapsed();
 
-    info!("{} {} - {:?}ms", method, uri, duration.as_millis());
+    info!("{} {} - {:?}", method, uri, duration.as_millis());
 
     response
 }
 
 async fn health_check() -> &'static str {
     "User service is healthy"
-}
-
-// 为UserService添加获取token_manager的方法
-impl UserService {
-    fn get_token_manager(&self) -> Arc<TokenManager> {
-        self.token_manager.clone()
-    }
 }

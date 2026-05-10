@@ -1,0 +1,229 @@
+/**
+ * 在线用户列表组件样式
+ */
+
+.online-users-list {
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 头部 */
+.online-users-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.online-users-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.online-users-count {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+/* 搜索框 */
+.online-users-search {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  background-color: #ffffff;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.online-users-search:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.online-users-search::placeholder {
+  color: #9ca3af;
+}
+
+/* 主体内容 */
+.online-users-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 分组 */
+.online-users-group {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.online-users-group:last-child {
+  border-bottom: none;
+}
+
+.online-users-group-header {
+  padding: 8px 16px;
+  background-color: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.group-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.group-count {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.online-users-group-body {
+  padding: 4px 0;
+}
+
+/* 列表项 */
+.online-users-item {
+  padding: 4px 8px;
+  transition: background-color 0.15s ease;
+}
+
+.online-users-item:hover {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* 无分组列表 */
+.online-users-list-body {
+  padding: 8px 0;
+}
+
+/* 空状态 */
+.online-users-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+/* 滚动条样式 */
+.online-users-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.online-users-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.online-users-body::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 3px;
+}
+
+.online-users-body::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .online-users-header {
+    padding: 10px 12px;
+  }
+
+  .online-users-title {
+    font-size: 13px;
+  }
+
+  .online-users-search {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .online-users-group-header {
+    padding: 6px 12px;
+  }
+
+  .group-name {
+    font-size: 11px;
+  }
+
+  .online-users-empty {
+    padding: 24px 12px;
+    font-size: 12px;
+  }
+}
+
+/* 暗色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .online-users-list {
+    background-color: #1f2937;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  .online-users-header {
+    border-bottom-color: #374151;
+    background-color: #111827;
+  }
+
+  .online-users-title {
+    color: #f9fafb;
+  }
+
+  .online-users-count {
+    color: #9ca3af;
+  }
+
+  .online-users-search {
+    background-color: #1f2937;
+    border-color: #374151;
+    color: #f9fafb;
+  }
+
+  .online-users-search:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+  }
+
+  .online-users-group {
+    border-bottom-color: #374151;
+  }
+
+  .online-users-group-header {
+    background-color: #111827;
+  }
+
+  .group-name {
+    color: #9ca3af;
+  }
+
+  .online-users-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .online-users-empty {
+    color: #6b7280;
+  }
+
+  .online-users-body::-webkit-scrollbar-thumb {
+    background-color: #4b5563;
+  }
+
+  .online-users-body::-webkit-scrollbar-thumb:hover {
+    background-color: #6b7280;
+  }
+}

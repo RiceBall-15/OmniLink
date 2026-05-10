@@ -1,9 +1,10 @@
-use super::super::models::{
+use crate::models::{
     CreateConversationRequest, CreateConversationResponse,
     ConversationsListResponse, ConversationInfo, ParticipantInfo,
 };
-use super::super::repository::ConversationRepository;
-use common::models::{Conversation, Participant, User};
+use crate::repository::ConversationRepository;
+use crate::user_repository::UserRepository;
+use common::models::{Conversation, User};
 use common::{AppError, Result};
 use uuid::Uuid;
 use chrono::Utc;
@@ -14,13 +15,18 @@ use std::collections::HashMap;
 /// 对话服务
 pub struct ConversationService {
     conversation_repository: Arc<ConversationRepository>,
+    user_repository: Arc<UserRepository>,
     user_cache: Arc<RwLock<HashMap<Uuid, User>>>,
 }
 
 impl ConversationService {
-    pub fn new(conversation_repository: Arc<ConversationRepository>) -> Self {
+    pub fn new(
+        conversation_repository: Arc<ConversationRepository>,
+        user_repository: Arc<UserRepository>,
+    ) -> Self {
         Self {
             conversation_repository,
+            user_repository,
             user_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -81,7 +87,7 @@ impl ConversationService {
 
         Ok(CreateConversationResponse {
             conversation_id,
-            name: conversation.name,
+            name: conversation.name.unwrap_or_default(),
             description: conversation.description,
             is_group: conversation.is_group,
             participants,
@@ -96,6 +102,7 @@ impl ConversationService {
             .get_user_conversations(user_id)
             .await?;
 
+        let total = conversations.len() as i32;
         let mut conversation_infos = Vec::new();
 
         for conversation in conversations {
@@ -106,7 +113,7 @@ impl ConversationService {
 
             conversation_infos.push(ConversationInfo {
                 conversation_id: conversation.id,
-                name: conversation.name,
+                name: conversation.name.unwrap_or_default(),
                 description: conversation.description,
                 is_group: conversation.is_group,
                 avatar_url: conversation.avatar_url,
@@ -119,7 +126,7 @@ impl ConversationService {
 
         Ok(ConversationsListResponse {
             conversations: conversation_infos,
-            total: conversations.len() as i32,
+            total,
         })
     }
 
@@ -138,7 +145,7 @@ impl ConversationService {
 
         Ok(ConversationInfo {
             conversation_id: conversation.id,
-            name: conversation.name,
+            name: conversation.name.unwrap_or_default(),
             description: conversation.description,
             is_group: conversation.is_group,
             avatar_url: conversation.avatar_url,
@@ -159,17 +166,29 @@ impl ConversationService {
             }
         }
 
-        // TODO: 从数据库加载
-        // 暂时返回假数据
-        Ok(User {
-            id: user_id,
-            username: format!("user_{}", user_id),
-            email: format!("user_{}@example.com", user_id),
-            password_hash: String::new(),
-            avatar_url: None,
-            status: Some("active".to_string()),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        })
+        // 从数据库加载
+        match self.user_repository.find_by_id(user_id).await? {
+            Some(user) => {
+                // 缓存用户信息
+                let mut cache = self.user_cache.write().await;
+                cache.insert(user.id, user.clone());
+                Ok(user)
+            }
+            None => {
+                // 用户不存在，返回默认信息
+                tracing::warn!("User {} not found in database, using default info", user_id);
+                Ok(User {
+                    id: user_id,
+                    username: format!("user_{}", user_id),
+                    email: format!("user_{}@example.com", user_id),
+                    password_hash: String::new(),
+                    avatar_url: None,
+                    bio: None,
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                    last_login_at: None,
+                })
+            }
+        }
     }
 }

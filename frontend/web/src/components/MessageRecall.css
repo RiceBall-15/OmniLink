@@ -1,0 +1,291 @@
+/* 消息撤回组件容器 */
+.message-recall {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  transition: all var(--transition-fast);
+}
+
+/* 撤回按钮 */
+.message-recall-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 0.813rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+.message-recall-btn:hover:not(:disabled) {
+  background: var(--border-hover);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  transform: translateY(-1px);
+}
+
+.message-recall-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.message-recall-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.message-recall-icon {
+  font-size: 0.875rem;
+}
+
+.message-recall-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: recallSpinner 0.6s linear infinite;
+}
+
+@keyframes recallSpinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 剩余时间提示 */
+.message-recall-time-hint {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/* 确认对话框遮罩层 */
+.message-recall-confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: recallFadeIn 0.2s ease;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+@keyframes recallFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 确认对话框 */
+.message-recall-confirm-dialog {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  width: 400px;
+  max-width: 90vw;
+  animation: recallScaleIn 0.3s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes recallScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 对话框头部 */
+.message-recall-confirm-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+
+.message-recall-confirm-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* 对话框内容 */
+.message-recall-confirm-body {
+  padding: 1.5rem;
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.message-recall-confirm-message {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.message-recall-confirm-warning {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--error-color);
+  line-height: 1.5;
+  padding: 0.75rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.message-recall-confirm-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+}
+
+.message-recall-confirm-info-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.message-recall-confirm-info span {
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* 对话框底部 */
+.message-recall-confirm-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  background: var(--bg-primary);
+}
+
+/* 对话框按钮 */
+.message-recall-confirm-btn {
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: none;
+  outline: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 96px;
+}
+
+.message-recall-confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.message-recall-confirm-btn-cancel {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.message-recall-confirm-btn-cancel:hover:not(:disabled) {
+  background: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.message-recall-confirm-btn-confirm {
+  background: var(--error-color);
+  color: white;
+}
+
+.message-recall-confirm-btn-confirm:hover:not(:disabled) {
+  background: var(--error-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.message-recall-confirm-btn-confirm:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* 响应式设计 */
+@media (max-width: 640px) {
+  .message-recall {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.5rem;
+  }
+
+  .message-recall-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .message-recall-confirm-dialog {
+    width: 95vw;
+    max-width: 95vw;
+    border-radius: var(--radius-md);
+  }
+
+  .message-recall-confirm-header {
+    padding: 1rem;
+  }
+
+  .message-recall-confirm-title {
+    font-size: 1rem;
+  }
+
+  .message-recall-confirm-body {
+    padding: 1rem;
+  }
+
+  .message-recall-confirm-message {
+    font-size: 0.875rem;
+  }
+
+  .message-recall-confirm-warning {
+    font-size: 0.813rem;
+  }
+
+  .message-recall-confirm-footer {
+    padding: 0.75rem 1rem;
+  }
+
+  .message-recall-confirm-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.813rem;
+    min-width: 80px;
+  }
+}

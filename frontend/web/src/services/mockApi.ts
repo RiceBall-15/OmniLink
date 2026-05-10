@@ -1,4 +1,7 @@
-import type { User, Conversation, Message, AIAssistant } from '../types'
+import type { User } from '../types/user'
+import type { Conversation, Message } from '../types/message'
+import type { AIAssistant } from '../types/ai'
+import { MessageType, MessageStatus } from '../types/message'
 
 // 内置超级管理员账号（用户可登录使用）
 export const ADMIN_CREDENTIALS = {
@@ -28,8 +31,8 @@ export const mockConversations: Conversation[] = [
       conversationId: 'conv-1',
       senderId: 'ai-1',
       content: '你好！我是AI助手，有什么可以帮助你的吗？',
-      type: 'text',
-      status: 'delivered',
+      type: MessageType.TEXT,
+      status: MessageStatus.DELIVERED,
       createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
       updatedAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
     },
@@ -49,8 +52,8 @@ export const mockConversations: Conversation[] = [
       conversationId: 'conv-2',
       senderId: 'ai-2',
       content: '让我帮你分析这段代码...',
-      type: 'text',
-      status: 'delivered',
+      type: MessageType.TEXT,
+      status: MessageStatus.DELIVERED,
       createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
       updatedAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
     },
@@ -68,8 +71,8 @@ export const mockMessages: Message[] = [
     conversationId: 'conv-1',
     senderId: '1',
     content: '你好！',
-    type: 'text',
-    status: 'delivered',
+    type: MessageType.TEXT,
+    status: MessageStatus.DELIVERED,
     createdAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
     updatedAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
   },
@@ -78,8 +81,8 @@ export const mockMessages: Message[] = [
     conversationId: 'conv-1',
     senderId: 'ai-1',
     content: '你好！我是AI助手，有什么可以帮助你的吗？',
-    type: 'text',
-    status: 'delivered',
+    type: MessageType.TEXT,
+    status: MessageStatus.DELIVERED,
     createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
     updatedAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
   },
@@ -88,8 +91,8 @@ export const mockMessages: Message[] = [
     conversationId: 'conv-1',
     senderId: '1',
     content: '请帮我解释一下React Hooks的使用',
-    type: 'text',
-    status: 'delivered',
+    type: MessageType.TEXT,
+    status: MessageStatus.DELIVERED,
     createdAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
     updatedAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
   },
@@ -154,7 +157,7 @@ export const mockApi = {
   },
 
   // 模拟注册
-  register: async (username: string, email: string, password: string) => {
+  register: async (_username: string, _email: string, _password: string) => {
     await mockApi.delay()
     return {
       success: true,
@@ -188,8 +191,8 @@ export const mockApi = {
       conversationId,
       senderId: mockUser.id,
       content,
-      type: 'text',
-      status: 'sent',
+      type: MessageType.TEXT,
+      status: MessageStatus.SENT,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }

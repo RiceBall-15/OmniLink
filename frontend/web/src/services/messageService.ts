@@ -2,10 +2,9 @@ import request, { ApiResponse } from './api'
 import type {
   Message,
   Conversation,
-  MessageType,
-  MessageStatus,
   OnlineStatus,
 } from '../types/message'
+import { MessageType } from '../types/message'
 
 // 消息服务
 export const messageService = {
@@ -69,5 +68,17 @@ export const messageService = {
       method: 'PUT',
       body: JSON.stringify({ status }),
     })
+  },
+
+  // 删除会话
+  deleteConversation: async (conversationId: string): Promise<ApiResponse<void>> => {
+    return request<void>(`/api/im/conversations/${conversationId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // 获取消息的已读用户列表
+  getMessageReadUsers: async (messageId: string): Promise<ApiResponse<any[]>> => {
+    return request<any[]>(`/api/im/messages/${messageId}/read-users`)
   },
 }

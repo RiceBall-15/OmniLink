@@ -1,6 +1,6 @@
 # OmniLink 开发进度
 
-## 📅 更新日期：2026-05-01
+## 📅 更新日期：2026-05-10
 
 ## ✅ 已完成功能
 
@@ -179,6 +179,9 @@
 - 🔄 消息引用/回复
 
 ### 后端
+- ✅ **消息已读/已送达回执** - HTTP API + WebSocket 广播（2026-05-10 完成）
+- ✅ **消息编辑功能** - HTTP API + WebSocket 广播，2分钟窗口限制（2026-05-10 完成）
+- ✅ **消息撤回功能** - HTTP API + WebSocket 广播，2分钟窗口限制（2026-05-10 完成）
 - 🔄 WebSocket 认证逻辑完善
 - 🔄 消息持久化实现
 - 🔄 文件上传 API 实现
@@ -191,7 +194,7 @@
 ## 📋 待开发
 
 ### 高优先级
-- ⏳ 消息已读回执
+- ✅ 消息已读回执（2026-05-10 完成）
 - ⏳ 在线状态同步
 - ⏳ 文件下载功能
 - ⏳ 图片预览
@@ -227,6 +230,7 @@
 - ⚠️ 大部分服务仍为框架状态，业务逻辑待实现
 - ⚠️ 缺少完整的单元测试
 - ⚠️ 需要添加性能监控
+- ⚠️ 项目存在大量预存编译错误（依赖缺失、类型推断、axum版本兼容等），需要逐一修复
 
 ---
 
@@ -249,10 +253,11 @@
 ## 🎯 下一步计划
 
 ### 短期（1-2 周）
-1. 完成后端核心业务逻辑
-2. 实现前端消息编辑/撤回
-3. 添加文件上传后端支持
-4. 对接至少一个 AI 模型
+1. 修复项目剩余编译错误（大部分为已有代码的依赖和类型问题）
+2. 实现群聊功能（创建群聊、群消息、群管理）
+3. 完善 WebSocket 认证逻辑（JWT token 验证）
+4. 添加文件上传后端支持
+5. 对接至少一个 AI 模型
 
 ### 中期（1 个月）
 1. 完善群聊功能
@@ -279,6 +284,18 @@
 ---
 
 ## 🔄 最近更新
+
+### 2026-05-10
+- ✅ 实现消息编辑 HTTP API (`PUT /api/im/conversations/:id/messages/:msg_id`)
+- ✅ 实现消息撤回 HTTP API (`POST /api/im/conversations/:id/messages/:msg_id/recall`)
+- ✅ 实现标记已读 HTTP API (`POST /api/im/conversations/:id/read`)
+- ✅ im-gateway 添加 `Edit` 和 `Recall` WebSocket 消息类型
+- ✅ im-gateway `MessageRepository` 添加 `update_content` 和 `soft_delete` 方法
+- ✅ im-gateway `IMService` 添加 `edit_message` 和 `recall_message` 服务方法
+- ✅ im-gateway WebSocket handler 添加 Edit 和 Recall 消息处理
+- ✅ 修复 `common` crate 缺失依赖 (`rand`, `mongodb`, `http`)
+- ✅ 修复 `im-api` crate 缺失依赖 (`anyhow`, `thiserror`)
+- ✅ 修复 `im-api` main.rs 缺失 `Path` 和 `Query` 导入
 
 ### 2026-05-01
 - ✅ 重构 `useMessages.ts` - 提高代码质量和类型安全

@@ -6,7 +6,6 @@ use axum::{
 };
 use common::ApiResponse;
 use std::sync::Arc;
-use uuid::Uuid;
 
 use crate::middleware::AuthContext;
 use crate::models::*;
@@ -16,7 +15,7 @@ use crate::services::UserService;
 pub async fn register(
     State(user_service): State<Arc<UserService>>,
     Json(req): JsonResponse<RegisterRequest>,
-) -> Result<Json<ApiResponse<UserInfo>>, (StatusCode, String)> {
+) -> Result<Json<ApiResponse<User>>, (StatusCode, String)> {
     match req.validate() {
         Ok(_) => {}
         Err(e) => {
@@ -53,10 +52,20 @@ pub async fn login(
         .login(req)
         .await
         .map(|response| Json(ApiResponse::success(response)))
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))
+        .map_err(|e| match e {
+            crate::error::AppError::Auth(msg) => {
+                (StatusCode::UNAUTHORIZED, msg)
+            }
+            crate::error::AppError::NotFound(msg) => {
+                (StatusCode::NOT_FOUND, msg)
+            }
+            _ => {
+                (StatusCode::BAD_REQUEST, e.to_string())
+            }
+        })
 }
 
-/// 刷新Token
+/// 刷新 Token
 pub async fn refresh_token(
     State(user_service): State<Arc<UserService>>,
     Json(req): JsonResponse<RefreshTokenRequest>,
@@ -85,7 +94,7 @@ pub async fn logout(
 pub async fn get_profile(
     State(user_service): State<Arc<UserService>>,
     auth: AuthContext,
-) -> Result<Json<ApiResponse<UserInfo>>, (StatusCode, String)> {
+) -> Result<Json<ApiResponse<User>>, (StatusCode, String)> {
     user_service
         .get_profile(auth.user_id)
         .await
@@ -98,7 +107,7 @@ pub async fn update_profile(
     State(user_service): State<Arc<UserService>>,
     auth: AuthContext,
     Json(req): JsonResponse<UpdateProfileRequest>,
-) -> Result<Json<ApiResponse<UserInfo>>, (StatusCode, String)> {
+) -> Result<Json<ApiResponse<User>>, (StatusCode, String)> {
     match req.validate() {
         Ok(_) => {}
         Err(e) => {
@@ -136,7 +145,14 @@ pub async fn change_password(
         .change_password(auth.user_id, req)
         .await
         .map(|_| Json(ApiResponse::success(())))
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))
+        .map_err(|e| match e {
+            crate::error::AppError::Auth(msg) => {
+                (StatusCode::UNAUTHORIZED, msg)
+            }
+            _ => {
+                (StatusCode::BAD_REQUEST, e.to_string())
+            }
+        })
 }
 
 /// 获取设备列表

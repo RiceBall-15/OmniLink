@@ -128,10 +128,10 @@ impl OnlineStatusManager {
             .count()
     }
 
-    /// 清理过期的在线状态 (超过5分钟未活动)
+    /// 清理过期的在线状态 (超过60秒未活动，匹配心跳超时时间)
     pub async fn cleanup_expired(&self) {
         let now = Utc::now().timestamp();
-        let expiration_threshold = 5 * 60; // 5分钟
+        let expiration_threshold = 60; // 60秒，匹配心跳超时时间
 
         let mut statuses = self.statuses.write().await;
         let mut to_remove = Vec::new();
@@ -145,7 +145,11 @@ impl OnlineStatusManager {
         }
 
         for user_id in to_remove {
-            tracing::info!("Cleaning up expired status for user {}", user_id);
+            tracing::info!(
+                "Cleaning up expired status for user {} (inactive for > {} seconds)",
+                user_id,
+                expiration_threshold
+            );
             statuses.remove(&user_id);
         }
     }

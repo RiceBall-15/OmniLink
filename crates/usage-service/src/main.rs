@@ -3,38 +3,38 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::info;
 
-use common::{auth::TokenManager, db::DatabaseManager};
-use crate::handlers::{AppState, *};
-use crate::middleware::auth_middleware;
+use common::auth::TokenManager;
+use usage_service::handlers::{AppState, *};
+use usage_service::middleware::auth_middleware;
 
-pub async fn run() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     // 初始化日志
     tracing_subscriber::fmt::init();
 
     // 加载配置
+    dotenvy::dotenv().ok();
+
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://im_chat:***@localhost:5432/im_chat".to_string());
-    let redis_url = std::env::var("REDIS_URL")
-        .unwrap_or_else(|_| "redis://:password@localhost:6379/0".to_string());
     let jwt_secret = std::env::var("JWT_SECRET")
         .unwrap_or_else(|_| "your-secret-key-change-in-production".to_string());
 
     info!("Starting usage service...");
 
-    // 初始化数据库管理器
-    let db_manager = DatabaseManager::new(&database_url, &redis_url).await?;
-    let pool = db_manager.pg_pool().clone();
+    // 初始化数据库连接池
+    let pool = sqlx::PgPool::connect(&database_url).await?;
 
     // 初始化Token管理器
     let token_manager = Arc::new(TokenManager::new(jwt_secret.as_bytes()));
 
     // 初始化用量服务
-    let usage_service = Arc::new(crate::services::UsageService::new(pool));
+    let usage_service = Arc::new(usage_service::services::UsageService::new(pool));
 
     // 创建应用状态
-    let app_state = Arc::new(AppState {
+    let app_state = AppState {
         usage_service,
-    });
+    };
 
     // 创建路由
     let app = create_router(app_state, token_manager);
@@ -48,7 +48,7 @@ pub async fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn create_router(app_state: Arc<AppState>, token_manager: Arc<TokenManager>) -> Router {
+fn create_router(app_state: AppState, token_manager: Arc<TokenManager>) -> Router {
     // 公开路由（不需要认证）
     let public_routes = Router::new()
         .route("/health", get(health_check))
@@ -64,14 +64,14 @@ fn create_router(app_state: Arc<AppState>, token_manager: Arc<TokenManager>) -> 
         .layer(middleware::from_fn_with_state(
             token_manager.clone(),
             auth_middleware,
-        ))
-        .with_state(app_state);
+        ));
 
     // 合并路由
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .layer(middleware::from_fn(logging_middleware))
+        .with_state(app_state)
 }
 
 async fn logging_middleware(

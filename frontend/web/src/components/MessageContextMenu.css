@@ -1,0 +1,106 @@
+/* 消息右键菜单容器 */
+.message-context-menu {
+  min-width: 180px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border-color);
+  padding: 0.25rem;
+  animation: contextMenuFadeIn 0.15s ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 菜单项 */
+.message-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  user-select: none;
+  outline: none;
+}
+
+.message-context-menu-item:hover {
+  background: var(--bg-tertiary);
+  transform: translateX(2px);
+}
+
+.message-context-menu-item:focus-visible {
+  background: var(--bg-tertiary);
+  box-shadow: 0 0 0 2px var(--primary-color);
+}
+
+/* 危险操作菜单项 */
+.message-context-menu-item-danger {
+  color: var(--error-color);
+}
+
+.message-context-menu-item-danger:hover {
+  background: #fee2e2;
+}
+
+/* 菜单项图标 */
+.message-context-menu-icon {
+  font-size: 1rem;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* 菜单项文本 */
+.message-context-menu-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+/* 菜单分隔线 */
+.message-context-menu-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 0.25rem 0.5rem;
+}
+
+/* 暗色模式适配 */
+@media (prefers-color-scheme: dark) {
+  .message-context-menu {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: var(--border-color);
+  }
+
+  .message-context-menu-item-danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+  }
+}
+
+/* 响应式 */
+@media (max-width: 640px) {
+  .message-context-menu {
+    min-width: 160px;
+  }
+
+  .message-context-menu-item {
+    padding: 0.4375rem 0.625rem;
+    font-size: 0.813rem;
+  }
+
+  .message-context-menu-icon {
+    font-size: 0.875rem;
+  }
+}

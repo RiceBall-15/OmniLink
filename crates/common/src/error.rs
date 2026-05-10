@@ -116,6 +116,14 @@ pub enum AppError {
 /// 简化了返回Result<T, AppError>的写法
 pub type Result<T> = std::result::Result<T, AppError>;
 
+/// 将 anyhow::Error 转换为 AppError
+/// 用于 DatabaseManager 等返回 anyhow::Error 的地方
+impl From<anyhow::Error> for AppError {
+    fn from(err: anyhow::Error) -> Self {
+        AppError::Internal(err.to_string())
+    }
+}
+
 /// 将AppError转换为HTTP状态码
 impl AppError {
     /// 获取对应的HTTP状态码

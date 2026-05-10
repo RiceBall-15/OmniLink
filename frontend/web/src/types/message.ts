@@ -28,6 +28,8 @@ export interface Message {
   readAt?: string
   replyTo?: string
   metadata?: Record<string, any>
+  isRecalled?: boolean
+  recalledAt?: string
 }
 
 // 会话实体
@@ -63,6 +65,7 @@ export enum WSMessageType {
   TYPING = 'typing',
   READ = 'read',
   ERROR = 'error',
+  STATUS_UPDATE = 'status_update',
 }
 
 // WebSocket 消息
@@ -74,4 +77,11 @@ export interface WSMessage {
   content?: string
   timestamp?: number
   data?: unknown
+}
+
+// 在线状态更新消息数据
+export interface StatusUpdateData {
+  userId: string
+  status: OnlineStatus
+  timestamp: number
 }

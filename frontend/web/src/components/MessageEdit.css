@@ -1,0 +1,203 @@
+/* 消息编辑容器 */
+.message-edit-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-md);
+  border: 2px solid var(--primary-color);
+  animation: messageEditIn 0.2s ease;
+  min-width: 200px;
+  max-width: 70%;
+}
+
+@keyframes messageEditIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 消息编辑内容区域 */
+.message-edit-content {
+  position: relative;
+}
+
+/* 编辑输入框 */
+.message-edit-textarea {
+  width: 100%;
+  min-height: 40px;
+  max-height: 200px;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  resize: none;
+  outline: none;
+  transition: all var(--transition-fast);
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  overflow-y: auto;
+}
+
+.message-edit-textarea:hover:not(:disabled) {
+  border-color: var(--border-hover);
+}
+
+.message-edit-textarea:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.message-edit-textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.message-edit-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--bg-tertiary);
+}
+
+/* 编辑超时提示 */
+.message-edit-expired {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  z-index: 10;
+}
+
+/* 编辑按钮区域 */
+.message-edit-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+/* 编辑按钮基础样式 */
+.message-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  white-space: nowrap;
+  outline: none;
+}
+
+.message-edit-btn:focus {
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+}
+
+.message-edit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 取消按钮 */
+.message-edit-btn-cancel {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.message-edit-btn-cancel:hover:not(:disabled) {
+  background: var(--border-hover);
+  transform: translateY(-1px);
+}
+
+/* 保存按钮 */
+.message-edit-btn-save {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  color: white;
+  box-shadow: var(--shadow-md);
+}
+
+.message-edit-btn-save:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.message-edit-btn-save:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 加载动画 */
+.message-edit-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: messageEditSpin 0.8s linear infinite;
+}
+
+@keyframes messageEditSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 编辑提示 */
+.message-edit-hint {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+}
+
+.message-edit-hint-text {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+/* 响应式 */
+@media (max-width: 640px) {
+  .message-edit-container {
+    max-width: 85%;
+    padding: 0.625rem 0.875rem;
+  }
+
+  .message-edit-textarea {
+    font-size: 0.875rem;
+  }
+
+  .message-edit-btn {
+    padding: 0.4375rem 0.875rem;
+    font-size: 0.813rem;
+  }
+}
+
+/* 暗色模式适配 */
+@media (prefers-color-scheme: dark) {
+  .message-edit-textarea {
+    background: var(--bg-primary);
+  }
+}

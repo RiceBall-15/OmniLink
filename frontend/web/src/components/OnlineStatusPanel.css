@@ -1,0 +1,289 @@
+/**
+ * 在线状态面板组件样式
+ */
+
+.online-status-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 面板标题 */
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.panel-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.panel-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  transition: background-color 0.2s ease;
+}
+
+.status-indicator.connected {
+  background-color: #10b981;
+}
+
+.status-text {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* 分区标题 */
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+/* 当前用户区域 */
+.current-user-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.current-user-info {
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+}
+
+/* 状态选择器 */
+.status-selector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.status-btn:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.status-btn.active {
+  background-color: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+/* 调试区域 */
+.debug-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.debug-info {
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.debug-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.debug-label {
+  color: #6b7280;
+  min-width: 100px;
+}
+
+.debug-value {
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.debug-value.ws-connected {
+  color: #10b981;
+}
+
+.debug-value.ws-disconnected {
+  color: #ef4444;
+}
+
+.debug-value.ws-connecting {
+  color: #f59e0b;
+}
+
+.debug-value.status-online {
+  color: #10b981;
+}
+
+.debug-value.status-away {
+  color: #f59e0b;
+}
+
+.debug-value.status-busy {
+  color: #ef4444;
+}
+
+.debug-value.status-offline {
+  color: #9ca3af;
+}
+
+.debug-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* 用户区域 */
+.users-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 按钮样式 */
+.btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.btn-secondary {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.btn-secondary:hover {
+  background-color: #e5e7eb;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .online-status-panel {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .panel-title {
+    font-size: 16px;
+  }
+
+  .status-selector {
+    gap: 6px;
+  }
+
+  .status-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
+/* 暗色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .online-status-panel {
+    background-color: #1f2937;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  .panel-header {
+    border-bottom-color: #374151;
+  }
+
+  .panel-title {
+    color: #f9fafb;
+  }
+
+  .status-text {
+    color: #9ca3af;
+  }
+
+  .section-title {
+    color: #e5e7eb;
+  }
+
+  .current-user-info,
+  .debug-info {
+    background-color: #111827;
+  }
+
+  .status-btn {
+    background-color: #374151;
+    border-color: #4b5563;
+    color: #e5e7eb;
+  }
+
+  .status-btn:hover {
+    background-color: #4b5563;
+    border-color: #6b7280;
+  }
+
+  .status-btn.active {
+    background-color: #1e3a5f;
+    border-color: #3b82f6;
+    color: #93c5fd;
+  }
+
+  .debug-label {
+    color: #9ca3af;
+  }
+
+  .debug-value {
+    color: #f9fafb;
+  }
+
+  .btn-secondary {
+    background-color: #374151;
+    color: #e5e7eb;
+  }
+
+  .btn-secondary:hover {
+    background-color: #4b5563;
+  }
+}

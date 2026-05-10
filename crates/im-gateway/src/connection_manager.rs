@@ -1,130 +1,247 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio_tungstenite::tungstenite::Message;
+use axum::extract::ws::Message;
 use uuid::Uuid;
-use futures_util::{SinkExt, StreamExt};
-use tokio::net::TcpStream;
-use std::net::SocketAddr;
 
 use crate::models::{WSMessage, WSMessageType};
+
+/// WebSocket连接ID (唯一标识每个连接)
+pub type ConnectionId = Uuid;
 
 /// WebSocket连接
 #[derive(Debug, Clone)]
 pub struct WSConnection {
+    /// 连接ID (唯一标识)
+    pub connection_id: ConnectionId,
+    /// 用户ID
     pub user_id: Uuid,
+    /// 当前会话ID (可选)
     pub conversation_id: Option<Uuid>,
-    pub addr: SocketAddr,
+    /// 客户端地址描述
+    pub addr: String,
+    /// 消息发送通道
     pub sender: tokio::sync::mpsc::UnboundedSender<Message>,
+    /// 连接时间戳
     pub connected_at: i64,
+    /// 最后活跃时间戳 (用于心跳检测)
+    pub last_active_at: i64,
 }
 
 /// WebSocket连接管理器
+/// 支持同一用户多设备连接
 #[derive(Clone)]
 pub struct WSConnectionManager {
-    connections: Arc<RwLock<HashMap<Uuid, WSConnection>>>,
-    conversation_connections: Arc<RwLock<HashMap<Uuid, Vec<Uuid>>>>, // conversation_id -> user_ids
+    /// 所有活跃连接: connection_id -> connection
+    connections: Arc<RwLock<HashMap<ConnectionId, WSConnection>>>,
+    /// 用户的连接列表: user_id -> vec<connection_id>
+    user_connections: Arc<RwLock<HashMap<Uuid, Vec<ConnectionId>>>>,
+    /// 会话连接映射: conversation_id -> vec<connection_id>
+    conversation_connections: Arc<RwLock<HashMap<Uuid, Vec<ConnectionId>>>>,
 }
 
 impl WSConnectionManager {
+    /// 创建新的连接管理器
     pub fn new() -> Self {
         Self {
             connections: Arc::new(RwLock::new(HashMap::new())),
+            user_connections: Arc::new(RwLock::new(HashMap::new())),
             conversation_connections: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
     /// 添加连接
-    pub async fn add_connection(&self, user_id: Uuid, connection: WSConnection) {
+    pub async fn add_connection(&self, connection: WSConnection) {
+        let connection_id = connection.connection_id;
+        let user_id = connection.user_id;
+
+        // 添加到总连接表
         let mut connections = self.connections.write().await;
-        connections.insert(user_id, connection);
-        tracing::info!("User {} connected", user_id);
+        connections.insert(connection_id, connection.clone());
+
+        // 添加到用户连接表
+        let mut user_connections = self.user_connections.write().await;
+        user_connections
+            .entry(user_id)
+            .or_insert_with(Vec::new)
+            .push(connection_id);
+
+        tracing::info!(
+            "User {} connected with connection {} (addr: {})",
+            user_id,
+            connection_id,
+            connection.addr
+        );
     }
 
     /// 移除连接
-    pub async fn remove_connection(&self, user_id: Uuid) {
+    pub async fn remove_connection(&self, connection_id: ConnectionId) -> Option<WSConnection> {
+        // 从总连接表获取并移除
         let mut connections = self.connections.write().await;
-        if let Some(conn) = connections.remove(&user_id) {
-            // 从对话连接中移除
+        let connection = connections.remove(&connection_id);
+
+        if let Some(conn) = connection {
+            // 从用户连接表中移除
+            let mut user_connections = self.user_connections.write().await;
+            if let Some(conn_ids) = user_connections.get_mut(&conn.user_id) {
+                conn_ids.retain(|id| *id != connection_id);
+                if conn_ids.is_empty() {
+                    user_connections.remove(&conn.user_id);
+                }
+            }
+
+            // 从会话连接表中移除
             if let Some(conversation_id) = conn.conversation_id {
                 let mut conv_connections = self.conversation_connections.write().await;
-                if let Some(users) = conv_connections.get_mut(&conversation_id) {
-                    users.retain(|uid| *uid != user_id);
-                    if users.is_empty() {
+                if let Some(conn_ids) = conv_connections.get_mut(&conversation_id) {
+                    conn_ids.retain(|id| *id != connection_id);
+                    if conn_ids.is_empty() {
                         conv_connections.remove(&conversation_id);
                     }
                 }
             }
+
+            tracing::info!(
+                "User {} disconnected (connection: {}, addr: {})",
+                conn.user_id,
+                connection_id,
+                conn.addr
+            );
+
+            return Some(conn);
         }
-        tracing::info!("User {} disconnected", user_id);
+
+        None
     }
 
     /// 获取连接
-    pub async fn get_connection(&self, user_id: Uuid) -> Option<WSConnection> {
+    pub async fn get_connection(&self, connection_id: ConnectionId) -> Option<WSConnection> {
         let connections = self.connections.read().await;
-        connections.get(&user_id).cloned()
+        connections.get(&connection_id).cloned()
     }
 
-    /// 检查用户是否在线
-    pub async fn is_online(&self, user_id: Uuid) -> bool {
+    /// 获取用户的所有连接
+    pub async fn get_user_connections(&self, user_id: Uuid) -> Vec<WSConnection> {
         let connections = self.connections.read().await;
-        connections.contains_key(&user_id)
+        let user_connections = self.user_connections.read().await;
+
+        if let Some(conn_ids) = user_connections.get(&user_id) {
+            conn_ids
+                .iter()
+                .filter_map(|id| connections.get(id).cloned())
+                .collect()
+        } else {
+            Vec::new()
+        }
     }
 
-    /// 获取在线用户ID列表
-    pub async fn get_online_users(&self) -> Vec<Uuid> {
-        let connections = self.connections.read().await;
-        connections.keys().cloned().collect()
-    }
-
-    /// 设置用户的当前对话
-    pub async fn set_conversation(&self, user_id: Uuid, conversation_id: Uuid) {
+    /// 更新连接的会话ID
+    pub async fn set_conversation(
+        &self,
+        connection_id: ConnectionId,
+        conversation_id: Uuid,
+    ) -> Option<WSConnection> {
         let mut connections = self.connections.write().await;
-        if let Some(conn) = connections.get_mut(&user_id) {
-            // 从旧对话中移除
+
+        if let Some(conn) = connections.get_mut(&connection_id) {
+            // 从旧会话中移除
             if let Some(old_conversation_id) = conn.conversation_id {
                 let mut conv_connections = self.conversation_connections.write().await;
-                if let Some(users) = conv_connections.get_mut(&old_conversation_id) {
-                    users.retain(|uid| *uid != user_id);
+                if let Some(conn_ids) = conv_connections.get_mut(&old_conversation_id) {
+                    conn_ids.retain(|id| *id != connection_id);
+                    if conn_ids.is_empty() {
+                        conv_connections.remove(&old_conversation_id);
+                    }
                 }
             }
 
             conn.conversation_id = Some(conversation_id);
 
-            // 添加到新对话
+            // 添加到新会话
             let mut conv_connections = self.conversation_connections.write().await;
             conv_connections
                 .entry(conversation_id)
                 .or_insert_with(Vec::new)
-                .push(user_id);
+                .push(connection_id);
+
+            return Some(conn.clone());
+        }
+
+        None
+    }
+
+    /// 更新连接的最后活跃时间
+    pub async fn update_last_active(&self, connection_id: ConnectionId) {
+        let mut connections = self.connections.write().await;
+        if let Some(conn) = connections.get_mut(&connection_id) {
+            conn.last_active_at = chrono::Utc::now().timestamp();
         }
     }
 
-    /// 向用户发送消息
-    pub async fn send_to_user(&self, user_id: Uuid, message: WSMessage) -> bool {
-        let connections = self.connections.read().await;
-        if let Some(conn) = connections.get(&user_id) {
-            if let Ok(json) = serde_json::to_string(&message) {
-                let ws_message = Message::Text(json);
-                let _ = conn.sender.send(ws_message);
-                return true;
-            }
-        }
-        false
+    /// 检查用户是否在线
+    pub async fn is_online(&self, user_id: Uuid) -> bool {
+        let user_connections = self.user_connections.read().await;
+        user_connections
+            .get(&user_id)
+            .map(|ids| !ids.is_empty())
+            .unwrap_or(false)
     }
 
-    /// 向对话中的所有用户发送消息
-    pub async fn send_to_conversation(&self, conversation_id: Uuid, message: WSMessage) -> usize {
-        let conv_connections = self.conversation_connections.read().await;
+    /// 获取在线用户ID列表
+    pub async fn get_online_users(&self) -> Vec<Uuid> {
+        let user_connections = self.user_connections.read().await;
+        user_connections.keys().cloned().collect()
+    }
+
+    /// 获取所有活跃连接ID
+    pub async fn get_all_connection_ids(&self) -> Vec<ConnectionId> {
+        let connections = self.connections.read().await;
+        connections.keys().cloned().collect()
+    }
+
+    /// 向用户的所有设备发送消息
+    pub async fn send_to_user(&self, user_id: Uuid, message: WSMessage) -> usize {
+        let user_connections = self.user_connections.read().await;
         let connections = self.connections.read().await;
 
-        if let Some(user_ids) = conv_connections.get(&conversation_id) {
+        if let Some(conn_ids) = user_connections.get(&user_id) {
             if let Ok(json) = serde_json::to_string(&message) {
                 let ws_message = Message::Text(json);
                 let mut sent_count = 0;
 
-                for user_id in user_ids {
-                    if let Some(conn) = connections.get(user_id) {
+                for conn_id in conn_ids {
+                    if let Some(conn) = connections.get(conn_id) {
+                        if conn.sender.send(ws_message.clone()).is_ok() {
+                            sent_count += 1;
+                        } else {
+                            tracing::warn!(
+                                "Failed to send message to connection {} of user {}",
+                                conn_id,
+                                user_id
+                            );
+                        }
+                    }
+                }
+
+                return sent_count;
+            }
+        }
+
+        0
+    }
+
+    /// 向会话中的所有连接发送消息
+    pub async fn send_to_conversation(&self, conversation_id: Uuid, message: WSMessage) -> usize {
+        let conv_connections = self.conversation_connections.read().await;
+        let connections = self.connections.read().await;
+
+        if let Some(conn_ids) = conv_connections.get(&conversation_id) {
+            if let Ok(json) = serde_json::to_string(&message) {
+                let ws_message = Message::Text(json);
+                let mut sent_count = 0;
+
+                for conn_id in conn_ids {
+                    if let Some(conn) = connections.get(conn_id) {
                         if conn.sender.send(ws_message.clone()).is_ok() {
                             sent_count += 1;
                         }
@@ -136,6 +253,65 @@ impl WSConnectionManager {
         }
 
         0
+    }
+
+    /// 向会话中的所有连接发送消息（排除指定用户）
+    pub async fn send_to_conversation_except(
+        &self,
+        conversation_id: Uuid,
+        exclude_user_id: Uuid,
+        message: WSMessage,
+    ) -> usize {
+        let conv_connections = self.conversation_connections.read().await;
+        let connections = self.connections.read().await;
+        let user_connections = self.user_connections.read().await;
+
+        if let Some(conn_ids) = conv_connections.get(&conversation_id) {
+            if let Ok(json) = serde_json::to_string(&message) {
+                let ws_message = Message::Text(json);
+                let mut sent_count = 0;
+
+                // 获取排除用户的连接ID集合
+                let exclude_conns: std::collections::HashSet<ConnectionId> = user_connections
+                    .get(&exclude_user_id)
+                    .map(|c| c.iter().cloned().collect())
+                    .unwrap_or_default();
+
+                for conn_id in conn_ids {
+                    // 跳过排除用户的连接
+                    if exclude_conns.contains(conn_id) {
+                        continue;
+                    }
+                    if let Some(conn) = connections.get(conn_id) {
+                        if conn.sender.send(ws_message.clone()).is_ok() {
+                            sent_count += 1;
+                        }
+                    }
+                }
+
+                return sent_count;
+            }
+        }
+
+        0
+    }
+
+    /// 向特定连接发送消息
+    pub async fn send_to_connection(
+        &self,
+        connection_id: ConnectionId,
+        message: WSMessage,
+    ) -> bool {
+        let connections = self.connections.read().await;
+
+        if let Some(conn) = connections.get(&connection_id) {
+            if let Ok(json) = serde_json::to_string(&message) {
+                let ws_message = Message::Text(json);
+                return conn.sender.send(ws_message).is_ok();
+            }
+        }
+
+        false
     }
 
     /// 广播消息给所有在线用户
@@ -160,17 +336,39 @@ impl WSConnectionManager {
 
     /// 获取在线用户数
     pub async fn online_count(&self) -> usize {
+        let user_connections = self.user_connections.read().await;
+        user_connections.len()
+    }
+
+    /// 获取总连接数
+    pub async fn connection_count(&self) -> usize {
         let connections = self.connections.read().await;
         connections.len()
     }
 
-    /// 获取对话中的在线用户数
+    /// 获取会话中的在线连接数
     pub async fn conversation_online_count(&self, conversation_id: Uuid) -> usize {
         let conv_connections = self.conversation_connections.read().await;
         conv_connections
             .get(&conversation_id)
-            .map(|users| users.len())
+            .map(|ids| ids.len())
             .unwrap_or(0)
+    }
+
+    /// 获取超时的连接 (超过指定秒数未活动)
+    pub async fn get_inactive_connections(
+        &self,
+        timeout_seconds: i64,
+    ) -> Vec<ConnectionId> {
+        let connections = self.connections.read().await;
+        let now = chrono::Utc::now().timestamp();
+        let threshold = now - timeout_seconds;
+
+        connections
+            .iter()
+            .filter(|(_, conn)| conn.last_active_at < threshold)
+            .map(|(id, _)| *id)
+            .collect()
     }
 }
 

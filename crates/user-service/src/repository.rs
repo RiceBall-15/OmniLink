@@ -3,14 +3,17 @@ use common::{AppError, Result};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 use chrono::Utc;
-use crate::models::{DeviceInfo};
+use crate::models::DeviceInfo;
 
 /// 用户仓库
+///
+/// 负责用户数据的数据库操作
 pub struct UserRepository {
     pool: Pool<Postgres>,
 }
 
 impl UserRepository {
+    /// 创建新的用户仓库实例
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self { pool }
     }
@@ -52,6 +55,15 @@ impl UserRepository {
     }
 
     /// 创建用户
+    ///
+    /// 创建新用户并插入到数据库
+    ///
+    /// # Arguments
+    /// * `user_id` - 用户 ID（UUID）
+    /// * `username` - 用户名
+    /// * `email` - 邮箱
+    /// * `password_hash` - 密码哈希（bcrypt 加密）
+    /// * `avatar_url` - 头像 URL（可选）
     pub async fn create(
         &self,
         user_id: Uuid,
@@ -59,14 +71,13 @@ impl UserRepository {
         email: String,
         password_hash: String,
         avatar_url: Option<String>,
-        bio: Option<String>,
     ) -> Result<User> {
         let now = Utc::now();
 
         sqlx::query_as::<_, User>(
             r#"
-            INSERT INTO users (id, username, email, password_hash, avatar_url, bio, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO users (id, username, email, password_hash, avatar_url, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING *
             "#
         )
@@ -75,7 +86,6 @@ impl UserRepository {
         .bind(email)
         .bind(password_hash)
         .bind(avatar_url)
-        .bind(bio)
         .bind(now)
         .bind(now)
         .fetch_one(&self.pool)
@@ -90,7 +100,6 @@ impl UserRepository {
         username: Option<String>,
         email: Option<String>,
         avatar_url: Option<String>,
-        bio: Option<String>,
     ) -> Result<User> {
         let now = Utc::now();
 
@@ -110,10 +119,6 @@ impl UserRepository {
             param_count += 1;
             query.push_str(&format!(", avatar_url = ${}", param_count));
         }
-        if bio.is_some() {
-            param_count += 1;
-            query.push_str(&format!(", bio = ${}", param_count));
-        }
 
         param_count += 1;
         query.push_str(&format!(" WHERE id = ${} RETURNING *", param_count));
@@ -129,9 +134,6 @@ impl UserRepository {
         }
         if let Some(avatar_url) = avatar_url {
             query_builder = query_builder.bind(avatar_url);
-        }
-        if let Some(bio) = bio {
-            query_builder = query_builder.bind(bio);
         }
         query_builder = query_builder.bind(user_id);
 
@@ -207,11 +209,14 @@ impl UserRepository {
 }
 
 /// 设备仓库
+///
+/// 负责用户设备数据的数据库操作
 pub struct DeviceRepository {
     pool: Pool<Postgres>,
 }
 
 impl DeviceRepository {
+    /// 创建新的设备仓库实例
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self { pool }
     }
@@ -223,19 +228,19 @@ impl DeviceRepository {
         device_id: String,
         device_name: String,
         device_type: String,
-        os_version: String,
+        platform: String,
     ) -> Result<()> {
         let now = Utc::now();
 
         sqlx::query(
             r#"
-            INSERT INTO user_devices (user_id, device_id, device_name, device_type, os_version, created_at, last_active)
+            INSERT INTO user_devices (user_id, device_id, device_name, device_type, platform, created_at, last_active)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (user_id, device_id)
             DO UPDATE SET
                 device_name = EXCLUDED.device_name,
                 device_type = EXCLUDED.device_type,
-                os_version = EXCLUDED.os_version,
+                platform = EXCLUDED.platform,
                 last_active = EXCLUDED.last_active
             "#
         )
@@ -243,7 +248,7 @@ impl DeviceRepository {
         .bind(&device_id)
         .bind(device_name)
         .bind(device_type)
-        .bind(os_version)
+        .bind(platform)
         .bind(now)
         .bind(now)
         .execute(&self.pool)
@@ -260,10 +265,10 @@ impl DeviceRepository {
             SELECT
                 device_id as id,
                 user_id,
-                device_name,
                 device_type,
-                os_version,
-                last_active,
+                device_name,
+                platform,
+                last_active as last_active_at,
                 created_at
             FROM user_devices
             WHERE user_id = $1

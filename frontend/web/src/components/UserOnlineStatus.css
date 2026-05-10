@@ -1,0 +1,127 @@
+/**
+ * 用户在线状态组件样式
+ */
+
+.user-online-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: default;
+  transition: all 0.2s ease;
+}
+
+.user-online-status.clickable {
+  cursor: pointer;
+}
+
+.user-online-status.clickable:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.user-online-status.compact {
+  padding: 4px;
+}
+
+/* 头像包装器 */
+.user-avatar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* 用户头像 */
+.user-avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.user-avatar-wrapper:hover .user-avatar {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* 头像占位符 */
+.user-avatar-placeholder {
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+  user-select: none;
+}
+
+/* 状态指示器 */
+.user-status-indicator {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background-color: white;
+  border-radius: 50%;
+  padding: 1px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+/* 用户信息 */
+.user-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 用户昵称 */
+.user-nickname {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 状态文字 */
+.user-status-text {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .user-nickname {
+    font-size: 13px;
+  }
+
+  .user-status-text {
+    font-size: 11px;
+  }
+}
+
+/* 暗色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .user-online-status.clickable:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .user-avatar-wrapper:hover .user-avatar {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .user-status-indicator {
+    background-color: #1f2937;
+  }
+
+  .user-nickname {
+    color: #f9fafb;
+  }
+
+  .user-status-text {
+    color: #9ca3af;
+  }
+}

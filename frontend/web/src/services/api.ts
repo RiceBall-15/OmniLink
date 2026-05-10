@@ -18,9 +18,9 @@ async function request<T>(
 ): Promise<ApiResponse<T>> {
   const token = localStorage.getItem('token')
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string> || {}),
   }
 
   if (token) {
@@ -58,6 +58,19 @@ async function request<T>(
       },
     }
   }
+}
+
+// API 便捷方法
+export const api = {
+  get: <T>(endpoint: string, options?: RequestInit) => request<T>(endpoint, { ...options, method: 'GET' }),
+  post: <T>(endpoint: string, data?: any, options?: RequestInit) =>
+    request<T>(endpoint, { ...options, method: 'POST', body: JSON.stringify(data) }),
+  put: <T>(endpoint: string, data?: any, options?: RequestInit) =>
+    request<T>(endpoint, { ...options, method: 'PUT', body: JSON.stringify(data) }),
+  delete: <T>(endpoint: string, options?: RequestInit) =>
+    request<T>(endpoint, { ...options, method: 'DELETE' }),
+  patch: <T>(endpoint: string, data?: any, options?: RequestInit) =>
+    request<T>(endpoint, { ...options, method: 'PATCH', body: JSON.stringify(data) }),
 }
 
 export default request

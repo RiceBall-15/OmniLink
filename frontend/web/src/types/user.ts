@@ -4,6 +4,7 @@ export interface User {
   username: string
   email: string
   avatar?: string
+  onlineStatus?: 'offline' | 'online' | 'away' | 'busy'
   createdAt: string
   updatedAt: string
 }

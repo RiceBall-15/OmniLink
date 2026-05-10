@@ -4,23 +4,29 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use common::{AppError, Claims};
+use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::jwt::JwtManager;
+use crate::error::AppError;
+
 /// 认证上下文
+///
+/// 包含从 JWT Token 中提取的用户信息
 #[derive(Debug, Clone)]
 pub struct AuthContext {
     pub user_id: Uuid,
-    pub device_id: String,
 }
 
 /// 认证中间件
+///
+/// 验证请求头中的 JWT Token，并将用户信息添加到请求扩展中
 pub async fn auth_middleware(
-    State(token_manager): State<std::sync::Arc<common::auth::TokenManager>>,
+    State(jwt_manager): State<Arc<JwtManager>>,
     mut req: Request,
     next: Next,
 ) -> Result<Response, Response> {
-    // 从Header获取Token
+    // 从 Header 获取 Token
     let auth_header = req
         .headers()
         .get("Authorization")
@@ -32,7 +38,7 @@ pub async fn auth_middleware(
                 .unwrap()
         })?;
 
-    // 验证Token格式
+    // 验证 Token 格式
     let token = auth_header
         .strip_prefix("Bearer ")
         .ok_or_else(|| {
@@ -42,8 +48,8 @@ pub async fn auth_middleware(
                 .unwrap()
         })?;
 
-    // 验证Token
-    let claims = token_manager
+    // 验证 Token
+    let claims = jwt_manager
         .verify_token(token)
         .map_err(|e| {
             Response::builder()
@@ -54,8 +60,7 @@ pub async fn auth_middleware(
 
     // 将用户信息添加到请求扩展
     let auth_context = AuthContext {
-        user_id: claims.sub,
-        device_id: claims.device_id,
+        user_id: claims.user_id,
     };
     req.extensions_mut().insert(auth_context);
 

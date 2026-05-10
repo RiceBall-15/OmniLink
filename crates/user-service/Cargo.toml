@@ -12,11 +12,14 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
+sqlx.workspace = true
+redis.workspace = true
 
 # User service dependencies
 argon2 = { version = "0.5", features = ["password-hash"] }
 validator = { version = "0.16", features = ["derive"] }
 bcrypt = "0.15"
+jsonwebtoken.workspace = true
 
 # Internal dependencies
 common = { path = "../common" }

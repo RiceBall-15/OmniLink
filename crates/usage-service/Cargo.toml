@@ -18,3 +18,10 @@ chrono-tz = "0.8"
 
 # Internal dependencies
 common = { path = "../common" }
+
+# Missing dependencies
+anyhow.workspace = true
+thiserror.workspace = true
+tracing-subscriber.workspace = true
+dotenvy.workspace = true
+sqlx.workspace = true

@@ -90,7 +90,7 @@ pub struct UsageStats {
 }
 
 /// 模型统计
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ModelStats {
     pub model_name: String,
     pub total_tokens: i64,
@@ -99,7 +99,7 @@ pub struct ModelStats {
 }
 
 /// 提供商统计
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ProviderStats {
     pub provider: String,
     pub total_tokens: i64,
@@ -108,9 +108,9 @@ pub struct ProviderStats {
 }
 
 /// 日期统计
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct DateStats {
-    pub date: String,
+    pub date: chrono::NaiveDate,
     pub total_tokens: i64,
     pub total_cost: f64,
     pub request_count: i64,

@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react'
-import { useMessages } from '../hooks/useMessages'
+import { useState, useEffect } from 'react'
 import './MessageSearch.css'
 
 interface MessageSearchProps {
-  conversationId: string
   onMessageSelect: (messageId: string) => void
 }
 
-export function MessageSearch({ conversationId, onMessageSelect }: MessageSearchProps) {
+export function MessageSearch({ onMessageSelect }: MessageSearchProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)

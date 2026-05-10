@@ -7,3 +7,4 @@ pub mod db;
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};
 pub use db::{DatabaseManager};
+pub use models::ApiResponse;

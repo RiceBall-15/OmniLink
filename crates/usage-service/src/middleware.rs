@@ -38,7 +38,7 @@ pub async fn auth_middleware(
     };
 
     // 验证token
-    let claims = match TokenManager::verify_token(token_manager.secret(), token) {
+    let claims = match token_manager.verify_token(token) {
         Ok(claims) => claims,
         Err(e) => {
             tracing::warn!("Invalid token: {:?}", e);
@@ -50,11 +50,4 @@ pub async fn auth_middleware(
     req.extensions_mut().insert(claims);
 
     Ok(next.run(req).await)
-}
-
-// 为TokenManager添加secret()方法
-impl TokenManager {
-    fn secret(&self) -> &[u8] {
-        self.secret.as_bytes()
-    }
 }

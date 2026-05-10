@@ -1,0 +1,174 @@
+/**
+ * 消息已读回执组件样式
+ */
+
+.message-read-receipt {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
+}
+
+/* 悬停提示 */
+.read-receipt-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  min-width: 200px;
+  max-width: 300px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  animation: tooltipFadeIn 0.2s ease;
+  pointer-events: none;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-8px);
+  }
+}
+
+/* 提示头部 */
+.tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.read-count {
+  font-size: 0.813rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.read-time {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+/* 已读用户列表 */
+.tooltip-users {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-bottom: 0.5rem;
+}
+
+.tooltip-user {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-avatar-placeholder {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-name {
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+}
+
+.more-users {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* 提示底部 */
+.tooltip-footer {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  text-align: center;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+/* 单聊场景 */
+.tooltip-single {
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* 三角箭头 */
+.read-receipt-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--bg-primary) transparent transparent transparent;
+}
+
+.read-receipt-tooltip::before {
+  content: '';
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--border-color) transparent transparent transparent;
+  z-index: -1;
+}
+
+/* 响应式 */
+@media (max-width: 640px) {
+  .read-receipt-tooltip {
+    min-width: 180px;
+    max-width: 250px;
+    padding: 0.625rem;
+  }
+
+  .read-count {
+    font-size: 0.75rem;
+  }
+
+  .read-time {
+    font-size: 0.7rem;
+  }
+
+  .user-avatar,
+  .user-avatar-placeholder {
+    width: 20px;
+    height: 20px;
+  }
+
+  .user-name {
+    font-size: 0.75rem;
+  }
+}

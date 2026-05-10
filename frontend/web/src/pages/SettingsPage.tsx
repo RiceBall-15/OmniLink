@@ -1,10 +1,10 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
 import './SettingsPage.css'
 
 export function SettingsPage() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const { showSuccess, showError } = useToast()
   const [activeTab, setActiveTab] = useState('profile')
   const [saving, setSaving] = useState(false)

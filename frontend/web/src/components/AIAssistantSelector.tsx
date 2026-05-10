@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import type { AIAssistant } from '../types/ai'
 import { aiService } from '../services/aiService'
-import { mockApi } from '../services/mockApi'
 import './AIAssistantSelector.css'
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true'

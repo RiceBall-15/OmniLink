@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { useConversations, useMessages, useWebSocket, WSMessageType } from '../hooks/useMessages'
+import { useConversations, useMessages, useWebSocket } from '../hooks/useMessages'
+import { WSMessageType } from '../types/message'
 import { MessageList } from '../components/MessageList'
 import { AIChat } from '../components/AIChat'
 import { MessageSearch } from '../components/MessageSearch'
@@ -25,7 +26,6 @@ export function ChatPage() {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [inputMessage, setInputMessage] = useState('')
-  const [selectedAssistant, setSelectedAssistant] = useState<string>('default')
   const [searchOpen, setSearchOpen] = useState(false)
   const [fileUploadOpen, setFileUploadOpen] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
@@ -400,10 +400,9 @@ export function ChatPage() {
             {/* 搜索面板 */}
             {searchOpen && (
               <div className="search-panel">
-                <MessageSearch
-                  conversationId={selectedConversation}
-                  onMessageSelect={handleMessageSelect}
-                />
+              <MessageSearch
+                onMessageSelect={handleMessageSelect}
+              />
               </div>
             )}
 
@@ -433,7 +432,7 @@ export function ChatPage() {
                   {selectedConv?.type === 'ai' ? (
                     <AIChat
                       conversationId={selectedConversation}
-                      assistantId={selectedAssistant}
+                      assistantId="default"
                     />
                   ) : (
                     <>

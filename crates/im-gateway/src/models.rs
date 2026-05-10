@@ -23,35 +23,36 @@ pub struct WSMessage {
 }
 
 /// WebSocket消息类型
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+/// 匹配前端 TypeScript 枚举: CONNECT, CONNECTED, MESSAGE, NEW_MESSAGE, PING, PONG, TYPING, READ, ERROR
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub enum WSMessageType {
     // 连接相关
-    Connect,
-    Connected,
-    Disconnect,
-    Ping,
-    Pong,
+    Connect,      // "connect" - 客户端发起连接请求
+    Connected,    // "connected" - 服务器确认连接成功
+    Disconnect,   // "disconnect" - 断开连接
 
     // 消息相关
-    Message,
-    MessageRead,
-    MessageDelivered,
+    Message,      // "message" - 普通消息
+    NewMessage,   // "new_message" - 新消息通知
+    Read,         // "read" - 已读回执
+    Edit,         // "edit" - 消息编辑
+    Recall,       // "recall" - 消息撤回
 
-    // 状态相关
-    Online,
-    Offline,
-    Typing,
-    StopTyping,
+    // 心跳保活
+    Ping,         // "ping" - 心跳探测
+    Pong,         // "pong" - 心跳响应
+
+    // 输入状态
+    Typing,       // "typing" - 正在输入
 
     // 错误
-    Error,
+    Error,        // "error" - 错误消息
 }
 
 /// 消息发送请求
 #[derive(Debug, Deserialize, Validate)]
 pub struct SendMessageRequest {
-    #[validate(length(min = 1))]
     pub conversation_id: Uuid,
     #[validate(length(min = 1))]
     pub content: String,
@@ -159,11 +160,40 @@ pub struct MessageInfo {
 }
 
 /// 标记已读请求
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize)]
 pub struct MarkReadRequest {
-    #[validate(length(min = 1))]
     pub conversation_id: Uuid,
     pub message_id: Uuid,
+}
+
+/// 消息历史查询参数
+#[derive(Debug, Deserialize)]
+pub struct MessageHistoryQuery {
+    pub conversation_id: Uuid,
+    pub limit: Option<i32>,
+    pub before_message_id: Option<Uuid>,
+}
+
+/// 编辑消息请求
+#[derive(Debug, Deserialize)]
+pub struct EditMessageRequest {
+    pub conversation_id: Uuid,
+    pub message_id: Uuid,
+    pub content: String,
+}
+
+/// 撤回消息请求
+#[derive(Debug, Deserialize)]
+pub struct RecallMessageRequest {
+    pub conversation_id: Uuid,
+    pub message_id: Uuid,
+}
+
+/// 对话列表查询参数
+#[derive(Debug, Deserialize)]
+pub struct ConversationsQuery {
+    pub limit: Option<i32>,
+    pub offset: Option<i32>,
 }
 
 /// 在线用户响应

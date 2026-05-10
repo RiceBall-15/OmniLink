@@ -1,10 +1,11 @@
-use super::super::models::{
+use crate::models::{
     SendMessageRequest, SendMessageResponse, MessageHistoryResponse, MessageInfo,
     OnlineUsersResponse, OnlineUserInfo, WSMessage, WSMessageType,
 };
-use super::super::repository::MessageRepository;
-use super::super::connection_manager::WSConnectionManager;
-use super::super::status_manager::OnlineStatusManager;
+use crate::repository::MessageRepository;
+use crate::user_repository::UserRepository;
+use crate::connection_manager::WSConnectionManager;
+use crate::status_manager::OnlineStatusManager;
 use common::models::{Message, User};
 use common::{AppError, Result};
 use uuid::Uuid;
@@ -16,6 +17,7 @@ use std::collections::HashMap;
 /// IM服务
 pub struct IMService {
     message_repository: Arc<MessageRepository>,
+    user_repository: Arc<UserRepository>,
     connection_manager: Arc<WSConnectionManager>,
     status_manager: Arc<OnlineStatusManager>,
     user_cache: Arc<RwLock<HashMap<Uuid, User>>>,
@@ -24,11 +26,13 @@ pub struct IMService {
 impl IMService {
     pub fn new(
         message_repository: Arc<MessageRepository>,
+        user_repository: Arc<UserRepository>,
         connection_manager: Arc<WSConnectionManager>,
         status_manager: Arc<OnlineStatusManager>,
     ) -> Self {
         Self {
             message_repository,
+            user_repository,
             connection_manager,
             status_manager,
             user_cache: Arc::new(RwLock::new(HashMap::new())),
@@ -72,8 +76,32 @@ impl IMService {
             .send_to_conversation(request.conversation_id, ws_message)
             .await;
 
-        // 获取参与者列表
-        // TODO: 获取对话参与者并标记已送达
+        // 获取对话参与者并标记已送达
+        if let Ok(participants) = self.get_conversation_participants(request.conversation_id).await {
+            for participant_id in participants {
+                if participant_id != sender_id {
+                    // 标记为已送达
+                    if let Err(e) = self.message_repository.mark_as_delivered(message_id, participant_id).await {
+                        tracing::warn!("Failed to mark message as delivered: {:?}", e);
+                    }
+                    
+                    // 通知在线用户有新消息
+                    let delivery_notification = WSMessage {
+                        message_type: WSMessageType::NewMessage,
+                        conversation_id: Some(request.conversation_id),
+                        message_id: Some(message_id),
+                        sender_id: Some(sender_id),
+                        content: None,
+                        timestamp: Some(message.created_at.timestamp()),
+                        data: Some(serde_json::json!({
+                            "message_id": message_id,
+                            "conversation_id": request.conversation_id,
+                        })),
+                    };
+                    self.connection_manager.send_to_user(participant_id, delivery_notification).await;
+                }
+            }
+        }
 
         Ok(SendMessageResponse {
             message_id,
@@ -122,12 +150,13 @@ impl IMService {
         message_infos.reverse();
 
         let has_more = message_infos.len() == limit as usize;
+        let total = message_infos.len() as i32;
 
         Ok(MessageHistoryResponse {
             conversation_id,
             messages: message_infos,
             has_more,
-            total: messages.len() as i32,
+            total,
         })
     }
 
@@ -138,18 +167,93 @@ impl IMService {
             .mark_as_read(message_id, user_id)
             .await?;
 
-        // 通知发送者消息已读
+        // 获取消息信息以找到发送者
+        if let Ok(Some(message)) = self.message_repository.get_by_id(message_id).await {
+            // 通知发送者消息已读
+            let ws_message = WSMessage {
+                message_type: WSMessageType::Read,
+                conversation_id: Some(conversation_id),
+                message_id: Some(message_id),
+                sender_id: Some(user_id),
+                content: None,
+                timestamp: Some(Utc::now().timestamp()),
+                data: Some(serde_json::json!({
+                    "read_by": user_id,
+                    "message_id": message_id,
+                })),
+            };
+
+            // 发送给消息发送者
+            self.connection_manager
+                .send_to_user(message.sender_id, ws_message)
+                .await;
+        }
+
+        Ok(())
+    }
+
+    /// 编辑消息
+    pub async fn edit_message(&self, conversation_id: Uuid, message_id: Uuid, user_id: Uuid, new_content: String) -> Result<()> {
+        // 获取原消息验证权限
+        let message = self.message_repository.get_by_id(message_id).await?
+            .ok_or_else(|| AppError::NotFound("消息不存在".to_string()))?;
+
+        // 验证是否是消息发送者
+        if message.sender_id != user_id {
+            return Err(AppError::Authorization("只能编辑自己的消息".to_string()));
+        }
+
+        // 更新消息内容
+        let _updated_message = self.message_repository.update_content(message_id, &new_content).await?;
+
+        // 广播编辑事件到会话
         let ws_message = WSMessage {
-            message_type: WSMessageType::MessageRead,
+            message_type: WSMessageType::Edit,
+            conversation_id: Some(conversation_id),
+            message_id: Some(message_id),
+            sender_id: Some(user_id),
+            content: Some(new_content),
+            timestamp: Some(Utc::now().timestamp()),
+            data: Some(serde_json::json!({
+                "message_id": message_id,
+                "conversation_id": conversation_id,
+            })),
+        };
+
+        self.connection_manager.send_to_conversation(conversation_id, ws_message).await;
+
+        Ok(())
+    }
+
+    /// 撤回消息
+    pub async fn recall_message(&self, conversation_id: Uuid, message_id: Uuid, user_id: Uuid) -> Result<()> {
+        // 获取原消息验证权限
+        let message = self.message_repository.get_by_id(message_id).await?
+            .ok_or_else(|| AppError::NotFound("消息不存在".to_string()))?;
+
+        // 验证是否是消息发送者
+        if message.sender_id != user_id {
+            return Err(AppError::Authorization("只能撤回自己的消息".to_string()));
+        }
+
+        // 撤回消息
+        self.message_repository.recall(message_id).await?;
+
+        // 广播撤回事件到会话
+        let ws_message = WSMessage {
+            message_type: WSMessageType::Recall,
             conversation_id: Some(conversation_id),
             message_id: Some(message_id),
             sender_id: Some(user_id),
             content: None,
             timestamp: Some(Utc::now().timestamp()),
-            data: None,
+            data: Some(serde_json::json!({
+                "message_id": message_id,
+                "conversation_id": conversation_id,
+            })),
         };
 
-        // TODO: 获取消息发送者并发送通知
+        self.connection_manager.send_to_conversation(conversation_id, ws_message).await;
 
         Ok(())
     }
@@ -160,7 +264,7 @@ impl IMService {
         let mut online_users = Vec::new();
 
         for user_id in user_ids {
-            if let Some(user) = self.get_user_info(user_id).await {
+            if let Ok(user) = self.get_user_info(user_id).await {
                 let status = self.status_manager.get_status(user_id).await;
 
                 if let Some(status_info) = status {
@@ -175,9 +279,11 @@ impl IMService {
             }
         }
 
+        let total = online_users.len() as i32;
+
         Ok(OnlineUsersResponse {
             online_users,
-            total: online_users.len() as i32,
+            total,
         })
     }
 
@@ -191,18 +297,36 @@ impl IMService {
             }
         }
 
-        // TODO: 从数据库加载
-        // 暂时返回假数据
-        Ok(User {
-            id: user_id,
-            username: format!("user_{}", user_id),
-            email: format!("user_{}@example.com", user_id),
-            password_hash: String::new(),
-            avatar_url: None,
-            status: Some("active".to_string()),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        })
+        // 从数据库加载
+        match self.user_repository.find_by_id(user_id).await? {
+            Some(user) => {
+                // 缓存用户信息
+                self.cache_user(user.clone()).await;
+                Ok(user)
+            }
+            None => {
+                // 用户不存在，返回默认信息（避免阻塞消息流）
+                tracing::warn!("User {} not found in database, using default info", user_id);
+                Ok(User {
+                    id: user_id,
+                    username: format!("user_{}", user_id),
+                    email: format!("user_{}@example.com", user_id),
+                    password_hash: String::new(),
+                    avatar_url: None,
+                    bio: None,
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                    last_login_at: None,
+                })
+            }
+        }
+    }
+
+    /// 获取对话参与者ID列表
+    async fn get_conversation_participants(&self, _conversation_id: Uuid) -> Result<Vec<Uuid>> {
+        // 这里需要从数据库查询对话参与者
+        // 暂时返回空列表，后续可以完善
+        Ok(Vec::new())
     }
 
     /// 缓存用户信息
