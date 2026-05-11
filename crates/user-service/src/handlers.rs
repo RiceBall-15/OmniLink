@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     http::StatusCode,
     response::Json,
     Json as JsonResponse,
@@ -7,6 +7,7 @@ use axum::{
 use common::ApiResponse;
 use std::sync::Arc;
 
+use validator::Validate;
 use crate::middleware::AuthContext;
 use crate::models::*;
 use crate::services::UserService;
@@ -52,15 +53,14 @@ pub async fn login(
         .login(req)
         .await
         .map(|response| Json(ApiResponse::success(response)))
-        .map_err(|e| match e {
-            crate::error::AppError::Auth(msg) => {
-                (StatusCode::UNAUTHORIZED, msg)
-            }
-            crate::error::AppError::NotFound(msg) => {
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("not found") || msg.contains("User not found") {
                 (StatusCode::NOT_FOUND, msg)
-            }
-            _ => {
-                (StatusCode::BAD_REQUEST, e.to_string())
+            } else if msg.contains("password") || msg.contains("Invalid") {
+                (StatusCode::UNAUTHORIZED, msg)
+            } else {
+                (StatusCode::BAD_REQUEST, msg)
             }
         })
 }
@@ -80,7 +80,7 @@ pub async fn refresh_token(
 /// 退出登录
 pub async fn logout(
     State(user_service): State<Arc<UserService>>,
-    auth: AuthContext,
+    Extension(auth): Extension<AuthContext>,
     Json(req): JsonResponse<LogoutRequest>,
 ) -> Result<Json<ApiResponse<()>>, (StatusCode, String)> {
     user_service
@@ -93,7 +93,7 @@ pub async fn logout(
 /// 获取当前用户信息
 pub async fn get_profile(
     State(user_service): State<Arc<UserService>>,
-    auth: AuthContext,
+    Extension(auth): Extension<AuthContext>,
 ) -> Result<Json<ApiResponse<User>>, (StatusCode, String)> {
     user_service
         .get_profile(auth.user_id)
@@ -105,7 +105,7 @@ pub async fn get_profile(
 /// 更新用户资料
 pub async fn update_profile(
     State(user_service): State<Arc<UserService>>,
-    auth: AuthContext,
+    Extension(auth): Extension<AuthContext>,
     Json(req): JsonResponse<UpdateProfileRequest>,
 ) -> Result<Json<ApiResponse<User>>, (StatusCode, String)> {
     match req.validate() {
@@ -128,7 +128,7 @@ pub async fn update_profile(
 /// 修改密码
 pub async fn change_password(
     State(user_service): State<Arc<UserService>>,
-    auth: AuthContext,
+    Extension(auth): Extension<AuthContext>,
     Json(req): JsonResponse<ChangePasswordRequest>,
 ) -> Result<Json<ApiResponse<()>>, (StatusCode, String)> {
     match req.validate() {
@@ -145,12 +145,12 @@ pub async fn change_password(
         .change_password(auth.user_id, req)
         .await
         .map(|_| Json(ApiResponse::success(())))
-        .map_err(|e| match e {
-            crate::error::AppError::Auth(msg) => {
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("password") || msg.contains("Invalid old password") {
                 (StatusCode::UNAUTHORIZED, msg)
-            }
-            _ => {
-                (StatusCode::BAD_REQUEST, e.to_string())
+            } else {
+                (StatusCode::BAD_REQUEST, msg)
             }
         })
 }
@@ -158,7 +158,7 @@ pub async fn change_password(
 /// 获取设备列表
 pub async fn get_devices(
     State(user_service): State<Arc<UserService>>,
-    auth: AuthContext,
+    Extension(auth): Extension<AuthContext>,
 ) -> Result<Json<ApiResponse<DevicesResponse>>, (StatusCode, String)> {
     // 从请求头或查询参数获取当前设备ID
     let current_device_id = "unknown".to_string(); // 简化版本
@@ -173,7 +173,7 @@ pub async fn get_devices(
 /// 删除设备
 pub async fn delete_device(
     State(user_service): State<Arc<UserService>>,
-    auth: AuthContext,
+    Extension(auth): Extension<AuthContext>,
     Path(device_id): Path<String>,
 ) -> Result<Json<ApiResponse<()>>, (StatusCode, String)> {
     user_service
@@ -186,7 +186,7 @@ pub async fn delete_device(
 /// 删除账号
 pub async fn delete_account(
     State(user_service): State<Arc<UserService>>,
-    auth: AuthContext,
+    Extension(auth): Extension<AuthContext>,
 ) -> Result<Json<ApiResponse<()>>, (StatusCode, String)> {
     user_service
         .delete_account(auth.user_id)

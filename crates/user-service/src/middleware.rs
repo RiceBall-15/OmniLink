@@ -1,4 +1,5 @@
 use axum::{
+    body::Body,
     extract::{Request, State},
     http::StatusCode,
     middleware::Next,
@@ -8,7 +9,6 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::jwt::JwtManager;
-use crate::error::AppError;
 
 /// 认证上下文
 ///
@@ -25,7 +25,7 @@ pub async fn auth_middleware(
     State(jwt_manager): State<Arc<JwtManager>>,
     mut req: Request,
     next: Next,
-) -> Result<Response, Response> {
+) -> Result<Response, Response<Body>> {
     // 从 Header 获取 Token
     let auth_header = req
         .headers()
@@ -34,7 +34,7 @@ pub async fn auth_middleware(
         .ok_or_else(|| {
             Response::builder()
                 .status(StatusCode::UNAUTHORIZED)
-                .body("Missing authorization header".to_string())
+                .body(Body::from("Missing authorization header"))
                 .unwrap()
         })?;
 
@@ -44,7 +44,7 @@ pub async fn auth_middleware(
         .ok_or_else(|| {
             Response::builder()
                 .status(StatusCode::UNAUTHORIZED)
-                .body("Invalid authorization header format".to_string())
+                .body(Body::from("Invalid authorization header format"))
                 .unwrap()
         })?;
 
@@ -54,7 +54,7 @@ pub async fn auth_middleware(
         .map_err(|e| {
             Response::builder()
                 .status(StatusCode::UNAUTHORIZED)
-                .body(e.to_string())
+                .body(Body::from(e.to_string()))
                 .unwrap()
         })?;
 

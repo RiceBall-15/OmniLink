@@ -16,17 +16,25 @@ pub struct RegisterRequest {
     pub password: String,
 
     #[validate(length(max = 500))]
-    pub avatar: Option<String>,
+    pub avatar_url: Option<String>,
+
+    #[validate(length(max = 500))]
+    pub bio: Option<String>,
 }
 
 /// 用户登录请求
 #[derive(Debug, Deserialize, Validate)]
 pub struct LoginRequest {
-    #[validate(email)]
-    pub email: String,
+    #[validate(length(min = 1))]
+    pub email_or_username: String,
 
     #[validate(length(min = 1))]
     pub password: String,
+
+    #[validate(length(min = 1))]
+    pub device_id: String,
+
+    pub device_name: Option<String>,
 }
 
 /// 用户登录响应（匹配前端类型定义）
@@ -83,7 +91,10 @@ pub struct UpdateProfileRequest {
     pub email: Option<String>,
 
     #[validate(length(max = 500))]
-    pub avatar: Option<String>,
+    pub avatar_url: Option<String>,
+
+    #[validate(length(max = 500))]
+    pub bio: Option<String>,
 }
 
 /// 修改密码请求
@@ -97,7 +108,7 @@ pub struct ChangePasswordRequest {
 }
 
 /// 设备信息
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct DeviceInfo {
     pub id: String,
     pub user_id: Uuid,

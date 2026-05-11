@@ -1,4 +1,3 @@
-pub mod main;
 pub mod handlers;
 pub mod services;
 pub mod repository;
@@ -8,4 +7,3 @@ pub mod jwt;
 pub mod password;
 pub mod error;
 pub mod handlers_test;
-pub use main::run;

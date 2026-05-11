@@ -23,6 +23,8 @@ jsonwebtoken.workspace = true
 
 # Internal dependencies
 common = { path = "../common" }
+anyhow.workspace = true
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
 tokio-test = "0.4"

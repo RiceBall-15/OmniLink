@@ -87,7 +87,7 @@ impl UserService {
             req.username,
             req.email,
             password_hash,
-            req.avatar,
+            req.avatar_url,
         ).await?;
 
         // 转换为前端用户信息格式
@@ -102,11 +102,18 @@ impl UserService {
     /// 3. 生成 JWT Token（有效期 7 天）
     /// 4. 返回 token 和用户信息
     pub async fn login(&self, req: LoginRequest) -> Result<LoginResponse> {
-        // 根据邮箱查询用户
-        let user = self.user_repo
-            .find_by_email(&req.email)
-            .await?
-            .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
+        // 根据邮箱或用户名查询用户
+        let user = if req.email_or_username.contains('@') {
+            self.user_repo
+                .find_by_email(&req.email_or_username)
+                .await?
+                .ok_or_else(|| AppError::NotFound("User not found".to_string()))?
+        } else {
+            self.user_repo
+                .find_by_username(&req.email_or_username)
+                .await?
+                .ok_or_else(|| AppError::NotFound("User not found".to_string()))?
+        };
 
         // 使用 bcrypt 验证密码
         let password_valid = PasswordManager::verify_password(&req.password, &user.password_hash)?;
@@ -206,7 +213,7 @@ impl UserService {
             user_id,
             req.username,
             req.email,
-            req.avatar,
+            req.avatar_url,
         ).await?;
 
         Ok(User::from_db_user(&user))

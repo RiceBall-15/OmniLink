@@ -4,12 +4,13 @@ use tokio::net::TcpListener;
 use tracing::info;
 
 use common::db::DatabaseManager;
-use crate::services::UserService;
-use crate::handlers::*;
-use crate::middleware::auth_middleware;
-use crate::jwt::JwtManager;
+use user_service::services::UserService;
+use user_service::handlers::*;
+use user_service::middleware::auth_middleware;
+use user_service::jwt::JwtManager;
 
-pub async fn run() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     // 初始化日志
     tracing_subscriber::fmt::init();
 
@@ -61,19 +62,19 @@ fn create_router(user_service: Arc<UserService>) -> Router {
         .route("/user/profile", post(update_profile))
         .route("/user/password", post(change_password))
         .route("/user/devices", get(get_devices))
-        .route("/user/devices/:device_id", delete(delete_device))
+        .route("/user/devices/{device_id}", delete(delete_device))
         .route("/user/account", delete(delete_account))
         .layer(middleware::from_fn_with_state(
             user_service.get_token_manager(),
             auth_middleware,
-        ))
-        .with_state(user_service);
+        ));
 
-    // 合并路由
+    // 合并路由并设置状态
     Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .layer(middleware::from_fn(logging_middleware))
+        .with_state(user_service)
 }
 
 async fn logging_middleware(

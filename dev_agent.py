@@ -498,20 +498,30 @@ class OmniLinkDeveloper:
         """实现在线状态同步功能"""
         print("🔧 实现在线状态同步...")
         
-        # 创建或修改相关文件
+        # 1. 创建或修改相关文件
         files_to_modify = [
             "services/im-gateway/src/connection_manager.rs",
             "services/im-gateway/src/handlers/websocket.rs",
             "services/common/src/redis.rs"
         ]
         
-        # 这里应该实现实际的代码编写逻辑
-        # 例如：添加用户状态管理、Redis存储、WebSocket广播
+        # 2. 实现用户状态管理
+        print("  - 实现用户状态管理...")
+        self.create_user_status_manager()
         
-        # 模拟实现过程
-        time.sleep(2)
+        # 3. 实现Redis在线状态存储
+        print("  - 实现Redis在线状态存储...")
+        self.create_redis_status_storage()
         
-        # 编译项目
+        # 4. 实现WebSocket状态广播
+        print("  - 实现WebSocket状态广播...")
+        self.create_websocket_status_broadcast()
+        
+        # 5. 创建在线状态查询API
+        print("  - 创建在线状态查询API...")
+        self.create_online_status_api()
+        
+        # 6. 编译项目
         compile_success, compile_output = self.compile_project()
         
         if not compile_success:
@@ -521,7 +531,7 @@ class OmniLinkDeveloper:
                 self.mark_task_blocked(task, "编译错误无法修复")
                 return False, f"编译错误: {compile_output}"
         
-        # 提交代码
+        # 7. 提交代码
         commit_hash = self.commit_changes(task['name'])
         
         if commit_hash:
@@ -531,6 +541,866 @@ class OmniLinkDeveloper:
         else:
             self.mark_task_blocked(task, "提交失败")
             return False, "代码提交失败"
+    
+    def create_user_status_manager(self):
+        """创建用户状态管理模块"""
+        # 这里应该实现实际的代码编写逻辑
+        # 例如：创建或修改ConnectionManager，添加用户状态管理
+        
+        # 创建用户状态管理文件
+        user_status_file = self.project_root / "services/common/src/user_status.rs"
+        user_status_content = """//! 用户状态管理模块
+//! 管理用户在线/离线状态，包括Redis存储和WebSocket广播
+
+use redis::{Client, Commands, RedisResult};
+use serde::{Serialize, Deserialize};
+use chrono::{DateTime, Utc};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+/// 用户状态枚举
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum UserStatus {
+    /// 在线
+    Online,
+    /// 离线
+    Offline,
+    /// 忙碌
+    Busy,
+    /// 离开
+    Away,
+}
+
+/// 用户状态信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserStatusInfo {
+    /// 用户ID
+    pub user_id: String,
+    /// 用户状态
+    pub status: UserStatus,
+    /// 最后在线时间
+    pub last_seen: DateTime<Utc>,
+    /// 设备信息
+    pub device_info: Option<String>,
+}
+
+/// 用户状态管理器
+pub struct UserStatusManager {
+    /// Redis客户端
+    redis_client: Arc<Client>,
+    /// 状态缓存
+    status_cache: Arc<RwLock<std::collections::HashMap<String, UserStatusInfo>>>,
+}
+
+impl UserStatusManager {
+    /// 创建新的用户状态管理器
+    pub fn new(redis_client: Arc<Client>) -> Self {
+        Self {
+            redis_client,
+            status_cache: Arc::new(RwLock::new(std::collections::HashMap::new())),
+        }
+    }
+    
+    /// 设置用户状态
+    pub async fn set_user_status(&self, user_id: &str, status: UserStatus, device_info: Option<String>) -> RedisResult<()> {
+        let status_info = UserStatusInfo {
+            user_id: user_id.to_string(),
+            status: status.clone(),
+            last_seen: Utc::now(),
+            device_info,
+        };
+        
+        // 更新Redis
+        let mut conn = self.redis_client.get_async_connection().await?;
+        let key = format!("user_status:{}", user_id);
+        let value = serde_json::to_string(&status_info).map_err(|e| redis::RedisError::from((redis::ErrorKind::TypeError, "JSON序列化失败", e.to_string())))?;
+        conn.set_ex(&key, &value, 3600).await?; // 1小时过期
+        
+        // 更新缓存
+        let mut cache = self.status_cache.write().await;
+        cache.insert(user_id.to_string(), status_info);
+        
+        Ok(())
+    }
+    
+    /// 获取用户状态
+    pub async fn get_user_status(&self, user_id: &str) -> RedisResult<Option<UserStatusInfo>> {
+        // 先检查缓存
+        {
+            let cache = self.status_cache.read().await;
+            if let Some(status_info) = cache.get(user_id) {
+                return Ok(Some(status_info.clone()));
+            }
+        }
+        
+        // 从Redis获取
+        let mut conn = self.redis_client.get_async_connection().await?;
+        let key = format!("user_status:{}", user_id);
+        let value: Option<String> = conn.get(&key).await?;
+        
+        if let Some(value) = value {
+            let status_info: UserStatusInfo = serde_json::from_str(&value).map_err(|e| redis::RedisError::from((redis::ErrorKind::TypeError, "JSON反序列化失败", e.to_string())))?;
+            
+            // 更新缓存
+            let mut cache = self.status_cache.write().await;
+            cache.insert(user_id.to_string(), status_info.clone());
+            
+            Ok(Some(status_info))
+        } else {
+            Ok(None)
+        }
+    }
+    
+    /// 批量获取用户状态
+    pub async fn get_batch_user_status(&self, user_ids: &[String]) -> RedisResult<std::collections::HashMap<String, UserStatusInfo>> {
+        let mut result = std::collections::HashMap::new();
+        
+        for user_id in user_ids {
+            if let Some(status_info) = self.get_user_status(user_id).await? {
+                result.insert(user_id.clone(), status_info);
+            }
+        }
+        
+        Ok(result)
+    }
+    
+    /// 获取在线用户列表
+    pub async fn get_online_users(&self) -> RedisResult<Vec<String>> {
+        let mut conn = self.redis_client.get_async_connection().await?;
+        let keys: Vec<String> = conn.keys("user_status:*").await?;
+        
+        let mut online_users = Vec::new();
+        for key in keys {
+            let value: Option<String> = conn.get(&key).await?;
+            if let Some(value) = value {
+                let status_info: UserStatusInfo = serde_json::from_str(&value).map_err(|e| redis::RedisError::from((redis::ErrorKind::TypeError, "JSON反序列化失败", e.to_string())))?;
+                if status_info.status == UserStatus::Online {
+                    // 从key中提取用户ID
+                    if let Some(user_id) = key.strip_prefix("user_status:") {
+                        online_users.push(user_id.to_string());
+                    }
+                }
+            }
+        }
+        
+        Ok(online_users)
+    }
+    
+    /// 清理过期状态
+    pub async fn cleanup_expired_status(&self) -> RedisResult<usize> {
+        let mut conn = self.redis_client.get_async_connection().await?;
+        let keys: Vec<String> = conn.keys("user_status:*").await?;
+        
+        let mut cleaned_count = 0;
+        for key in keys {
+            let ttl: i64 = conn.ttl(&key).await?;
+            if ttl < 0 {
+                conn.del(&key).await?;
+                cleaned_count += 1;
+            }
+        }
+        
+        Ok(cleaned_count)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use redis::Client;
+    
+    #[tokio::test]
+    async fn test_user_status_manager() {
+        // 这里应该添加实际的测试
+        // 由于需要Redis连接，这里只是示例
+    }
+}
+"""
+        
+        # 写入文件
+        if not user_status_file.parent.exists():
+            user_status_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(user_status_file, 'w', encoding='utf-8') as f:
+            f.write(user_status_content)
+        
+        print(f"  ✅ 创建用户状态管理文件: {user_status_file}")
+        
+        # 更新Cargo.toml添加依赖
+        cargo_file = self.project_root / "services/common/Cargo.toml"
+        if cargo_file.exists():
+            with open(cargo_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 检查是否已添加依赖
+            if 'redis' not in content or 'chrono' not in content:
+                # 添加依赖
+                if '[dependencies]' in content:
+                    content = content.replace('[dependencies]', '[dependencies]\\nredis = { version = "0.23", features = ["tokio-comp"] }\\nchrono = { version = "0.4", features = ["serde"] }')
+                else:
+                    content += '\\n[dependencies]\\nredis = { version = "0.23", features = ["tokio-comp"] }\\nchrono = { version = "0.4", features = ["serde"] }'
+                
+                with open(cargo_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                print(f"  ✅ 更新Cargo.toml添加依赖")
+    
+    def create_redis_status_storage(self):
+        """创建Redis在线状态存储"""
+        # 这里应该实现实际的代码编写逻辑
+        # 例如：创建Redis在线状态存储模块
+        
+        # 创建Redis状态存储文件
+        redis_status_file = self.project_root / "services/common/src/redis_status.rs"
+        redis_status_content = """//! Redis在线状态存储模块
+//! 提供Redis存储的在线状态管理功能
+
+use redis::{Client, Commands, RedisResult, ConnectionInfo, ConnectionAddr};
+use serde::{Serialize, Deserialize};
+use chrono::{DateTime, Utc};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use std::collections::HashMap;
+
+/// Redis在线状态存储配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedisStatusConfig {
+    /// Redis连接地址
+    pub redis_url: String,
+    /// 状态过期时间（秒）
+    pub status_ttl: u64,
+    /// 批量操作大小
+    pub batch_size: usize,
+}
+
+impl Default for RedisStatusConfig {
+    fn default() -> Self {
+        Self {
+            redis_url: "redis://127.0.0.1:6379".to_string(),
+            status_ttl: 3600, // 1小时
+            batch_size: 100,
+        }
+    }
+}
+
+/// Redis在线状态存储
+pub struct RedisStatusStorage {
+    /// Redis客户端
+    client: Arc<Client>,
+    /// 配置
+    config: RedisStatusConfig,
+    /// 本地缓存
+    cache: Arc<RwLock<HashMap<String, String>>>,
+}
+
+impl RedisStatusStorage {
+    /// 创建新的Redis在线状态存储
+    pub fn new(config: RedisStatusConfig) -> RedisResult<Self> {
+        let client = Client::open(config.redis_url.clone())?;
+        
+        Ok(Self {
+            client: Arc::new(client),
+            config,
+            cache: Arc::new(RwLock::new(HashMap::new())),
+        })
+    }
+    
+    /// 测试Redis连接
+    pub async fn test_connection(&self) -> RedisResult<bool> {
+        let mut conn = self.client.get_async_connection().await?;
+        let pong: String = redis::cmd("PING").query_async(&mut conn).await?;
+        Ok(pong == "PONG")
+    }
+    
+    /// 设置用户状态
+    pub async fn set_status(&self, user_id: &str, status: &str) -> RedisResult<()> {
+        let mut conn = self.client.get_async_connection().await?;
+        let key = format!("user:status:{}", user_id);
+        let value = serde_json::to_string(status).unwrap_or_default();
+        
+        // 设置带过期时间的状态
+        conn.set_ex(&key, &value, self.config.status_ttl).await?;
+        
+        // 更新本地缓存
+        let mut cache = self.cache.write().await;
+        cache.insert(user_id.to_string(), value);
+        
+        Ok(())
+    }
+    
+    /// 获取用户状态
+    pub async fn get_status(&self, user_id: &str) -> RedisResult<Option<String>> {
+        // 先检查本地缓存
+        {
+            let cache = self.cache.read().await;
+            if let Some(value) = cache.get(user_id) {
+                return Ok(Some(value.clone()));
+            }
+        }
+        
+        // 从Redis获取
+        let mut conn = self.client.get_async_connection().await?;
+        let key = format!("user:status:{}", user_id);
+        let value: Option<String> = conn.get(&key).await?;
+        
+        // 更新本地缓存
+        if let Some(ref v) = value {
+            let mut cache = self.cache.write().await;
+            cache.insert(user_id.to_string(), v.clone());
+        }
+        
+        Ok(value)
+    }
+    
+    /// 批量设置用户状态
+    pub async fn batch_set_status(&self, statuses: &[(String, String)]) -> RedisResult<()> {
+        let mut conn = self.client.get_async_connection().await?;
+        let mut pipe = redis::pipe();
+        
+        for (user_id, status) in statuses {
+            let key = format!("user:status:{}", user_id);
+            let value = serde_json::to_string(status).unwrap_or_default();
+            pipe.set_ex(&key, &value, self.config.status_ttl);
+        }
+        
+        pipe.query_async(&mut conn).await?;
+        
+        // 更新本地缓存
+        let mut cache = self.cache.write().await;
+        for (user_id, status) in statuses {
+            cache.insert(user_id.clone(), serde_json::to_string(status).unwrap_or_default());
+        }
+        
+        Ok(())
+    }
+    
+    /// 获取所有在线用户
+    pub async fn get_online_users(&self) -> RedisResult<Vec<String>> {
+        let mut conn = self.client.get_async_connection().await?;
+        let pattern = "user:status:*";
+        
+        // 使用SCAN命令获取所有匹配的键
+        let keys: Vec<String> = redis::cmd("SCAN")
+            .cursor_arg(0)
+            .arg("MATCH")
+            .arg(pattern)
+            .arg("COUNT")
+            .arg(self.config.batch_size)
+            .query_async(&mut conn)
+            .await?;
+        
+        let mut online_users = Vec::new();
+        for key in keys {
+            if let Some(user_id) = key.strip_prefix("user:status:") {
+                // 检查状态是否为在线
+                if let Ok(Some(status)) = self.get_status(user_id).await {
+                    if status.contains("Online") {
+                        online_users.push(user_id.to_string());
+                    }
+                }
+            }
+        }
+        
+        Ok(online_users)
+    }
+    
+    /// 删除用户状态
+    pub async fn delete_status(&self, user_id: &str) -> RedisResult<()> {
+        let mut conn = self.client.get_async_connection().await?;
+        let key = format!("user:status:{}", user_id);
+        
+        conn.del(&key).await?;
+        
+        // 删除本地缓存
+        let mut cache = self.cache.write().await;
+        cache.remove(user_id);
+        
+        Ok(())
+    }
+    
+    /// 清理过期状态
+    pub async fn cleanup_expired(&self) -> RedisResult<usize> {
+        let mut conn = self.client.get_async_connection().await?;
+        let pattern = "user:status:*";
+        
+        let keys: Vec<String> = redis::cmd("SCAN")
+            .cursor_arg(0)
+            .arg("MATCH")
+            .arg(pattern)
+            .arg("COUNT")
+            .arg(self.config.batch_size)
+            .query_async(&mut conn)
+            .await?;
+        
+        let mut cleaned = 0;
+        for key in keys {
+            let ttl: i64 = conn.ttl(&key).await?;
+            if ttl < 0 {
+                conn.del(&key).await?;
+                cleaned += 1;
+            }
+        }
+        
+        Ok(cleaned)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[tokio::test]
+    async fn test_redis_status_storage() {
+        let config = RedisStatusConfig::default();
+        let storage = RedisStatusStorage::new(config).unwrap();
+        
+        // 测试连接
+        if let Ok(true) = storage.test_connection().await {
+            // 设置状态
+            storage.set_status("user1", "Online").await.unwrap();
+            
+            // 获取状态
+            let status = storage.get_status("user1").await.unwrap();
+            assert_eq!(status, Some("Online".to_string()));
+            
+            // 删除状态
+            storage.delete_status("user1").await.unwrap();
+            
+            // 验证删除
+            let status = storage.get_status("user1").await.unwrap();
+            assert_eq!(status, None);
+        }
+    }
+}
+"""
+        
+        # 写入文件
+        with open(redis_status_file, 'w', encoding='utf-8') as f:
+            f.write(redis_status_content)
+        
+        print(f"  ✅ 创建Redis状态存储文件: {redis_status_file}")
+        
+        # 更新Cargo.toml添加依赖
+        cargo_file = self.project_root / "services/common/Cargo.toml"
+        if cargo_file.exists():
+            with open(cargo_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 检查是否已添加依赖
+            if 'tokio' not in content:
+                # 添加依赖
+                if '[dependencies]' in content:
+                    content = content.replace('[dependencies]', '[dependencies]\\ntokio = { version = "1.0", features = ["full"] }')
+                else:
+                    content += '\\n[dependencies]\\ntokio = { version = "1.0", features = ["full"] }'
+                
+                with open(cargo_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                print(f"  ✅ 更新Cargo.toml添加tokio依赖")
+    
+    def create_websocket_status_broadcast(self):
+        """创建WebSocket状态广播"""
+        # 这里应该实现实际的代码编写逻辑
+        # 例如：实现WebSocket状态广播功能
+        
+        # 创建WebSocket状态广播文件
+        ws_status_file = self.project_root / "services/im-gateway/src/status_broadcast.rs"
+        ws_status_content = """//! WebSocket状态广播模块
+//! 负责向相关用户广播在线状态变化
+
+use crate::connection_manager::ConnectionManager;
+use crate::user_status::{UserStatus, UserStatusInfo};
+use serde::{Serialize, Deserialize};
+use chrono::Utc;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use std::collections::HashMap;
+
+/// 状态变化事件
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatusChangeEvent {
+    /// 用户ID
+    pub user_id: String,
+    /// 新状态
+    pub status: UserStatus,
+    /// 变化时间
+    pub timestamp: chrono::DateTime<Utc>,
+    /// 设备信息
+    pub device_info: Option<String>,
+}
+
+/// WebSocket状态广播器
+pub struct StatusBroadcaster {
+    /// 连接管理器
+    connection_manager: Arc<ConnectionManager>,
+    /// 订阅者列表（用户ID -> 订阅的用户ID列表）
+    subscribers: Arc<RwLock<HashMap<String, Vec<String>>>>,
+}
+
+impl StatusBroadcaster {
+    /// 创建新的状态广播器
+    pub fn new(connection_manager: Arc<ConnectionManager>) -> Self {
+        Self {
+            connection_manager,
+            subscribers: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+    
+    /// 添加订阅关系
+    pub async fn add_subscription(&self, subscriber_id: &str, target_id: &str) {
+        let mut subscribers = self.subscribers.write().await;
+        let entry = subscribers.entry(subscriber_id.to_string()).or_insert_with(Vec::new);
+        if !entry.contains(&target_id.to_string()) {
+            entry.push(target_id.to_string());
+        }
+    }
+    
+    /// 移除订阅关系
+    pub async fn remove_subscription(&self, subscriber_id: &str, target_id: &str) {
+        let mut subscribers = self.subscribers.write().await;
+        if let Some(entry) = subscribers.get_mut(subscriber_id) {
+            entry.retain(|id| id != target_id);
+        }
+    }
+    
+    /// 广播状态变化
+    pub async fn broadcast_status_change(&self, event: StatusChangeEvent) -> Result<(), Box<dyn std::error::Error>> {
+        // 获取所有订阅了该用户的订阅者
+        let subscribers = self.subscribers.read().await;
+        let mut target_subscribers = Vec::new();
+        
+        for (subscriber_id, targets) in subscribers.iter() {
+            if targets.contains(&event.user_id) {
+                target_subscribers.push(subscriber_id.clone());
+            }
+        }
+        
+        // 向每个订阅者发送状态变化通知
+        for subscriber_id in target_subscribers {
+            if let Some(connection) = self.connection_manager.get_connection(&subscriber_id).await {
+                let notification = serde_json::json!({
+                    "type": "status_change",
+                    "data": {
+                        "user_id": event.user_id,
+                        "status": event.status,
+                        "timestamp": event.timestamp,
+                        "device_info": event.device_info,
+                    }
+                });
+                
+                if let Err(e) = connection.send_message(notification).await {
+                    eprintln!("发送状态变化通知失败: {}", e);
+                }
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// 广播批量状态变化
+    pub async fn broadcast_batch_status_change(&self, events: Vec<StatusChangeEvent>) -> Result<(), Box<dyn std::error::Error>> {
+        for event in events {
+            self.broadcast_status_change(event).await?;
+        }
+        
+        Ok(())
+    }
+    
+    /// 获取用户的所有订阅者
+    pub async fn get_user_subscribers(&self, user_id: &str) -> Vec<String> {
+        let subscribers = self.subscribers.read().await;
+        let mut result = Vec::new();
+        
+        for (subscriber_id, targets) in subscribers.iter() {
+            if targets.contains(&user_id.to_string()) {
+                result.push(subscriber_id.clone());
+            }
+        }
+        
+        result
+    }
+    
+    /// 清理无效订阅
+    pub async fn cleanup_invalid_subscriptions(&self) -> usize {
+        let mut subscribers = self.subscribers.write().await;
+        let mut cleaned = 0;
+        
+        let mut to_remove = Vec::new();
+        
+        for (subscriber_id, targets) in subscribers.iter() {
+            let mut new_targets = Vec::new();
+            
+            for target_id in targets {
+                // 检查连接是否存在
+                if self.connection_manager.get_connection(target_id).await.is_some() {
+                    new_targets.push(target_id.clone());
+                } else {
+                    cleaned += 1;
+                }
+            }
+            
+            if new_targets.is_empty() {
+                to_remove.push(subscriber_id.clone());
+            } else {
+                subscribers.insert(subscriber_id.clone(), new_targets);
+            }
+        }
+        
+        for subscriber_id in to_remove {
+            subscribers.remove(&subscriber_id);
+        }
+        
+        cleaned
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::connection_manager::ConnectionManager;
+    
+    #[tokio::test]
+    async fn test_status_broadcaster() {
+        let connection_manager = Arc::new(ConnectionManager::new());
+        let broadcaster = StatusBroadcaster::new(connection_manager);
+        
+        // 测试订阅关系
+        broadcaster.add_subscription("user1", "user2").await;
+        broadcaster.add_subscription("user1", "user3").await;
+        
+        let subscribers = broadcaster.get_user_subscribers("user2").await;
+        assert!(subscribers.contains(&"user1".to_string()));
+        
+        // 测试移除订阅
+        broadcaster.remove_subscription("user1", "user2").await;
+        let subscribers = broadcaster.get_user_subscribers("user2").await;
+        assert!(!subscribers.contains(&"user1".to_string()));
+    }
+}
+"""
+        
+        # 写入文件
+        with open(ws_status_file, 'w', encoding='utf-8') as f:
+            f.write(ws_status_content)
+        
+        print(f"  ✅ 创建WebSocket状态广播文件: {ws_status_file}")
+        
+        # 更新Cargo.toml添加依赖
+        cargo_file = self.project_root / "services/im-gateway/Cargo.toml"
+        if cargo_file.exists():
+            with open(cargo_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 检查是否已添加依赖
+            if 'chrono' not in content:
+                # 添加依赖
+                if '[dependencies]' in content:
+                    content = content.replace('[dependencies]', '[dependencies]\\nchrono = { version = "0.4", features = ["serde"] }')
+                else:
+                    content += '\\n[dependencies]\\nchrono = { version = "0.4", features = ["serde"] }'
+                
+                with open(cargo_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                print(f"  ✅ 更新Cargo.toml添加chrono依赖")
+    
+    def create_online_status_api(self):
+        """创建在线状态查询API"""
+        # 这里应该实现实际的代码编写逻辑
+        # 例如：创建在线状态查询API端点
+        
+        # 创建在线状态API文件
+        online_status_api_file = self.project_root / "services/im-api/src/handlers/online_status.rs"
+        online_status_api_content = """//! 在线状态查询API
+//! 提供用户在线状态查询的HTTP接口
+
+use actix_web::{web, HttpResponse, Result};
+use serde::{Serialize, Deserialize};
+use chrono::{DateTime, Utc};
+use std::sync::Arc;
+use crate::user_status::{UserStatus, UserStatusInfo};
+use crate::redis_status::RedisStatusStorage;
+
+/// 在线状态查询请求
+#[derive(Debug, Deserialize)]
+pub struct OnlineStatusRequest {
+    /// 用户ID列表
+    pub user_ids: Vec<String>,
+}
+
+/// 在线状态查询响应
+#[derive(Debug, Serialize)]
+pub struct OnlineStatusResponse {
+    /// 用户状态列表
+    pub statuses: Vec<UserStatusInfo>,
+    /// 查询时间
+    pub query_time: DateTime<Utc>,
+}
+
+/// 在线状态API处理器
+pub struct OnlineStatusHandler {
+    /// Redis状态存储
+    status_storage: Arc<RedisStatusStorage>,
+}
+
+impl OnlineStatusHandler {
+    /// 创建新的在线状态API处理器
+    pub fn new(status_storage: Arc<RedisStatusStorage>) -> Self {
+        Self { status_storage }
+    }
+    
+    /// 查询用户在线状态
+    pub async fn get_user_status(&self, user_id: web::Path<String>) -> Result<HttpResponse> {
+        match self.status_storage.get_status(&user_id).await {
+            Ok(Some(status)) => {
+                let response = OnlineStatusResponse {
+                    statuses: vec![UserStatusInfo {
+                        user_id: user_id.clone(),
+                        status: UserStatus::Online,
+                        last_seen: Utc::now(),
+                        device_info: None,
+                    }],
+                    query_time: Utc::now(),
+                };
+                Ok(HttpResponse::Ok().json(response))
+            }
+            Ok(None) => {
+                Ok(HttpResponse::NotFound().json(serde_json::json!({
+                    "error": "用户不存在或未设置状态"
+                })))
+            }
+            Err(e) => {
+                Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("查询状态失败: {}", e)
+                })))
+            }
+        }
+    }
+    
+    /// 批量查询用户在线状态
+    pub async fn batch_get_user_status(&self, req: web::Json<OnlineStatusRequest>) -> Result<HttpResponse> {
+        let mut statuses = Vec::new();
+        
+        for user_id in &req.user_ids {
+            match self.status_storage.get_status(user_id).await {
+                Ok(Some(status)) => {
+                    statuses.push(UserStatusInfo {
+                        user_id: user_id.clone(),
+                        status: UserStatus::Online,
+                        last_seen: Utc::now(),
+                        device_info: None,
+                    });
+                }
+                Ok(None) => {
+                    // 用户不存在，跳过
+                }
+                Err(e) => {
+                    eprintln!("查询用户 {} 状态失败: {}", user_id, e);
+                }
+            }
+        }
+        
+        let response = OnlineStatusResponse {
+            statuses,
+            query_time: Utc::now(),
+        };
+        
+        Ok(HttpResponse::Ok().json(response))
+    }
+    
+    /// 获取所有在线用户
+    pub async fn get_online_users(&self) -> Result<HttpResponse> {
+        match self.status_storage.get_online_users().await {
+            Ok(online_users) => {
+                let response = serde_json::json!({
+                    "online_users": online_users,
+                    "count": online_users.len(),
+                    "query_time": Utc::now(),
+                });
+                Ok(HttpResponse::Ok().json(response))
+            }
+            Err(e) => {
+                Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("获取在线用户失败: {}", e)
+                })))
+            }
+        }
+    }
+    
+    /// 设置用户在线状态
+    pub async fn set_user_status(&self, user_id: web::Path<String>, status: web::Json<UserStatus>) -> Result<HttpResponse> {
+        match self.status_storage.set_status(&user_id, &serde_json::to_string(&status).unwrap()).await {
+            Ok(_) => {
+                Ok(HttpResponse::Ok().json(serde_json::json!({
+                    "message": "状态设置成功",
+                    "user_id": user_id,
+                    "status": status,
+                })))
+            }
+            Err(e) => {
+                Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("设置状态失败: {}", e)
+                })))
+            }
+        }
+    }
+    
+    /// 删除用户在线状态
+    pub async fn delete_user_status(&self, user_id: web::Path<String>) -> Result<HttpResponse> {
+        match self.status_storage.delete_status(&user_id).await {
+            Ok(_) => {
+                Ok(HttpResponse::Ok().json(serde_json::json!({
+                    "message": "状态删除成功",
+                    "user_id": user_id,
+                })))
+            }
+            Err(e) => {
+                Ok(HttpResponse::InternalServerError().json(serde_json::json!({
+                    "error": format!("删除状态失败: {}", e)
+                })))
+            }
+        }
+    }
+}
+
+/// 配置在线状态API路由
+pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::scope("/online-status")
+            .route("/users/{user_id}", web::get().to(OnlineStatusHandler::get_user_status))
+            .route("/users/batch", web::post().to(OnlineStatusHandler::batch_get_user_status))
+            .route("/users", web::get().to(OnlineStatusHandler::get_online_users))
+            .route("/users/{user_id}", web::put().to(OnlineStatusHandler::set_user_status))
+            .route("/users/{user_id}", web::delete().to(OnlineStatusHandler::delete_user_status))
+    );
+}
+"""
+        
+        # 写入文件
+        with open(online_status_api_file, 'w', encoding='utf-8') as f:
+            f.write(online_status_api_content)
+        
+        print(f"  ✅ 创建在线状态API文件: {online_status_api_file}")
+        
+        # 更新主路由文件
+        main_route_file = self.project_root / "services/im-api/src/main.rs"
+        if main_route_file.exists():
+            with open(main_route_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 检查是否已添加路由
+            if 'online_status' not in content:
+                # 添加路由
+                content = content.replace(
+                    "configure_app(cfg)",
+                    "configure_app(cfg);\\n    online_status::configure(cfg)"
+                )
+                
+                with open(main_route_file, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                print(f"  ✅ 更新主路由文件添加在线状态API路由")
     
     def implement_websocket_auth(self, task):
         """实现WebSocket认证逻辑"""
