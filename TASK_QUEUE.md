@@ -47,10 +47,10 @@
 - [x] Axum 0.7 State 类型兼容性修复
 - [ ] MinIO 存储集成（当前使用本地存储）
 
-#### 6. AI 模型对接（基础） ⏳
-- [ ] 完善 OpenAI provider 实现
-- [ ] 添加基础对话功能
-- [ ] 流式响应支持
+#### 6. AI 模型对接（基础） 🔄
+- [x] 完善 OpenAI provider 实现
+- [x] 添加基础对话功能
+- [x] 流式响应支持
 - [ ] 错误处理和重试
 
 ### 阶段二：AI 服务集成
@@ -211,15 +211,15 @@
 
 **总任务数**: 15
 **已完成**: 7
-**进行中**: 0
-**待开发**: 8
+**进行中**: 1
+**待开发**: 7
 **受阻**: 0
 
 **完成率**: 47%
 
 ---
 
-*最后更新: 2026-05-13 00:25*
+*最后更新: 2026-05-13 01:15*
 
 ### 2026-05-12 00:45 - WebSocket认证逻辑完善
 **状态**: ✅ 完成
@@ -242,6 +242,19 @@
 - 实现完整的文件服务 API：上传、下载、删除、列表、更新、缩略图、存储统计
 - 添加 tracing-subscriber 依赖
 - 所有 cargo check warning 清零（file-service 范围内）
+
+### 2026-05-13 01:15 - AI模型对接（Task 6）进行中
+**状态**: 🔄 进行中
+**耗时**: 1小时
+**提交**: 1de9c1d
+**备注**:
+- 修复 ai-service 全部编译错误（E0615, E0382, E0308, E0599, E0601）
+- 重写 main.rs：添加 #[tokio::main]、修复 DatabaseManager 参数、pg_pool().clone()
+- 重写 chat_stream：从模拟数据切换到真实 AI provider 流式调用
+- 更新 handlers.rs：使用 service.chat_stream() 获取 provider stream，映射为 SSE 事件
+- 清理所有 ai-service 范围内 warning
+- 3个 provider（OpenAI、Anthropic、Google）均已实现 chat_completion_stream
+- 剩余：错误重试逻辑
 
 ### 2026-05-12 00:30 - 在线状态同步
 **状态**: ✅ 完成
