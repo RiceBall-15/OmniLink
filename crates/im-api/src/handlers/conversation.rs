@@ -1317,7 +1317,7 @@ pub async fn update_member_role(
     .bind(&role_str)
     .bind(conv_uuid)
     .bind(member_uuid)
-    .execute(&*pool)
+    .execute(&pool)
     .await
     {
         Ok(_) => (

@@ -14,6 +14,12 @@ pub struct User {
     pub email: String,
     #[serde(rename = "avatar", skip_serializing_if = "Option::is_none")]
     pub avatar: Option<String>,
+    #[serde(rename = "nickname", skip_serializing_if = "Option::is_none")]
+    pub nickname: Option<String>,
+    #[serde(rename = "bio", skip_serializing_if = "Option::is_none")]
+    pub bio: Option<String>,
+    #[serde(rename = "statusMessage", skip_serializing_if = "Option::is_none")]
+    pub status_message: Option<String>,
     #[serde(rename = "createdAt")]
     pub created_at: String,
     #[serde(rename = "updatedAt")]
@@ -28,6 +34,9 @@ pub struct UserEntity {
     pub email: String,
     pub password_hash: String,
     pub avatar: Option<String>,
+    pub nickname: Option<String>,
+    pub bio: Option<String>,
+    pub status_message: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -40,6 +49,9 @@ impl UserEntity {
             username: self.username.clone(),
             email: self.email.clone(),
             avatar: self.avatar.clone(),
+            nickname: self.nickname.clone(),
+            bio: self.bio.clone(),
+            status_message: self.status_message.clone(),
             created_at: self.created_at.to_rfc3339(),
             updated_at: self.updated_at.to_rfc3339(),
         }
@@ -80,6 +92,18 @@ pub struct UpdateUserRequest {
     pub username: Option<String>,
     #[validate(email(message = "邮箱格式不正确"))]
     pub email: Option<String>,
+    pub avatar: Option<String>,
+}
+
+/// 用户资料更新请求（扩展字段）
+#[derive(Debug, Deserialize, Validate, utoipa::ToSchema)]
+pub struct UpdateUserProfileRequest {
+    #[validate(length(min = 1, max = 50, message = "昵称长度必须在 1-50 个字符之间"))]
+    pub nickname: Option<String>,
+    #[validate(length(max = 500, message = "个人简介不能超过 500 个字符"))]
+    pub bio: Option<String>,
+    #[validate(length(max = 100, message = "状态消息不能超过 100 个字符"))]
+    pub status_message: Option<String>,
     pub avatar: Option<String>,
 }
 
@@ -192,6 +216,9 @@ mod tests {
             username: "alice".to_string(),
             email: "alice@example.com".to_string(),
             avatar: None,
+            nickname: None,
+            bio: None,
+            status_message: None,
             created_at: "2026-05-13T00:00:00Z".to_string(),
             updated_at: "2026-05-13T00:00:00Z".to_string(),
         };
@@ -209,6 +236,9 @@ mod tests {
             username: "bob".to_string(),
             email: "bob@example.com".to_string(),
             avatar: Some("https://example.com/avatar.png".to_string()),
+            nickname: Some("Bob".to_string()),
+            bio: Some("A developer".to_string()),
+            status_message: Some("Available".to_string()),
             created_at: "2026-05-13T00:00:00Z".to_string(),
             updated_at: "2026-05-13T00:00:00Z".to_string(),
         };
@@ -288,6 +318,9 @@ mod tests {
             username: "alice".to_string(),
             email: "alice@example.com".to_string(),
             avatar: None,
+            nickname: None,
+            bio: None,
+            status_message: None,
             created_at: "2026-05-13T00:00:00Z".to_string(),
             updated_at: "2026-05-13T00:00:00Z".to_string(),
         };

@@ -54,6 +54,28 @@ async fn main() -> anyhow::Result<()> {
     .await
     .ok(); // 忽略错误，列可能已存在
 
+    // 确保用户资料字段存在（兼容已有数据库）
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(50)"
+    )
+    .execute(&pool)
+    .await
+    .ok();
+
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(500)"
+    )
+    .execute(&pool)
+    .await
+    .ok();
+
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS status_message VARCHAR(100)"
+    )
+    .execute(&pool)
+    .await
+    .ok();
+
     // 创建 OpenAPI 文档
     let openapi = ApiDoc::openapi();
 
@@ -78,6 +100,8 @@ async fn main() -> anyhow::Result<()> {
 
         // 用户路由（需要认证）
         .route("/api/user/me", get(get_me_with_auth).put(update_me_with_auth))
+        .route("/api/user/profile", put(update_profile_with_auth))
+        .route("/api/user/:id/profile", get(get_user_profile_with_auth))
 
         // 会话路由（需要认证）
         .route("/api/im/conversations", get(get_conversations_with_auth).post(create_conversation_with_auth))
@@ -175,6 +199,37 @@ async fn update_me_with_auth(
     }
 }
 
+/// 更新用户扩展资料（包装认证中间件）
+async fn update_profile_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+
+    // 将 JSON 转换为 UpdateUserProfileRequest
+    let update_req: Result<im_api::models::auth::UpdateUserProfileRequest, _> =
+        serde_json::from_value(req);
+
+    match update_req {
+        Ok(req) => auth::update_profile(State(pool), Extension(user_id), Json(req)).await,
+        Err(e) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(im_api::models::auth::ApiResponse::<serde_json::Value>::error("INVALID_JSON", format!("无效的请求数据: {}", e))),
+        ),
+    }
+}
+
+/// 获取指定用户公开资料（包装认证中间件）
+async fn get_user_profile_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(target_user_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    auth::get_user_profile(State(pool), Extension(user_id), Path(target_user_id)).await
+}
+
 /// 获取会话列表（包装认证中间件）
 async fn get_conversations_with_auth(
     State(pool): State<PgPool>,
@@ -254,10 +309,9 @@ async fn add_reaction_with_auth(
     State(pool): State<PgPool>,
     auth: AuthUser,
     Path(message_id): Path<String>,
-    Json(req): Json<handlers::message::AddReactionRequest>,
+    Json(req): Json<im_api::models::message::AddReactionRequest>,
 ) -> impl IntoResponse {
-    let user_id = auth.user_id;
-    message::add_reaction(State(pool), Extension(user_id), Path(message_id), Json(req)).await
+    message::add_reaction(State(pool), auth, Path(message_id), Json(req)).await
 }
 
 /// 删除表情回应（包装认证中间件）
@@ -266,8 +320,7 @@ async fn remove_reaction_with_auth(
     auth: AuthUser,
     Path((message_id, emoji)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let user_id = auth.user_id;
-    message::remove_reaction(State(pool), Extension(user_id), Path((message_id, emoji))).await
+    message::remove_reaction(State(pool), auth, Path((message_id, emoji))).await
 }
 
 /// 获取表情回应列表（包装认证中间件）
@@ -276,7 +329,7 @@ async fn get_reactions_with_auth(
     auth: AuthUser,
     Path(message_id): Path<String>,
 ) -> impl IntoResponse {
-    message::get_reactions(State(pool), Path(message_id)).await
+    message::get_reactions(State(pool), auth, Path(message_id)).await
 }
 
 /// 标记会话已读（包装认证中间件）
@@ -346,7 +399,7 @@ async fn update_member_role_with_auth(
     State(pool): State<PgPool>,
     auth: AuthUser,
     Path((id, member_id)): Path<(String, String)>,
-    Json(req): Json<conversation::UpdateMemberRoleRequest>,
+    Json(req): Json<im_api::models::conversation::UpdateMemberRoleRequest>,
 ) -> impl IntoResponse {
     let user_id = auth.user_id;
     conversation::update_member_role(State(pool), Extension(user_id), Path((id, member_id)), Json(req)).await

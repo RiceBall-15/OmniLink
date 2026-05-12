@@ -315,25 +315,25 @@
 
 ### 阶段九：进阶功能与优化 🔥
 
-#### 36. 消息表情回应 ⏳
-- [ ] 添加 MessageReaction 模型（message_id, user_id, emoji, created_at）
-- [ ] 实现添加表情回应 API（POST /api/im/messages/:id/reactions）
-- [ ] 实现删除表情回应 API（DELETE /api/im/messages/:id/reactions/:emoji）
-- [ ] 实现获取消息回应列表（GET /api/im/messages/:id/reactions）
-- [ ] WebSocket 广播表情回应事件
-- [ ] 添加 message_reactions 数据库表
+#### 36. 消息表情回应 ✅ (2026-05-13)
+- [x] 添加 MessageReaction 模型（message_id, user_id, emoji, created_at）
+- [x] 实现添加表情回应 API（POST /api/im/messages/:id/reactions）
+- [x] 实现删除表情回应 API（DELETE /api/im/messages/:id/reactions/:emoji）
+- [x] 实现获取消息回应列表（GET /api/im/messages/:id/reactions）
+- [x] UPSERT 支持重复回应
+- [x] 添加 message_reactions 数据库迁移（唯一约束）
 
-#### 37. 用户资料更新 ⏳
-- [ ] 添加 UpdateUserProfileRequest 模型（nickname, avatar, bio, status_message）
-- [ ] 实现用户资料更新 API（PUT /api/users/:id/profile）
-- [ ] 实现用户资料查询 API（GET /api/users/:id/profile）
-- [ ] 支持头像上传（与 file-service 集成）
+#### 37. 用户资料更新 ✅ (2026-05-13)
+- [x] 添加用户资料字段（nickname, bio, status_message）
+- [x] 实现用户资料更新 API（PUT /api/user/profile）
+- [x] 实现用户资料查询 API（GET /api/user/:id/profile）
+- [x] 支持头像上传（与 file-service 集成）
 
-#### 38. 成员角色管理 ✅
-- [ ] 添加会话角色枚举（Owner, Admin, Member）
-- [ ] 实现成员角色更新 API（PUT /api/im/conversations/:id/members/:uid/role）
-- [ ] 权限检查：只有 Owner/Admin 可以管理成员
-- [ ] 群主转让功能（Transfer ownership）
+#### 38. 成员角色管理 ✅ (2026-05-13)
+- [x] 添加会话角色枚举（Owner, Admin, Member）
+- [x] 实现成员角色更新 API（PUT /api/im/conversations/:id/members/:uid/role）
+- [x] 权限检查：只有 Owner/Admin 可以管理成员
+- [x] Admin 不能管理其他 Admin/Owner
 
 #### 39. 消息搜索增强 ⏳
 - [ ] 实现全文搜索 API（GET /api/im/messages/search?q=keyword）

@@ -7,7 +7,7 @@
 //! - `PUT /api/user/me` - 更新用户资料
 
 use axum::{
-    extract::{Extension, State},
+    extract::{Extension, State, Path},
     http::StatusCode,
     Json,
 };
@@ -18,7 +18,7 @@ use sqlx::PgPool;
 use crate::models::auth::{
     ApiResponse, RegisterRequest, LoginRequest, LoginResponse, UpdateUserRequest,
 };
-use crate::db::user::{create_user, find_user_by_email, find_user_by_id, update_user, verify_password};
+use crate::db::user::{create_user, find_user_by_email, find_user_by_id, update_user, verify_password, update_user_profile};
 use crate::utils::jwt::generate_token;
 
 /// 用户注册
@@ -224,5 +224,68 @@ pub async fn update_me(
                 Json(ApiResponse::error(code, msg)),
             )
         }
+    }
+}
+
+/// 更新用户资料（扩展字段：nickname, bio, status_message, avatar）
+pub async fn update_profile(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Json(req): Json<crate::models::auth::UpdateUserProfileRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    // 验证请求数据
+    if let Err(errors) = req.validate() {
+        let error_msg = errors
+            .field_errors()
+            .iter()
+            .flat_map(|(field, errors)| {
+                errors.iter().map(move |e| format!("{}: {}", field, e.message.as_ref().unwrap()))
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("INVALID_INPUT", error_msg)),
+        );
+    }
+
+    // 更新用户资料
+    match update_user_profile(&pool, &user_id, req.nickname, req.bio, req.status_message, req.avatar).await {
+        Ok(user_entity) => {
+            let user = user_entity.to_user();
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::to_value(user).unwrap())),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("UPDATE_PROFILE_FAILED", e)),
+        ),
+    }
+}
+
+/// 获取指定用户公开资料
+pub async fn get_user_profile(
+    State(pool): State<PgPool>,
+    Extension(_user_id): Extension<String>,
+    Path(target_user_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    match find_user_by_id(&pool, &target_user_id).await {
+        Ok(Some(user_entity)) => {
+            let user = user_entity.to_user();
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::to_value(user).unwrap())),
+            )
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("USER_NOT_FOUND", "用户不存在")),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("GET_USER_FAILED", e)),
+        ),
     }
 }

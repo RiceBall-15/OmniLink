@@ -19,8 +19,9 @@ use serde::Deserialize;
 use sqlx::PgPool;
 
 use crate::models::auth::ApiResponse;
-use crate::models::message::{Message, SendMessageRequest, EditMessageRequest, CreateMessageParams};
+use crate::models::message::{Message, SendMessageRequest, EditMessageRequest, CreateMessageParams, AddReactionRequest, ReactionSummary, MessageEntity};
 use crate::db::message::{create_message, get_messages_by_conversation, get_message_by_id, update_message_content, recall_message, mark_conversation_as_read, can_edit_message, can_recall_message};
+use crate::middleware::auth::AuthUser;
 
 /// 获取会话的消息列表（分页）
 #[derive(Debug, Deserialize)]
@@ -589,11 +590,11 @@ pub async fn add_reaction(
     }
 
     // 检查消息是否存在
-    let message = match sqlx::query_as::<_, crate::db::message::MessageEntity>(
+    let message = match sqlx::query_as::<_, MessageEntity>(
         "SELECT * FROM messages WHERE id = $1 AND deleted_at IS NULL"
     )
     .bind(msg_uuid)
-    .fetch_optional(&*pool)
+    .fetch_optional(&pool)
     .await
     {
         Ok(Some(msg)) => msg,
@@ -617,7 +618,7 @@ pub async fn add_reaction(
     )
     .bind(message.conversation_id)
     .bind(user_uuid)
-    .fetch_one(&*pool)
+    .fetch_one(&pool)
     .await
     {
         Ok(exists) => exists,
@@ -648,7 +649,7 @@ pub async fn add_reaction(
     .bind(msg_uuid)
     .bind(user_uuid)
     .bind(&req.emoji)
-    .fetch_optional(&*pool)
+    .fetch_optional(&pool)
     .await
     {
         Ok(_) => {
@@ -706,7 +707,7 @@ pub async fn remove_reaction(
     .bind(msg_uuid)
     .bind(user_uuid)
     .bind(&emoji)
-    .execute(&*pool)
+    .execute(&pool)
     .await
     {
         Ok(_) => {
