@@ -51,6 +51,24 @@ async fn main() -> anyhow::Result<()> {
         api_keys.insert("google".to_string(), google_key);
     }
 
+    // 通义千问
+    if let Ok(qwen_key) = std::env::var("QWEN_API_KEY") {
+        api_keys.insert("qwen".to_string(), qwen_key);
+    }
+
+    // 智谱AI
+    if let Ok(zhipu_key) = std::env::var("ZHIPU_API_KEY") {
+        api_keys.insert("zhipu".to_string(), zhipu_key);
+    }
+
+    // 文心一言
+    if let Ok(ernie_key) = std::env::var("ERNIE_API_KEY") {
+        api_keys.insert("ernie".to_string(), ernie_key);
+        if let Ok(ernie_secret) = std::env::var("ERNIE_SECRET_KEY") {
+            api_keys.insert("ernie_secret".to_string(), ernie_secret);
+        }
+    }
+
     ai_service.init_providers(api_keys).await?;
 
     // 创建Token管理器

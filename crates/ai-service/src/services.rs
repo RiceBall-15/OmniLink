@@ -1,11 +1,4 @@
-use super::providers::{AIProvider, AIMessage, MessageRole, ChatOptions, OpenAIProvider, AnthropicProvider, GoogleProvider};
-use super::models::{
-    ChatRequest, ChatResponse,
-    CreateAssistantRequest, CreateAssistantResponse, AssistantsListResponse,
-    UpdateAssistantRequest, AssistantInfo,
-    TokenUsageResponse, ModelUsage, ModelsResponse, ModelConfig
-};
-use super::providers::{AIProvider, AIMessage, MessageRole, ChatOptions, OpenAIProvider, AnthropicProvider, GoogleProvider};
+use super::providers::{AIProvider, AIMessage, MessageRole, ChatOptions, OpenAIProvider, AnthropicProvider, GoogleProvider, QwenProvider, ZhipuProvider, ErnieProvider};
 use super::models::{
     ChatRequest, ChatResponse, ChatStreamResponse,
     ModelsResponse, ModelInfo,
@@ -70,6 +63,32 @@ impl AIService {
             );
         }
 
+        // 通义千问 (Qwen)
+        if let Some(qwen_key) = api_keys.get("qwen") {
+            providers.insert(
+                "qwen".to_string(),
+                Arc::new(QwenProvider::new(qwen_key.clone(), None)),
+            );
+        }
+
+        // 智谱AI (ZhipuAI)
+        if let Some(zhipu_key) = api_keys.get("zhipu") {
+            providers.insert(
+                "zhipu".to_string(),
+                Arc::new(ZhipuProvider::new(zhipu_key.clone(), None)),
+            );
+        }
+
+        // 文心一言 (Ernie)
+        if let Some(ernie_key) = api_keys.get("ernie") {
+            if let Some(ernie_secret) = api_keys.get("ernie_secret") {
+                providers.insert(
+                    "ernie".to_string(),
+                    Arc::new(ErnieProvider::new(ernie_key.clone(), ernie_secret.clone(), None)),
+                );
+            }
+        }
+
         Ok(())
     }
 
@@ -111,6 +130,90 @@ impl AIService {
                 max_tokens: 2048,
                 input_price_per_1k: 0.0005,
                 output_price_per_1k: 0.0015,
+            },
+            // 通义千问模型
+            ModelConfig {
+                id: "qwen-turbo".to_string(),
+                name: "通义千问-Turbo".to_string(),
+                provider: "qwen".to_string(),
+                api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
+                max_tokens: 8192,
+                input_price_per_1k: 0.002,
+                output_price_per_1k: 0.006,
+            },
+            ModelConfig {
+                id: "qwen-plus".to_string(),
+                name: "通义千问-Plus".to_string(),
+                provider: "qwen".to_string(),
+                api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
+                max_tokens: 131072,
+                input_price_per_1k: 0.004,
+                output_price_per_1k: 0.012,
+            },
+            ModelConfig {
+                id: "qwen-max".to_string(),
+                name: "通义千问-Max".to_string(),
+                provider: "qwen".to_string(),
+                api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1".to_string(),
+                max_tokens: 32768,
+                input_price_per_1k: 0.02,
+                output_price_per_1k: 0.06,
+            },
+            // 智谱AI模型
+            ModelConfig {
+                id: "glm-4".to_string(),
+                name: "GLM-4".to_string(),
+                provider: "zhipu".to_string(),
+                api_base: "https://open.bigmodel.cn/api/paas/v4".to_string(),
+                max_tokens: 8192,
+                input_price_per_1k: 0.1,
+                output_price_per_1k: 0.1,
+            },
+            ModelConfig {
+                id: "glm-4-flash".to_string(),
+                name: "GLM-4-Flash".to_string(),
+                provider: "zhipu".to_string(),
+                api_base: "https://open.bigmodel.cn/api/paas/v4".to_string(),
+                max_tokens: 8192,
+                input_price_per_1k: 0.0001,
+                output_price_per_1k: 0.0001,
+            },
+            ModelConfig {
+                id: "glm-4-air".to_string(),
+                name: "GLM-4-Air".to_string(),
+                provider: "zhipu".to_string(),
+                api_base: "https://open.bigmodel.cn/api/paas/v4".to_string(),
+                max_tokens: 8192,
+                input_price_per_1k: 0.001,
+                output_price_per_1k: 0.001,
+            },
+            // 文心一言模型
+            ModelConfig {
+                id: "ernie-3.5-8k".to_string(),
+                name: "文心一言-3.5".to_string(),
+                provider: "ernie".to_string(),
+                api_base: "https://aip.baidubce.com".to_string(),
+                max_tokens: 8192,
+                input_price_per_1k: 0.008,
+                output_price_per_1k: 0.008,
+            },
+            ModelConfig {
+                id: "ernie-4.0-8k".to_string(),
+                name: "文心一言-4.0".to_string(),
+                provider: "ernie".to_string(),
+                api_base: "https://aip.baidubce.com".to_string(),
+                max_tokens: 8192,
+                input_price_per_1k: 0.12,
+                output_price_per_1k: 0.12,
+            },
+            ModelConfig {
+                id: "ernie-speed-8k".to_string(),
+                name: "文心一言-Speed".to_string(),
+                provider: "ernie".to_string(),
+                api_base: "https://aip.baidubce.com".to_string(),
+                max_tokens: 8192,
+                input_price_per_1k: 0.001,
+                output_price_per_1k: 0.001,
             },
         ]
     }

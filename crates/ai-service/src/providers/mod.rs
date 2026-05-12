@@ -1,10 +1,16 @@
 pub mod openai;
 pub mod anthropic;
 pub mod google;
+pub mod qwen;
+pub mod zhipu;
+pub mod ernie;
 
 pub use openai::OpenAIProvider;
 pub use anthropic::AnthropicProvider;
 pub use google::GoogleProvider;
+pub use qwen::QwenProvider;
+pub use zhipu::ZhipuProvider;
+pub use ernie::ErnieProvider;
 
 use async_trait::async_trait;
 use std::pin::Pin;
