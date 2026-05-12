@@ -303,6 +303,19 @@
   - 加密消息存储（数据库表、存储 API）
   - 解密消息显示（解密 API、消息历史查询）
 - ✅ 所有 15 个开发任务完成（100%）
+- ✅ API 文档生成（Task 22 完成）
+  - 创建完整的 REST API 文档 (`docs/API.md`)
+  - 覆盖所有端点：认证、用户、会话、消息、群组、标签、加密
+  - 包含数据模型定义（TypeScript 接口）
+  - WebSocket 消息类型参考
+  - 服务端口和数据库表参考
+- ✅ 代码清理和优化（Task 23 完成）
+  - 添加模块级文档注释到所有 crate
+  - im-api: handlers, models, db 模块文档
+  - im-gateway: lib.rs, handlers 模块文档
+  - common: lib.rs 模块文档
+  - 所有 crate 编译无新增警告
+- ✅ **所有 17 个开发任务全部完成（100%）**
 
 ### 2026-05-10
 - ✅ 实现消息编辑 HTTP API (`PUT /api/im/conversations/:id/messages/:msg_id`)
