@@ -13,6 +13,7 @@ Cargo.lock
 # Environment
 .env
 .env.local
+.env.production
 
 # Database
 *.db
@@ -29,10 +30,26 @@ Thumbs.db
 # Build
 dist/
 build/
-
-# Node (frontend)
 node_modules/
-.npm/
+
+# Coverage
+coverage/
+*.profraw
+*.profdata
 
 # Docker
-.dockerignore
+.docker/
+
+# MinIO data
+minio-data/
+
+# Uploads (local storage)
+uploads/
+tmp/
+
+# Backup files
+*.bak
+*.backup
+
+# Test artifacts
+*.test

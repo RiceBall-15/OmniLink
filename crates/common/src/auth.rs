@@ -161,3 +161,98 @@ impl CryptoManager {
             .map_err(|_| AppError::Internal("Invalid UTF-8".to_string()))
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    #[test]
+    fn test_token_generate_and_verify() {
+        let secret = b"test-secret-key-for-jwt-tokens";
+        let manager = TokenManager::new(secret);
+        let user_id = Uuid::new_v4();
+        let device_id = "test-device-001".to_string();
+
+        let token = manager.generate_access_token(user_id, device_id.clone());
+        assert!(!token.is_empty());
+
+        let claims = manager.verify_token(&token).unwrap();
+        assert_eq!(claims.sub, user_id);
+        assert_eq!(claims.device_id, device_id);
+    }
+
+    #[test]
+    fn test_token_invalid() {
+        let manager = TokenManager::new(b"secret");
+        let result = manager.verify_token("invalid.token.here");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_token_wrong_secret() {
+        let manager1 = TokenManager::new(b"secret-one");
+        let manager2 = TokenManager::new(b"secret-two");
+        let user_id = Uuid::new_v4();
+
+        let token = manager1.generate_access_token(user_id, "device".to_string());
+        let result = manager2.verify_token(&token);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_password_hash_and_verify() {
+        let password = "MySecure@Pass123";
+        let hash = PasswordManager::hash_password(password).unwrap();
+
+        assert!(PasswordManager::verify_password(password, &hash).unwrap());
+        assert!(!PasswordManager::verify_password("wrong-password", &hash).unwrap());
+    }
+
+    #[test]
+    fn test_password_different_hashes() {
+        let password = "same-password";
+        let hash1 = PasswordManager::hash_password(password).unwrap();
+        let hash2 = PasswordManager::hash_password(password).unwrap();
+
+        // Different salts produce different hashes
+        assert_ne!(hash1, hash2);
+
+        // But both verify correctly
+        assert!(PasswordManager::verify_password(password, &hash1).unwrap());
+        assert!(PasswordManager::verify_password(password, &hash2).unwrap());
+    }
+
+    #[test]
+    fn test_crypto_encrypt_decrypt() {
+        let key: [u8; 32] = rand::random();
+        let crypto = CryptoManager::new(&key);
+        let plaintext = b"Hello, OmniLink encrypted world!";
+
+        let encrypted = crypto.encrypt(plaintext).unwrap();
+        assert_ne!(encrypted, plaintext.to_vec());
+
+        let decrypted = crypto.decrypt(&encrypted).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn test_crypto_api_key_roundtrip() {
+        let key: [u8; 32] = rand::random();
+        let crypto = CryptoManager::new(&key);
+        let api_key = "sk-proj-1234567890abcdef";
+
+        let encrypted = crypto.encrypt_api_key(api_key);
+        assert_ne!(encrypted, api_key);
+
+        let decrypted = crypto.decrypt_api_key(&encrypted).unwrap();
+        assert_eq!(decrypted, api_key);
+    }
+
+    #[test]
+    fn test_crypto_decrypt_too_short() {
+        let key: [u8; 32] = rand::random();
+        let crypto = CryptoManager::new(&key);
+        let result = crypto.decrypt(&[1, 2, 3]); // Less than 12 bytes
+        assert!(result.is_err());
+    }
+}
