@@ -5,7 +5,7 @@ use sqlx::FromRow;
 use serde_json::Value as JsonValue;
 
 /// 消息类型（与前端枚举匹配）
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "varchar", rename_all = "lowercase")]
 pub enum MessageType {
     #[serde(rename = "text")]
@@ -44,7 +44,7 @@ impl std::str::FromStr for MessageType {
 }
 
 /// 消息状态（与前端枚举匹配）
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "varchar", rename_all = "lowercase")]
 pub enum MessageStatus {
     #[serde(rename = "sending")]
@@ -162,7 +162,7 @@ pub struct EditMessageRequest {
 }
 
 /// 在线状态（与前端枚举匹配）
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "varchar", rename_all = "lowercase")]
 pub enum OnlineStatus {
     #[serde(rename = "offline")]
@@ -214,4 +214,180 @@ pub struct CreateMessageParams {
     pub type_: MessageType,
     pub reply_to: Option<Uuid>,
     pub metadata: Option<JsonValue>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+
+    // === MessageType 测试 ===
+
+    #[test]
+    fn test_message_type_display() {
+        assert_eq!(MessageType::Text.to_string(), "text");
+        assert_eq!(MessageType::Image.to_string(), "image");
+        assert_eq!(MessageType::File.to_string(), "file");
+        assert_eq!(MessageType::System.to_string(), "system");
+    }
+
+    #[test]
+    fn test_message_type_from_str() {
+        assert_eq!("text".parse::<MessageType>().unwrap(), MessageType::Text);
+        assert_eq!("image".parse::<MessageType>().unwrap(), MessageType::Image);
+        assert_eq!("file".parse::<MessageType>().unwrap(), MessageType::File);
+        assert_eq!("system".parse::<MessageType>().unwrap(), MessageType::System);
+        assert_eq!("TEXT".parse::<MessageType>().unwrap(), MessageType::Text);
+    }
+
+    #[test]
+    fn test_message_type_from_str_invalid() {
+        assert!("video".parse::<MessageType>().is_err());
+        assert!("".parse::<MessageType>().is_err());
+    }
+
+    #[test]
+    fn test_message_type_serialization() {
+        let json = serde_json::to_string(&MessageType::Text).unwrap();
+        assert_eq!(json, "\"text\"");
+        let json = serde_json::to_string(&MessageType::Image).unwrap();
+        assert_eq!(json, "\"image\"");
+    }
+
+    #[test]
+    fn test_message_type_deserialization() {
+        let msg_type: MessageType = serde_json::from_str("\"text\"").unwrap();
+        assert_eq!(msg_type, MessageType::Text);
+        let msg_type: MessageType = serde_json::from_str("\"file\"").unwrap();
+        assert_eq!(msg_type, MessageType::File);
+    }
+
+    // === MessageStatus 测试 ===
+
+    #[test]
+    fn test_message_status_display() {
+        assert_eq!(MessageStatus::Sending.to_string(), "sending");
+        assert_eq!(MessageStatus::Sent.to_string(), "sent");
+        assert_eq!(MessageStatus::Delivered.to_string(), "delivered");
+        assert_eq!(MessageStatus::Read.to_string(), "read");
+        assert_eq!(MessageStatus::Failed.to_string(), "failed");
+    }
+
+    #[test]
+    fn test_message_status_from_str() {
+        assert_eq!("sending".parse::<MessageStatus>().unwrap(), MessageStatus::Sending);
+        assert_eq!("sent".parse::<MessageStatus>().unwrap(), MessageStatus::Sent);
+        assert_eq!("delivered".parse::<MessageStatus>().unwrap(), MessageStatus::Delivered);
+        assert_eq!("read".parse::<MessageStatus>().unwrap(), MessageStatus::Read);
+        assert_eq!("failed".parse::<MessageStatus>().unwrap(), MessageStatus::Failed);
+    }
+
+    #[test]
+    fn test_message_status_from_str_invalid() {
+        assert!("unknown".parse::<MessageStatus>().is_err());
+        assert!("".parse::<MessageStatus>().is_err());
+    }
+
+    // === OnlineStatus 测试 ===
+
+    #[test]
+    fn test_online_status_display() {
+        assert_eq!(OnlineStatus::Offline.to_string(), "offline");
+        assert_eq!(OnlineStatus::Online.to_string(), "online");
+        assert_eq!(OnlineStatus::Away.to_string(), "away");
+        assert_eq!(OnlineStatus::Busy.to_string(), "busy");
+    }
+
+    #[test]
+    fn test_online_status_from_str() {
+        assert_eq!("offline".parse::<OnlineStatus>().unwrap(), OnlineStatus::Offline);
+        assert_eq!("online".parse::<OnlineStatus>().unwrap(), OnlineStatus::Online);
+        assert_eq!("away".parse::<OnlineStatus>().unwrap(), OnlineStatus::Away);
+        assert_eq!("busy".parse::<OnlineStatus>().unwrap(), OnlineStatus::Busy);
+    }
+
+    #[test]
+    fn test_online_status_from_str_invalid() {
+        assert!("invisible".parse::<OnlineStatus>().is_err());
+        assert!("".parse::<OnlineStatus>().is_err());
+    }
+
+    // === Message 测试 ===
+
+    #[test]
+    fn test_message_serialization() {
+        let msg = Message {
+            id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            conversation_id: "660e8400-e29b-41d4-a716-446655440000".to_string(),
+            sender_id: "770e8400-e29b-41d4-a716-446655440000".to_string(),
+            content: "Hello".to_string(),
+            type_: MessageType::Text,
+            status: MessageStatus::Sent,
+            created_at: "2026-05-13T00:00:00Z".to_string(),
+            updated_at: "2026-05-13T00:00:00Z".to_string(),
+            read_at: None,
+            reply_to: None,
+            metadata: None,
+        };
+
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"conversationId\""));
+        assert!(json.contains("\"senderId\""));
+        assert!(json.contains("\"createdAt\""));
+        assert!(!json.contains("\"readAt\"")); // skip_serializing_if = None
+        assert!(!json.contains("\"replyTo\""));
+    }
+
+    #[test]
+    fn test_message_deserialization() {
+        let json = r#"{
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "conversationId": "660e8400-e29b-41d4-a716-446655440000",
+            "senderId": "770e8400-e29b-41d4-a716-446655440000",
+            "content": "Hello",
+            "type": "text",
+            "status": "sent",
+            "createdAt": "2026-05-13T00:00:00Z",
+            "updatedAt": "2026-05-13T00:00:00Z"
+        }"#;
+
+        let msg: Message = serde_json::from_str(json).unwrap();
+        assert_eq!(msg.content, "Hello");
+        assert_eq!(msg.type_, MessageType::Text);
+        assert_eq!(msg.status, MessageStatus::Sent);
+    }
+
+    // === SendMessageRequest 测试 ===
+
+    #[test]
+    fn test_send_message_request_deserialization() {
+        let json = r#"{
+            "content": "Hello World",
+            "type": "text"
+        }"#;
+
+        let request: SendMessageRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.content, "Hello World");
+        assert_eq!(request.type_, MessageType::Text);
+    }
+
+    #[test]
+    fn test_send_message_request_image_type() {
+        let json = r#"{
+            "content": "image_url",
+            "type": "image"
+        }"#;
+
+        let request: SendMessageRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.type_, MessageType::Image);
+    }
+
+    // === EditMessageRequest 测试 ===
+
+    #[test]
+    fn test_edit_message_request_deserialization() {
+        let json = r#"{"content": "Updated message"}"#;
+        let request: EditMessageRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.content, "Updated message");
+    }
 }

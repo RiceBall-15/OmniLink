@@ -137,3 +137,220 @@ pub struct CreateUserParams {
     pub email: String,
     pub password_hash: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+
+    // === ApiResponse 测试 ===
+
+    #[test]
+    fn test_api_response_success() {
+        let resp = ApiResponse::success("hello");
+        assert!(resp.success);
+        assert_eq!(resp.data, Some("hello"));
+        assert!(resp.error.is_none());
+    }
+
+    #[test]
+    fn test_api_response_error() {
+        let resp: ApiResponse<()> = ApiResponse::error("ERR_CODE", "error message");
+        assert!(!resp.success);
+        assert!(resp.data.is_none());
+        assert!(resp.error.is_some());
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, "ERR_CODE");
+        assert_eq!(err.message, "error message");
+    }
+
+    #[test]
+    fn test_api_response_success_serialization() {
+        let resp = ApiResponse::success(serde_json::json!({"key": "value"}));
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("key"));
+        assert!(!json.contains("error")); // skip_serializing_if = None
+    }
+
+    #[test]
+    fn test_api_response_error_serialization() {
+        let resp: ApiResponse<()> = ApiResponse::error("CODE", "msg");
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"success\":false"));
+        assert!(json.contains("CODE"));
+        assert!(json.contains("msg"));
+        assert!(!json.contains("data")); // skip_serializing_if = None
+    }
+
+    // === User 测试 ===
+
+    #[test]
+    fn test_user_serialization() {
+        let user = User {
+            id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            username: "alice".to_string(),
+            email: "alice@example.com".to_string(),
+            avatar: None,
+            created_at: "2026-05-13T00:00:00Z".to_string(),
+            updated_at: "2026-05-13T00:00:00Z".to_string(),
+        };
+
+        let json = serde_json::to_string(&user).unwrap();
+        assert!(json.contains("\"username\""));
+        assert!(json.contains("alice"));
+        assert!(!json.contains("\"avatar\"")); // skip_serializing_if = None
+    }
+
+    #[test]
+    fn test_user_with_avatar_serialization() {
+        let user = User {
+            id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            username: "bob".to_string(),
+            email: "bob@example.com".to_string(),
+            avatar: Some("https://example.com/avatar.png".to_string()),
+            created_at: "2026-05-13T00:00:00Z".to_string(),
+            updated_at: "2026-05-13T00:00:00Z".to_string(),
+        };
+
+        let json = serde_json::to_string(&user).unwrap();
+        assert!(json.contains("avatar"));
+    }
+
+    // === RegisterRequest 验证测试 ===
+
+    #[test]
+    fn test_register_request_valid() {
+        let req = RegisterRequest {
+            username: "alice".to_string(),
+            email: "alice@example.com".to_string(),
+            password: "password123".to_string(),
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_register_request_short_username() {
+        let req = RegisterRequest {
+            username: "ab".to_string(),
+            email: "test@example.com".to_string(),
+            password: "password123".to_string(),
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn test_register_request_invalid_email() {
+        let req = RegisterRequest {
+            username: "alice".to_string(),
+            email: "not-an-email".to_string(),
+            password: "password123".to_string(),
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn test_register_request_short_password() {
+        let req = RegisterRequest {
+            username: "alice".to_string(),
+            email: "test@example.com".to_string(),
+            password: "short".to_string(),
+        };
+        assert!(req.validate().is_err());
+    }
+
+    // === LoginRequest 验证测试 ===
+
+    #[test]
+    fn test_login_request_valid() {
+        let req = LoginRequest {
+            email: "test@example.com".to_string(),
+            password: "anypassword".to_string(),
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_login_request_empty_password() {
+        let req = LoginRequest {
+            email: "test@example.com".to_string(),
+            password: "".to_string(),
+        };
+        assert!(req.validate().is_err());
+    }
+
+    // === LoginResponse 测试 ===
+
+    #[test]
+    fn test_login_response_serialization() {
+        let user = User {
+            id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            username: "alice".to_string(),
+            email: "alice@example.com".to_string(),
+            avatar: None,
+            created_at: "2026-05-13T00:00:00Z".to_string(),
+            updated_at: "2026-05-13T00:00:00Z".to_string(),
+        };
+
+        let resp = LoginResponse {
+            token: "jwt_token_here".to_string(),
+            user,
+        };
+
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("jwt_token_here"));
+        assert!(json.contains("alice"));
+    }
+
+    // === Claims 测试 ===
+
+    #[test]
+    fn test_claims_serialization() {
+        let claims = Claims {
+            sub: "user123".to_string(),
+            email: "test@example.com".to_string(),
+            exp: 1700000000,
+            iat: 1699996400,
+        };
+
+        let json = serde_json::to_string(&claims).unwrap();
+        assert!(json.contains("user123"));
+        assert!(json.contains("test@example.com"));
+    }
+
+    #[test]
+    fn test_claims_deserialization() {
+        let json = r#"{
+            "sub": "user456",
+            "email": "bob@example.com",
+            "exp": 1700000000,
+            "iat": 1699996400
+        }"#;
+
+        let claims: Claims = serde_json::from_str(json).unwrap();
+        assert_eq!(claims.sub, "user456");
+        assert_eq!(claims.email, "bob@example.com");
+    }
+
+    // === UpdateUserRequest 测试 ===
+
+    #[test]
+    fn test_update_user_request_partial() {
+        let req = UpdateUserRequest {
+            username: Some("newname".to_string()),
+            email: None,
+            avatar: None,
+        };
+        assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_update_user_request_empty() {
+        let req = UpdateUserRequest {
+            username: None,
+            email: None,
+            avatar: None,
+        };
+        assert!(req.validate().is_ok()); // all optional, no validation needed
+    }
+}
