@@ -17,6 +17,55 @@ pub enum ConversationType {
     Ai,
 }
 
+/// 成员角色枚举
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(type_name = "varchar", rename_all = "lowercase")]
+pub enum MemberRole {
+    #[serde(rename = "owner")]
+    Owner,
+    #[serde(rename = "admin")]
+    Admin,
+    #[serde(rename = "member")]
+    Member,
+}
+
+impl std::fmt::Display for MemberRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MemberRole::Owner => write!(f, "owner"),
+            MemberRole::Admin => write!(f, "admin"),
+            MemberRole::Member => write!(f, "member"),
+        }
+    }
+}
+
+impl std::str::FromStr for MemberRole {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "owner" => Ok(MemberRole::Owner),
+            "admin" => Ok(MemberRole::Admin),
+            "member" => Ok(MemberRole::Member),
+            _ => Err(format!("无效的成员角色: {}", s)),
+        }
+    }
+}
+
+/// 更新成员角色请求
+#[derive(Debug, Deserialize)]
+pub struct UpdateMemberRoleRequest {
+    pub role: MemberRole,
+}
+
+/// 会话成员信息（带角色）
+#[derive(Debug, Serialize)]
+pub struct ConversationMember {
+    pub user_id: String,
+    pub role: MemberRole,
+    pub joined_at: String,
+}
+
 impl std::fmt::Display for ConversationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

@@ -96,6 +96,7 @@ async fn main() -> anyhow::Result<()> {
         // 群组管理
         .route("/api/im/conversations/:id/members", get(get_group_members_with_auth).post(add_group_members_with_auth))
         .route("/api/im/conversations/:id/members/:member_id", delete(remove_group_member_with_auth))
+        .route("/api/im/conversations/:id/members/:member_id/role", put(update_member_role_with_auth))
         .route("/api/im/conversations/:id/group", put(update_group_info_with_auth))
         .route("/api/im/conversations/:id/announcement", get(get_group_announcement_with_auth).put(update_group_announcement_with_auth))
 
@@ -334,10 +335,21 @@ async fn add_group_members_with_auth(
 async fn remove_group_member_with_auth(
     State(pool): State<PgPool>,
     auth: AuthUser,
-    Path((conversation_id, member_id)): Path<(String, String)>,
+    Path((id, uid)): Path<(String, String)>,
 ) -> impl IntoResponse {
     let user_id = auth.user_id;
-    conversation::remove_group_member(State(pool), Extension(user_id), Path((conversation_id, member_id))).await
+    conversation::remove_group_member(State(pool), Extension(user_id), Path((id, uid))).await
+}
+
+/// 更新成员角色（包装认证中间件）
+async fn update_member_role_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path((id, member_id)): Path<(String, String)>,
+    Json(req): Json<conversation::UpdateMemberRoleRequest>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::update_member_role(State(pool), Extension(user_id), Path((id, member_id)), Json(req)).await
 }
 
 /// 更新群组信息（包装认证中间件）

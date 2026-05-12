@@ -1213,3 +1213,139 @@ pub async fn get_conversation_tags_handler(
         ),
     }
 }
+
+/// 更新成员角色
+pub async fn update_member_role(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path((conversation_id, member_id)): axum::extract::Path<(String, String)>,
+    Json(req): Json<crate::models::conversation::UpdateMemberRoleRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let member_uuid = match member_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_MEMBER_ID", "无效的成员 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是群主或管理员
+    let user_role = match get_member_role(&pool, &conv_uuid, &user_uuid).await {
+        Ok(Some(role)) => role,
+        Ok(None) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_MEMBER", "您不是该会话的成员")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("DB_ERROR", format!("检查角色失败: {}", e))),
+            );
+        }
+    };
+
+    if user_role != "owner" && user_role != "admin" {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::error("INSUFFICIENT_PERMISSION", "只有群主或管理员可以管理成员角色")),
+        );
+    }
+
+    // 管理员不能修改其他管理员或群主的角色
+    if user_role == "admin" {
+        let target_role = match get_member_role(&pool, &conv_uuid, &member_uuid).await {
+            Ok(Some(role)) => role,
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(ApiResponse::error("MEMBER_NOT_FOUND", "成员不存在")),
+                );
+            }
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::error("DB_ERROR", format!("查询成员角色失败: {}", e))),
+                );
+            }
+        };
+
+        if target_role == "owner" || target_role == "admin" {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("INSUFFICIENT_PERMISSION", "管理员不能修改群主或其他管理员的角色")),
+            );
+        }
+    }
+
+    // 不能修改自己的角色
+    if user_uuid == member_uuid {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("CANNOT_CHANGE_SELF", "不能修改自己的角色")),
+        );
+    }
+
+    // 更新角色
+    let role_str = req.role.to_string();
+    match sqlx::query(
+        "UPDATE conversation_members SET role = $1 WHERE conversation_id = $2 AND user_id = $3"
+    )
+    .bind(&role_str)
+    .bind(conv_uuid)
+    .bind(member_uuid)
+    .execute(&*pool)
+    .await
+    {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "message": "成员角色更新成功",
+                "user_id": member_id,
+                "new_role": role_str,
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("UPDATE_ROLE_FAILED", format!("更新角色失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取成员角色的辅助函数
+async fn get_member_role(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+    user_id: &Uuid,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT role FROM conversation_members WHERE conversation_id = $1 AND user_id = $2"
+    )
+    .bind(conversation_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await
+}
