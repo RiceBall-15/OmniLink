@@ -22,6 +22,13 @@ pub struct DateRangeQuery {
     pub end_date: Option<String>,
 }
 
+/// Pagination query parameters
+#[derive(Debug, Deserialize)]
+pub struct PaginationQuery {
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+
 /// Chat with AI assistant
 pub async fn chat(
     State(service): State<Arc<AIService>>,
@@ -247,6 +254,46 @@ pub async fn list_models(
         Ok(response) => Ok(JsonResponse(ApiResponse::success(response))),
         Err(e) => {
             tracing::error!("List models error: {:?}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                JsonResponse(ApiResponse::error(500, e.to_string())),
+            ))
+        }
+    }
+}
+
+/// Get conversation history
+pub async fn get_conversation_history(
+    State(service): State<Arc<AIService>>,
+    Auth(_claims): Auth,
+    Path(conversation_id): Path<Uuid>,
+    Query(query): Query<PaginationQuery>,
+) -> Result<JsonResponse<ApiResponse<ConversationHistoryResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let page = query.page.unwrap_or(1).max(1);
+    let page_size = query.page_size.unwrap_or(50).min(100);
+
+    match service.get_conversation_history(conversation_id, page, page_size).await {
+        Ok(response) => Ok(JsonResponse(ApiResponse::success(response))),
+        Err(e) => {
+            tracing::error!("Get conversation history error: {:?}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                JsonResponse(ApiResponse::error(500, e.to_string())),
+            ))
+        }
+    }
+}
+
+/// Clear conversation history
+pub async fn clear_conversation(
+    State(service): State<Arc<AIService>>,
+    Auth(_claims): Auth,
+    Path(conversation_id): Path<Uuid>,
+) -> Result<JsonResponse<ApiResponse<()>>, (StatusCode, Json<ApiResponse<()>>)> {
+    match service.clear_conversation(conversation_id).await {
+        Ok(_) => Ok(JsonResponse(ApiResponse::success(()))),
+        Err(e) => {
+            tracing::error!("Clear conversation error: {:?}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 JsonResponse(ApiResponse::error(500, e.to_string())),

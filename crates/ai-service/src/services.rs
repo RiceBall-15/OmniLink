@@ -184,19 +184,20 @@ impl AIService {
             content: request.message.clone(),
         });
 
-        // 获取模型配置
+        // 获取模型配置（支持请求级别的模型覆盖）
+        let effective_model_id = request.model_id.as_deref().unwrap_or(&assistant.model_id);
         let model_configs = self.model_configs.read().await;
         let model_config = model_configs
             .iter()
-            .find(|m| m.id == assistant.model_id)
-            .ok_or_else(|| AppError::NotFound("Model config not found".to_string()))?;
+            .find(|m| m.id == effective_model_id)
+            .ok_or_else(|| AppError::NotFound(format!("Model config not found: {}", effective_model_id)))?;
 
         // 获取提供商
         let provider = self.get_provider(&model_config.provider).await?;
 
         // 构建对话选项
         let options = ChatOptions {
-            model: assistant.model_id.clone(),
+            model: effective_model_id.to_string(),
             temperature: request.temperature.or(assistant.temperature).or(Some(0.7)),
             max_tokens: request.max_tokens.or(assistant.max_tokens).or(Some(2048)),
             top_p: Some(1.0),
@@ -296,25 +297,60 @@ impl AIService {
             });
         }
 
+        // 加载对话历史（最近20条消息作为上下文）
+        let history = self
+            .conversation_message_repository
+            .get_conversation_history(request.conversation_id, 20)
+            .await
+            .unwrap_or_default();
+
+        for msg in &history {
+            let role = if msg.sender_type == "user" {
+                MessageRole::User
+            } else if msg.sender_type == "assistant" {
+                MessageRole::Assistant
+            } else {
+                continue;
+            };
+            let content = msg.content
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+            if !content.is_empty() {
+                messages.push(AIMessage { role, content });
+            }
+        }
+
+        // 保存用户消息到数据库
+        let _ = self.conversation_message_repository
+            .save_message(
+                request.conversation_id,
+                _user_id,
+                "user",
+                serde_json::json!(request.message),
+            )
+            .await;
+
         // 添加用户消息
         messages.push(AIMessage {
             role: MessageRole::User,
             content: request.message.clone(),
         });
 
-        // 获取模型配置
+        // 获取模型配置（支持请求级别的模型覆盖）
+        let effective_model_id = request.model_id.as_deref().unwrap_or(&assistant.model_id);
         let model_configs = self.model_configs.read().await;
         let model_config = model_configs
             .iter()
-            .find(|m| m.id == assistant.model_id)
-            .ok_or_else(|| AppError::NotFound("Model config not found".to_string()))?;
+            .find(|m| m.id == effective_model_id)
+            .ok_or_else(|| AppError::NotFound(format!("Model config not found: {}", effective_model_id)))?;
 
         // 获取提供商
         let provider = self.get_provider(&model_config.provider).await?;
 
         // 构建对话选项
         let options = ChatOptions {
-            model: assistant.model_id.clone(),
+            model: effective_model_id.to_string(),
             temperature: request.temperature.or(assistant.temperature).or(Some(0.7)),
             max_tokens: request.max_tokens.or(assistant.max_tokens).or(Some(2048)),
             top_p: Some(1.0),
@@ -506,5 +542,48 @@ impl AIService {
         Ok(ModelsResponse {
             models: model_configs.clone(),
         })
+    }
+
+    /// 获取对话历史
+    pub async fn get_conversation_history(
+        &self,
+        conversation_id: Uuid,
+        page: i64,
+        page_size: i64,
+    ) -> Result<ConversationHistoryResponse> {
+        let offset = (page - 1).max(0) * page_size;
+        let total = self
+            .conversation_message_repository
+            .count_messages(conversation_id)
+            .await?;
+
+        let messages = self
+            .conversation_message_repository
+            .get_conversation_history(conversation_id, page_size)
+            .await
+            .unwrap_or_default();
+
+        let message_history: Vec<MessageHistory> = messages
+            .into_iter()
+            .map(|msg| MessageHistory {
+                role: msg.sender_type.clone(),
+                content: msg.content.as_str().unwrap_or("").to_string(),
+                created_at: msg.created_at.timestamp(),
+            })
+            .collect();
+
+        Ok(ConversationHistoryResponse {
+            conversation_id,
+            assistant_id: Uuid::nil(), // Will be filled from context
+            messages: message_history,
+            total_messages: total as i32,
+        })
+    }
+
+    /// 清空对话历史
+    pub async fn clear_conversation(&self, conversation_id: Uuid) -> Result<()> {
+        self.conversation_message_repository
+            .clear_conversation(conversation_id)
+            .await
     }
 }

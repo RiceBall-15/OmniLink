@@ -8,6 +8,7 @@ use common::{auth::TokenManager, db::DatabaseManager};
 use ai_service::handlers::{
     chat, chat_stream, create_assistant, list_assistants, get_assistant,
     update_assistant, delete_assistant, get_token_usage, list_models,
+    get_conversation_history, clear_conversation,
 };
 use ai_service::middleware::auth_middleware;
 use ai_service::repository::{AssistantRepository, TokenUsageRepository, ConversationMessageRepository};
@@ -74,6 +75,10 @@ async fn main() -> anyhow::Result<()> {
 
         // 模型列表
         .route("/models", get(list_models))
+
+        // 对话历史管理
+        .route("/conversations/:conversation_id/messages", get(get_conversation_history))
+        .route("/conversations/:conversation_id", delete(clear_conversation))
 
         // 添加认证中间件
         .layer(middleware::from_fn_with_state(
