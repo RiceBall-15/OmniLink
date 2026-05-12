@@ -7,7 +7,7 @@ use crate::repository::MessageRepository;
 use crate::user_repository::UserRepository;
 use crate::connection_manager::WSConnectionManager;
 use crate::status_manager::OnlineStatusManager;
-use common::models::{Message, User};
+use common::models::User;
 use common::{AppError, Result};
 use uuid::Uuid;
 use chrono::Utc;
@@ -60,7 +60,7 @@ impl IMService {
             .await?;
 
         // 获取发送者信息
-        let sender = self.get_user_info(sender_id).await?;
+        let _sender = self.get_user_info(sender_id).await?;
 
         // 发送给对话中的所有用户
         let ws_message = WSMessage {

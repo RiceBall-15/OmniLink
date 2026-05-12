@@ -8,8 +8,8 @@ use serde::Deserialize;
 use sqlx::PgPool;
 
 use crate::models::auth::ApiResponse;
-use crate::models::message::{Message, SendMessageRequest, EditMessageRequest, CreateMessageParams, MessageType};
-use crate::db::message::{create_message, get_messages_by_conversation, get_message_by_id, update_message_content, recall_message, mark_conversation_as_read, can_edit_message, can_recall_message, get_last_message, count_unread_messages};
+use crate::models::message::{Message, SendMessageRequest, EditMessageRequest, CreateMessageParams};
+use crate::db::message::{create_message, get_messages_by_conversation, get_message_by_id, update_message_content, recall_message, mark_conversation_as_read, can_edit_message, can_recall_message};
 
 /// 获取会话的消息列表（分页）
 #[derive(Debug, Deserialize)]
@@ -183,7 +183,7 @@ pub async fn send_message(
 pub async fn edit_message(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
-    Path((conversation_id, message_id)): Path<(String, String)>,
+    Path((_conversation_id, message_id)): Path<(String, String)>,
     Json(req): Json<EditMessageRequest>,
 ) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
     // 解析 ID
@@ -260,7 +260,7 @@ pub async fn edit_message(
 pub async fn recall_message_handler(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
-    Path((conversation_id, message_id)): Path<(String, String)>,
+    Path((_conversation_id, message_id)): Path<(String, String)>,
 ) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
     // 解析 ID
     let msg_uuid = match message_id.parse::<Uuid>() {

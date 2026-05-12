@@ -241,7 +241,7 @@ fn derive_public_key(private_key: &[u8]) -> Vec<u8> {
 /// 验证消息完整性
 /// 
 /// 使用 HMAC-SHA256 验证消息未被篡改
-pub fn verify_message_integrity(message: &[u8], signature: &[u8], key: &[u8]) -> bool {
+pub fn verify_message_integrity(_message: &[u8], _signature: &[u8], _key: &[u8]) -> bool {
     // 简化实现：实际应用中应使用 HMAC-SHA256
     // 这里仅作为示例
     true

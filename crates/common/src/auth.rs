@@ -1,7 +1,7 @@
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{Utc, Duration};
+use chrono::Utc;
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
@@ -26,7 +26,7 @@ pub struct TokenManager {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
     access_token_ttl: i64,   // 访问Token有效期（秒）
-    refresh_token_ttl: i64,  // 刷新Token有效期（秒）
+    _refresh_token_ttl: i64,  // 刷新Token有效期（秒）
 }
 
 impl TokenManager {
@@ -35,7 +35,7 @@ impl TokenManager {
             encoding_key: EncodingKey::from_secret(secret),
             decoding_key: DecodingKey::from_secret(secret),
             access_token_ttl: 3600 * 24 * 7,    // 7天
-            refresh_token_ttl: 3600 * 24 * 30,  // 30天
+            _refresh_token_ttl: 3600 * 24 * 30,  // 30天
         }
     }
 

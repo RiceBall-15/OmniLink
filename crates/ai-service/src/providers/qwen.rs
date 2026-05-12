@@ -57,7 +57,7 @@ struct QwenUsage {
 #[derive(Debug, Deserialize)]
 struct QwenStreamResponse {
     choices: Vec<QwenStreamChoice>,
-    model: Option<String>,
+    _model: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

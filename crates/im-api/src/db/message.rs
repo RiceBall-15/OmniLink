@@ -1,10 +1,10 @@
 use sqlx::PgPool;
 use uuid::Uuid;
-use chrono::{DateTime, Utc, Duration};
+use chrono::{Utc, Duration};
 use anyhow::Result;
 
 use crate::models::message::{
-    MessageEntity, Message, CreateMessageParams, MessageType, MessageStatus,
+    MessageEntity, CreateMessageParams, MessageStatus,
 };
 
 /// 创建消息

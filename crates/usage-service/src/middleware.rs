@@ -5,7 +5,7 @@ use axum::{
     response::Response,
 };
 use std::sync::Arc;
-use common::auth::{TokenManager, Claims};
+use common::auth::TokenManager;
 
 pub async fn auth_middleware(
     State(token_manager): State<Arc<TokenManager>>,

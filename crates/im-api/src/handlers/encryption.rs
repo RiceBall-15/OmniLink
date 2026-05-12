@@ -12,7 +12,7 @@ use common::crypto;
 
 /// 生成用户身份密钥对
 pub async fn generate_keys(
-    State(pool): State<PgPool>,
+    State(_pool): State<PgPool>,
     Extension(user_id): Extension<Uuid>,
 ) -> impl IntoResponse {
     let key_pair = crypto::generate_identity_key_pair(user_id);
@@ -32,11 +32,11 @@ pub async fn generate_keys(
 
 /// 获取加密会话密钥
 pub async fn get_session_key(
-    State(pool): State<PgPool>,
-    Extension(user_id): Extension<Uuid>,
+    State(_pool): State<PgPool>,
+    Extension(_user_id): Extension<Uuid>,
     Path(conversation_id): Path<String>,
 ) -> impl IntoResponse {
-    let conv_uuid = match Uuid::parse_str(&conversation_id) {
+    let _conv_uuid = match Uuid::parse_str(&conversation_id) {
         Ok(id) => id,
         Err(_) => {
             return (
@@ -66,7 +66,7 @@ pub async fn get_session_key(
 
 /// 加密消息
 pub async fn encrypt_message(
-    State(pool): State<PgPool>,
+    State(_pool): State<PgPool>,
     Extension(user_id): Extension<Uuid>,
     Json(req): Json<serde_json::Value>,
 ) -> impl IntoResponse {
@@ -122,8 +122,8 @@ pub async fn encrypt_message(
 
 /// 解密消息
 pub async fn decrypt_message(
-    State(pool): State<PgPool>,
-    Extension(user_id): Extension<Uuid>,
+    State(_pool): State<PgPool>,
+    Extension(_user_id): Extension<Uuid>,
     Json(req): Json<serde_json::Value>,
 ) -> impl IntoResponse {
     let ciphertext = match req.get("ciphertext").and_then(|v| v.as_str()) {
@@ -196,8 +196,8 @@ pub async fn decrypt_message(
 
 /// 获取加密信息
 pub async fn get_encryption_info(
-    State(pool): State<PgPool>,
-    Extension(user_id): Extension<Uuid>,
+    State(_pool): State<PgPool>,
+    Extension(_user_id): Extension<Uuid>,
 ) -> impl IntoResponse {
     (
         StatusCode::OK,
@@ -218,8 +218,8 @@ pub async fn get_encryption_info(
 
 /// 密钥交换请求
 pub async fn key_exchange(
-    State(pool): State<PgPool>,
-    Extension(user_id): Extension<Uuid>,
+    State(_pool): State<PgPool>,
+    Extension(_user_id): Extension<Uuid>,
     Json(req): Json<serde_json::Value>,
 ) -> impl IntoResponse {
     let conversation_id = match req.get("conversationId").and_then(|v| v.as_str()) {
@@ -232,7 +232,7 @@ pub async fn key_exchange(
         }
     };
     
-    let public_key = match req.get("publicKey").and_then(|v| v.as_str()) {
+    let _public_key = match req.get("publicKey").and_then(|v| v.as_str()) {
         Some(key) => key,
         None => {
             return (
@@ -244,7 +244,7 @@ pub async fn key_exchange(
     
     // 生成新的会话密钥用于此会话
     let session_key = crypto::generate_session_key();
-    let session_key_b64 = base64::Engine::encode(
+    let _session_key_b64 = base64::Engine::encode(
         &base64::engine::general_purpose::STANDARD,
         &session_key,
     );
@@ -347,7 +347,7 @@ pub async fn store_encrypted_message(
 /// 获取会话的加密消息历史
 pub async fn get_encrypted_messages(
     State(pool): State<PgPool>,
-    Extension(user_id): Extension<Uuid>,
+    Extension(_user_id): Extension<Uuid>,
     Path(conversation_id): Path<String>,
 ) -> impl IntoResponse {
     let conv_uuid = match Uuid::parse_str(&conversation_id) {

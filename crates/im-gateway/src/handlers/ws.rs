@@ -28,7 +28,7 @@ pub async fn websocket_handler(
 
 /// 处理 WebSocket 连接
 async fn handle_websocket(
-    mut socket: WebSocket,
+    socket: WebSocket,
     state: Arc<AppState>,
 ) {
     let addr = "unknown".to_string();

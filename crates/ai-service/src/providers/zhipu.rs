@@ -57,7 +57,7 @@ struct ZhipuUsage {
 #[derive(Debug, Deserialize)]
 struct ZhipuStreamResponse {
     choices: Vec<ZhipuStreamChoice>,
-    model: Option<String>,
+    _model: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

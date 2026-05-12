@@ -3,7 +3,7 @@ use uuid::Uuid;
 use anyhow::Result;
 
 use crate::models::conversation::{
-    ConversationEntity, Conversation, CreateConversationParams, ConversationType,
+    ConversationEntity, CreateConversationParams, ConversationType,
 };
 
 /// 创建会话
@@ -112,7 +112,7 @@ pub async fn is_conversation_participant(pool: &PgPool, conversation_id: &Uuid, 
 }
 
 /// 更新会话未读计数
-pub async fn update_unread_count(pool: &PgPool, conversation_id: &Uuid, user_id: &Uuid, count: i32) -> Result<()> {
+pub async fn update_unread_count(pool: &PgPool, conversation_id: &Uuid, _user_id: &Uuid, count: i32) -> Result<()> {
     // 这里简化处理，直接更新会话的 unread_count
     // 实际应用中可能需要为每个用户维护未读计数
     sqlx::query(

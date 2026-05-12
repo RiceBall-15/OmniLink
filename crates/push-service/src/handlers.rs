@@ -227,7 +227,7 @@ pub async fn health_check() -> &'static str {
 
 /// 注册设备
 pub async fn register_device(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Json(req): Json<RegisterDeviceRequest>,
 ) -> Result<Json<ApiResponse<DeviceInfo>>, StatusCode> {
     let device_id = Uuid::new_v4();

@@ -1,8 +1,8 @@
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
 use bcrypt::{hash, verify, DEFAULT_COST};
-use chrono::{DateTime, Utc};
-use crate::models::auth::{User, UserEntity, CreateUserParams};
+use chrono::Utc;
+use crate::models::auth::{UserEntity, CreateUserParams};
 
 /// 创建用户
 pub async fn create_user(

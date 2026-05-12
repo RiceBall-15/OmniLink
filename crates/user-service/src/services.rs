@@ -4,7 +4,7 @@ use chrono::Utc;
 use crate::models::{
     RegisterRequest, LoginRequest, LoginResponse, RefreshTokenRequest,
     UpdateProfileRequest, ChangePasswordRequest, LogoutRequest,
-    User, DevicesResponse, DeviceInfo
+    User, DevicesResponse
 };
 use crate::repository::{UserRepository, DeviceRepository};
 use crate::jwt::JwtManager;
@@ -79,7 +79,7 @@ impl UserService {
         let user_id = Uuid::new_v4();
 
         // 记录创建时间和更新时间
-        let now = Utc::now();
+        let _now = Utc::now();
 
         // 创建用户
         let user = self.user_repo.create(

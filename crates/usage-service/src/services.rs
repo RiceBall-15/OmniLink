@@ -1,6 +1,5 @@
 use anyhow::Result;
 use sqlx::PgPool;
-use std::sync::Arc;
 use uuid::Uuid;
 
 use super::models::*;

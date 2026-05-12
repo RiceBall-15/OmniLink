@@ -1,7 +1,7 @@
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{Utc, Duration};
+use chrono::Utc;
 use crate::error::{AppError, Result};
 
 /// JWT Claims

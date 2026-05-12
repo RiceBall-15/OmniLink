@@ -72,7 +72,7 @@ impl MessageRepository {
         );
         let mut param_count = 1;
 
-        if let Some(before_id) = before_message_id {
+        if let Some(_before_id) = before_message_id {
             param_count += 1;
             query.push_str(&format!(" AND created_at < (SELECT created_at FROM messages WHERE id = ${})", param_count));
         }

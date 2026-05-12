@@ -4,7 +4,7 @@ use crate::models::{
 };
 use crate::repository::ConversationRepository;
 use crate::user_repository::UserRepository;
-use common::models::{Conversation, User};
+use common::models::User;
 use common::{AppError, Result};
 use uuid::Uuid;
 use chrono::Utc;

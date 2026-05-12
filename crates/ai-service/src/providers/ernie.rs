@@ -49,7 +49,7 @@ struct ErnieUsage {
 struct ErnieStreamResponse {
     result: Option<String>,
     is_end: Option<bool>,
-    usage: Option<ErnieUsage>,
+    _usage: Option<ErnieUsage>,
     #[serde(default)]
     error_code: Option<i32>,
     #[serde(default)]
@@ -62,7 +62,7 @@ pub struct ErnieProvider {
     api_key: String,
     secret_key: String,
     base_url: String,
-    access_token: Option<String>,
+    _access_token: Option<String>,
 }
 
 impl ErnieProvider {
@@ -74,7 +74,7 @@ impl ErnieProvider {
             base_url: base_url.unwrap_or_else(|| {
                 "https://aip.baidubce.com".to_string()
             }),
-            access_token: None,
+            _access_token: None,
         }
     }
 

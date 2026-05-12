@@ -6,14 +6,14 @@ use uuid::Uuid;
 use chrono::Utc;
 use anyhow::{Result, anyhow};
 
-use super::providers::{AIProvider, AIMessage, MessageRole, ChatOptions, StreamChunk, OpenAIProvider, AnthropicProvider, GoogleProvider, QwenProvider, ZhipuProvider, ErnieProvider};
+use super::providers::{AIProvider, AIMessage, MessageRole, ChatOptions, OpenAIProvider, AnthropicProvider, GoogleProvider, QwenProvider, ZhipuProvider, ErnieProvider};
 use super::models::{
-    ChatRequest, ChatResponse, ChatStreamResponse,
+    ChatRequest, ChatResponse,
     ModelsResponse, ModelConfig,
     CreateAssistantRequest, UpdateAssistantRequest, AssistantInfo, AssistantsListResponse,
     TokenUsageResponse, ModelUsage, MessageHistory, ConversationHistoryResponse, CreateAssistantResponse,
 };
-use super::repository::{AssistantRepository, TokenUsageRepository, ConversationMessageRepository, TokenUsageSummary};
+use super::repository::{AssistantRepository, TokenUsageRepository, ConversationMessageRepository};
 
 /// AI服务错误类型
 #[derive(Debug)]
@@ -682,7 +682,7 @@ impl AIService {
         page: i64,
         page_size: i64,
     ) -> Result<ConversationHistoryResponse> {
-        let offset = (page - 1).max(0) * page_size;
+        let _offset = (page - 1).max(0) * page_size;
         let total = self
             .conversation_message_repository
             .count_messages(conversation_id)

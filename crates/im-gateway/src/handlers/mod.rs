@@ -10,10 +10,8 @@ use std::sync::Arc;
 use crate::middleware::AuthUser;
 use crate::models::{
     SendMessageRequest, MessageHistoryQuery, MarkReadRequest, EditMessageRequest, RecallMessageRequest,
-    CreateConversationRequest, ConversationsQuery, CreateConversationResponse,
-    ConversationsListResponse, ConversationInfo,
-    MessageHistoryResponse, SendMessageResponse, OnlineUsersResponse,
-    BatchStatusQuery, BatchStatusResponse, UserStatusItem,
+    CreateConversationRequest, ConversationsQuery,
+    BatchStatusQuery,
 };
 use crate::services::IMService;
 use crate::conversation_service::ConversationService;

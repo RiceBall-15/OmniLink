@@ -4,7 +4,7 @@ use tokio::sync::RwLock;
 use axum::extract::ws::Message;
 use uuid::Uuid;
 
-use crate::models::{WSMessage, WSMessageType};
+use crate::models::WSMessage;
 
 /// WebSocket连接ID (唯一标识每个连接)
 pub type ConnectionId = Uuid;
