@@ -300,3 +300,99 @@ pub struct TokenUsageSummary {
     pub total_tokens: i64,
     pub estimated_cost: f64,
 }
+
+/// 对话消息仓库 - 管理AI对话历史
+pub struct ConversationMessageRepository {
+    pool: Pool<Postgres>,
+}
+
+/// 对话消息记录
+#[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct ConversationMessage {
+    pub id: Uuid,
+    pub conversation_id: Uuid,
+    pub sender_id: Uuid,
+    pub sender_type: String,
+    pub content: serde_json::Value,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl ConversationMessageRepository {
+    pub fn new(pool: Pool<Postgres>) -> Self {
+        Self { pool }
+    }
+
+    /// 保存对话消息
+    pub async fn save_message(
+        &self,
+        conversation_id: Uuid,
+        sender_id: Uuid,
+        sender_type: &str,
+        content: serde_json::Value,
+    ) -> Result<ConversationMessage> {
+        let now = Utc::now();
+        sqlx::query_as::<_, ConversationMessage>(
+            r#"
+            INSERT INTO messages (id, conversation_id, sender_id, sender_type, content_type, content, created_at, status)
+            VALUES (gen_random_uuid(), $1, $2, $3, 'text', $4, $5, 'sent')
+            RETURNING id, conversation_id, sender_id, sender_type, content, created_at
+            "#
+        )
+        .bind(conversation_id)
+        .bind(sender_id)
+        .bind(sender_type)
+        .bind(content)
+        .bind(now)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e))
+    }
+
+    /// 获取对话历史（最近N条消息）
+    pub async fn get_conversation_history(
+        &self,
+        conversation_id: Uuid,
+        limit: i64,
+    ) -> Result<Vec<ConversationMessage>> {
+        let messages = sqlx::query_as::<_, ConversationMessage>(
+            r#"
+            SELECT id, conversation_id, sender_id, sender_type, content, created_at
+            FROM messages
+            WHERE conversation_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            "#
+        )
+        .bind(conversation_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e))?;
+
+        // 反转为时间正序
+        Ok(messages.into_iter().rev().collect())
+    }
+
+    /// 清空对话历史
+    pub async fn clear_conversation(&self, conversation_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM messages WHERE conversation_id = $1")
+            .bind(conversation_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::Database(e))?;
+        Ok(())
+    }
+
+    /// 获取对话消息总数
+    pub async fn count_messages(&self, conversation_id: Uuid) -> Result<i64> {
+        let count: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM messages WHERE conversation_id = $1"
+        )
+        .bind(conversation_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e))?;
+
+        Ok(count.0)
+    }
+}

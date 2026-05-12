@@ -10,7 +10,7 @@ use ai_service::handlers::{
     update_assistant, delete_assistant, get_token_usage, list_models,
 };
 use ai_service::middleware::auth_middleware;
-use ai_service::repository::{AssistantRepository, TokenUsageRepository};
+use ai_service::repository::{AssistantRepository, TokenUsageRepository, ConversationMessageRepository};
 use ai_service::services::AIService;
 
 #[tokio::main]
@@ -25,12 +25,14 @@ async fn main() -> anyhow::Result<()> {
 
     // 创建仓库
     let assistant_repository = Arc::new(AssistantRepository::new(pg_pool.clone()));
-    let token_usage_repository = Arc::new(TokenUsageRepository::new(pg_pool));
+    let token_usage_repository = Arc::new(TokenUsageRepository::new(pg_pool.clone()));
+    let conversation_message_repository = Arc::new(ConversationMessageRepository::new(pg_pool));
 
     // 创建AI服务
     let ai_service = Arc::new(AIService::new(
         assistant_repository,
         token_usage_repository,
+        conversation_message_repository,
     ));
 
     // 初始化AI提供商（从环境变量读取API密钥）

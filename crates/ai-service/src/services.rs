@@ -5,19 +5,20 @@ use super::models::{
     UpdateAssistantRequest, AssistantInfo,
     TokenUsageResponse, ModelUsage, ModelsResponse, ModelConfig
 };
-use super::repository::{AssistantRepository, TokenUsageRepository};
-use common::{AppError, Result};
-use uuid::Uuid;
-use chrono::Utc;
-use std::collections::HashMap;
-use std::pin::Pin;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use super::providers::{AIProvider, AIMessage, MessageRole, ChatOptions, OpenAIProvider, AnthropicProvider, GoogleProvider};
+use super::models::{
+    ChatRequest, ChatResponse, ChatStreamResponse,
+    ModelsResponse, ModelInfo,
+    CreateAssistantRequest, UpdateAssistantRequest, AssistantInfo, AssistantsListResponse,
+    TokenUsageResponse, TokenUsageSummary as TokenUsageSummaryResponse,
+};
+use super::repository::{AssistantRepository, TokenUsageRepository, ConversationMessageRepository};
 
 /// AI服务
 pub struct AIService {
     assistant_repository: Arc<AssistantRepository>,
     token_usage_repository: Arc<TokenUsageRepository>,
+    conversation_message_repository: Arc<ConversationMessageRepository>,
     providers: Arc<RwLock<HashMap<String, Arc<dyn AIProvider>>>>,
     model_configs: Arc<RwLock<Vec<ModelConfig>>>,
 }
@@ -27,6 +28,7 @@ impl AIService {
     pub fn new(
         assistant_repository: Arc<AssistantRepository>,
         token_usage_repository: Arc<TokenUsageRepository>,
+        conversation_message_repository: Arc<ConversationMessageRepository>,
     ) -> Self {
         let providers = Arc::new(RwLock::new(HashMap::new()));
         let model_configs = Arc::new(RwLock::new(Self::default_models()));
@@ -34,6 +36,7 @@ impl AIService {
         Self {
             assistant_repository,
             token_usage_repository,
+            conversation_message_repository,
             providers,
             model_configs,
         }
@@ -130,18 +133,52 @@ impl AIService {
             .await?
             .ok_or_else(|| AppError::NotFound("Assistant not found".to_string()))?;
 
-        // 获取对话历史（简化版，实际需要从数据库获取）
+        // 构建消息列表
         let mut messages = vec![];
 
         // 添加系统提示
-        if let Some(system_prompt) = assistant.system_prompt {
+        if let Some(ref system_prompt) = assistant.system_prompt {
             messages.push(AIMessage {
                 role: MessageRole::System,
-                content: system_prompt,
+                content: system_prompt.clone(),
             });
         }
 
-        // 添加用户消息
+        // 加载对话历史（最近20条消息作为上下文）
+        let history = self
+            .conversation_message_repository
+            .get_conversation_history(request.conversation_id, 20)
+            .await
+            .unwrap_or_default();
+
+        for msg in &history {
+            let role = if msg.sender_type == "user" {
+                MessageRole::User
+            } else if msg.sender_type == "assistant" {
+                MessageRole::Assistant
+            } else {
+                continue; // skip system messages from history
+            };
+            let content = msg.content
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+            if !content.is_empty() {
+                messages.push(AIMessage { role, content });
+            }
+        }
+
+        // 保存用户消息到数据库
+        self.conversation_message_repository
+            .save_message(
+                request.conversation_id,
+                user_id,
+                "user",
+                serde_json::json!(request.message),
+            )
+            .await?;
+
+        // 添加当前用户消息
         messages.push(AIMessage {
             role: MessageRole::User,
             content: request.message.clone(),
@@ -192,8 +229,15 @@ impl AIService {
         }
         let completion = completion.ok_or_else(|| AppError::Internal("AI API failed after max retries".to_string()))?;
 
-        // 保存消息到数据库（简化版）
-        let message_id = Uuid::new_v4();
+        // 保存助手回复到数据库
+        let saved_message = self.conversation_message_repository
+            .save_message(
+                request.conversation_id,
+                assistant.id,
+                "assistant",
+                serde_json::json!(completion.content),
+            )
+            .await?;
 
         // 记录Token使用
         let cost = provider.calculate_cost(
@@ -217,7 +261,7 @@ impl AIService {
         Ok(ChatResponse {
             conversation_id: request.conversation_id,
             assistant_id: request.assistant_id,
-            message_id,
+            message_id: saved_message.id,
             content: completion.content,
             model: completion.model,
             prompt_tokens: completion.prompt_tokens,
