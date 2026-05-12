@@ -46,6 +46,9 @@ pub enum WSMessageType {
     // 输入状态
     Typing,       // "typing" - 正在输入
 
+    // 状态变更
+    StatusChange, // "status_change" - 用户状态变更（上线/下线/忙碌/离开）
+
     // 错误
     Error,        // "error" - 错误消息
 }
@@ -218,4 +221,30 @@ pub struct OnlineUserInfo {
 pub struct TypingRequest {
     pub conversation_id: Uuid,
     pub is_typing: bool,
+}
+
+/// 状态变更请求 (通过 WebSocket 发送)
+#[derive(Debug, Deserialize)]
+pub struct StatusChangeRequest {
+    pub status: String,  // online, away, busy, offline
+}
+
+/// 批量状态查询请求
+#[derive(Debug, Deserialize)]
+pub struct BatchStatusQuery {
+    pub user_ids: Vec<Uuid>,
+}
+
+/// 批量状态查询响应
+#[derive(Debug, Serialize)]
+pub struct BatchStatusResponse {
+    pub statuses: Vec<UserStatusItem>,
+}
+
+/// 用户状态项
+#[derive(Debug, Serialize)]
+pub struct UserStatusItem {
+    pub user_id: Uuid,
+    pub status: String,
+    pub last_seen: i64,
 }

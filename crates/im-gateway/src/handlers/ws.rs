@@ -166,6 +166,22 @@ async fn handle_websocket(
         if !state.connection_manager.is_online(conn.user_id).await {
             state.status_manager.set_offline(conn.user_id).await;
             tracing::info!("User {} is now offline (last connection closed)", conn.user_id);
+
+            // 广播离线状态变更给所有连接的用户
+            let status_change_msg = WSMessage {
+                message_type: WSMessageType::StatusChange,
+                conversation_id: None,
+                message_id: None,
+                sender_id: Some(conn.user_id),
+                content: None,
+                timestamp: Some(Utc::now().timestamp()),
+                data: Some(serde_json::json!({
+                    "user_id": conn.user_id,
+                    "status": "offline",
+                    "last_seen": Utc::now().timestamp(),
+                })),
+            };
+            state.connection_manager.broadcast(status_change_msg).await;
         }
     }
 
@@ -225,6 +241,22 @@ async fn handle_auth_message(
 
                     // 设置用户在线
                     state.status_manager.set_online(uid, Some(format!("ws:{}", addr))).await;
+
+                    // 广播上线状态变更给所有连接的用户
+                    let status_change_msg = WSMessage {
+                        message_type: WSMessageType::StatusChange,
+                        conversation_id: None,
+                        message_id: None,
+                        sender_id: Some(uid),
+                        content: None,
+                        timestamp: Some(Utc::now().timestamp()),
+                        data: Some(serde_json::json!({
+                            "user_id": uid,
+                            "status": "online",
+                            "last_seen": Utc::now().timestamp(),
+                        })),
+                    };
+                    state.connection_manager.broadcast(status_change_msg).await;
 
                     // 发送连接成功消息
                     let response = WSMessage {
@@ -407,6 +439,33 @@ async fn handle_authenticated_message(
                 state.connection_manager.send_to_conversation(conversation_id, recall_msg).await;
             } else {
                 tracing::warn!("Recall message missing conversation_id or message_id from user {}", user_id);
+            }
+        }
+
+        WSMessageType::StatusChange => {
+            // 处理状态变更请求 - 用户主动更改状态 (away, busy, 等)
+            if let Some(data) = &ws_msg.data {
+                if let Ok(status_req) = serde_json::from_value::<crate::models::StatusChangeRequest>(data.clone()) {
+                    let new_status = crate::status_manager::UserStatus::from_str(&status_req.status);
+                    tracing::info!("User {} changing status to {:?}", user_id, new_status);
+                    state.status_manager.update_status(user_id, new_status.clone()).await;
+
+                    // 广播状态变更给所有连接的用户
+                    let status_change_msg = WSMessage {
+                        message_type: WSMessageType::StatusChange,
+                        conversation_id: None,
+                        message_id: None,
+                        sender_id: Some(user_id),
+                        content: None,
+                        timestamp: Some(Utc::now().timestamp()),
+                        data: Some(serde_json::json!({
+                            "user_id": user_id,
+                            "status": format!("{:?}", new_status).to_lowercase(),
+                            "last_seen": Utc::now().timestamp(),
+                        })),
+                    };
+                    state.connection_manager.broadcast(status_change_msg).await;
+                }
             }
         }
 

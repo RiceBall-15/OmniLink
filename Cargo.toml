@@ -22,11 +22,15 @@ license = "MIT"
 # 异步运行时
 tokio = { version = "1.35", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+async-stream = "0.3"
 
 # Web框架
 axum = { version = "0.7", features = ["ws", "multipart"] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip"] }
+headers = "0.4"
 
 # 序列化
 serde = { version = "1.0", features = ["derive"] }

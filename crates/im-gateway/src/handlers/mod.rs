@@ -13,6 +13,7 @@ use crate::models::{
     CreateConversationRequest, ConversationsQuery, CreateConversationResponse,
     ConversationsListResponse, ConversationInfo,
     MessageHistoryResponse, SendMessageResponse, OnlineUsersResponse,
+    BatchStatusQuery, BatchStatusResponse, UserStatusItem,
 };
 use crate::services::IMService;
 use crate::conversation_service::ConversationService;
@@ -131,6 +132,20 @@ pub async fn get_online_users(
         Ok(response) => Ok(Json(ApiResponse::success(response))),
         Err(e) => {
             tracing::error!("Failed to get online users: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// 批量查询用户在线状态
+pub async fn batch_status_query(
+    State(im_service): State<Arc<IMService>>,
+    Json(request): Json<BatchStatusQuery>,
+) -> Result<impl IntoResponse, StatusCode> {
+    match im_service.get_batch_status(&request.user_ids).await {
+        Ok(response) => Ok(Json(ApiResponse::success(response))),
+        Err(e) => {
+            tracing::error!("Failed to batch query user status: {}", e);
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }

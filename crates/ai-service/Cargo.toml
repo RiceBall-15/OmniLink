@@ -12,6 +12,13 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
+sqlx.workspace = true
+validator.workspace = true
+tracing-subscriber.workspace = true
+axum-extra.workspace = true
+headers.workspace = true
+tokio-stream.workspace = true
+async-stream.workspace = true
 
 # AI dependencies
 async-openai = "0.14"

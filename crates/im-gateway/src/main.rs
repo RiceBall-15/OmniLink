@@ -41,7 +41,10 @@ async fn main() -> Result<()> {
 
     // 创建管理器实例
     let connection_manager = Arc::new(WSConnectionManager::new());
-    let status_manager = Arc::new(OnlineStatusManager::new());
+
+    // 创建带 Redis 的在线状态管理器
+    tracing::info!("Initializing OnlineStatusManager with Redis backend");
+    let status_manager = Arc::new(OnlineStatusManager::with_redis(db_manager.redis().clone()));
 
     // 创建服务实例
     let im_service = Arc::new(IMService::new(
@@ -82,6 +85,7 @@ async fn main() -> Result<()> {
         .route("/messages/edit", put(im_gateway::handlers::edit_message))
         .route("/messages/recall", post(im_gateway::handlers::recall_message))
         .route("/users/online", get(im_gateway::handlers::get_online_users))
+        .route("/users/status/batch", post(im_gateway::handlers::batch_status_query))
         .with_state(im_service);
 
     // 对话路由 (使用 conv_service)
@@ -105,6 +109,19 @@ async fn main() -> Result<()> {
         .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
+
+    // 从 Redis 加载之前的状态
+    status_manager.load_from_redis().await;
+
+    // 启动状态清理后台任务
+    let cleanup_status_manager = status_manager.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            cleanup_status_manager.cleanup_expired().await;
+        }
+    });
 
     // 启动服务器
     let addr = "0.0.0.0:3002";

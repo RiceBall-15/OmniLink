@@ -1,6 +1,7 @@
 use crate::models::{
     SendMessageRequest, SendMessageResponse, MessageHistoryResponse, MessageInfo,
     OnlineUsersResponse, OnlineUserInfo, WSMessage, WSMessageType,
+    BatchStatusResponse, UserStatusItem,
 };
 use crate::repository::MessageRepository;
 use crate::user_repository::UserRepository;
@@ -284,6 +285,33 @@ impl IMService {
         Ok(OnlineUsersResponse {
             online_users,
             total,
+        })
+    }
+
+    /// 批量查询用户在线状态
+    pub async fn get_batch_status(&self, user_ids: &[Uuid]) -> Result<BatchStatusResponse> {
+        let statuses = self.status_manager.get_batch_statuses(user_ids).await;
+        let status_items: Vec<UserStatusItem> = user_ids
+            .iter()
+            .map(|uid| {
+                if let Some(info) = statuses.get(uid) {
+                    UserStatusItem {
+                        user_id: *uid,
+                        status: format!("{:?}", info.status).to_lowercase(),
+                        last_seen: info.last_seen,
+                    }
+                } else {
+                    UserStatusItem {
+                        user_id: *uid,
+                        status: "offline".to_string(),
+                        last_seen: 0,
+                    }
+                }
+            })
+            .collect();
+
+        Ok(BatchStatusResponse {
+            statuses: status_items,
         })
     }
 
