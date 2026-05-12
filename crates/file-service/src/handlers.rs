@@ -296,6 +296,36 @@ pub async fn health_check() -> &'static str {
     "File service is healthy"
 }
 
+/// 获取文件预览信息
+pub async fn get_file_preview(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Path(file_id): Path<String>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
+    let file_uuid = Uuid::parse_str(&file_id).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    let file = state.repository.get_file_by_id(file_uuid).await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // 构建预览信息
+    let preview = serde_json::json!({
+        "id": file.id.to_string(),
+        "filename": file.filename,
+        "original_filename": file.original_filename,
+        "content_type": file.content_type,
+        "size": file.size,
+        "is_image": file.content_type.starts_with("image/"),
+        "is_video": file.content_type.starts_with("video/"),
+        "is_audio": file.content_type.starts_with("audio/"),
+        "is_document": !file.content_type.starts_with("image/") && !file.content_type.starts_with("video/") && !file.content_type.starts_with("audio/"),
+        "preview_url": format!("/api/files/{}", file.id),
+        "created_at": file.created_at.to_rfc3339(),
+    });
+
+    Ok(Json(ApiResponse::success(preview)))
+}
+
 /// 创建文件分享链接
 pub async fn create_share(
     State(state): State<Arc<AppState>>,

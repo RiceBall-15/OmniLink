@@ -329,7 +329,7 @@
 - [ ] 实现用户资料查询 API（GET /api/users/:id/profile）
 - [ ] 支持头像上传（与 file-service 集成）
 
-#### 38. 会话成员角色管理 ⏳
+#### 38. 成员角色管理 ✅
 - [ ] 添加会话角色枚举（Owner, Admin, Member）
 - [ ] 实现成员角色更新 API（PUT /api/im/conversations/:id/members/:uid/role）
 - [ ] 权限检查：只有 Owner/Admin 可以管理成员

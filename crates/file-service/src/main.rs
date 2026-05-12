@@ -55,6 +55,7 @@ fn create_router(app_state: Arc<AppState>, token_manager: Arc<TokenManager>) -> 
         .route("/api/files/{file_id}", put(update_file))
         .route("/api/files", get(list_files))
         .route("/api/files/{file_id}/thumbnail", get(get_thumbnail))
+        .route("/api/files/{file_id}/preview", get(get_file_preview))
         .route("/api/files/stats/storage", get(get_storage_stats))
         .route("/api/files/{file_id}/shares", post(create_share))
         .route("/api/files/{file_id}/shares", get(get_file_shares))
