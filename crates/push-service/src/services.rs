@@ -6,11 +6,11 @@ use super::models::*;
 use super::repository::PushRepository;
 
 /// Push Service - 处理所有推送相关业务逻辑
-/// 
+///
 /// 支持多种推送平台：
 /// - APNs (Apple Push Notification Service)
-/// - FCM (Firebase Cloud Messaging)  
-/// - 极光推送 (JPush)
+/// - FCM (Firebase Cloud Messaging)
+/// - Web Push
 pub struct PushService {
     repository: PushRepository,
 }
@@ -24,12 +24,6 @@ impl PushService {
     }
 
     /// 发送单条推送消息
-    /// 
-    /// # 参数
-    /// - `request`: 推送消息请求
-    /// 
-    /// # 返回
-    /// - `Result<PushMessage>`: 推送消息记录
     pub async fn send_push(&self, request: CreatePushRequest) -> Result<PushMessage> {
         let message_id = Uuid::new_v4();
         let created_at = chrono::Utc::now();
@@ -57,47 +51,69 @@ impl PushService {
         // 保存到数据库
         let message = self.repository.create_push_message(message).await?;
 
-        // 异步发送推送
-        let msg_id = message.id;
-        let device_type = message.device_type.clone();
-        let device_token = message.device_token.clone();
-        let title = message.title.clone();
-        let body = message.body.clone();
-        let data = message.data.clone();
-        let badge = message.badge;
-        let sound = message.sound.clone();
-        let priority = message.priority;
-        let ttl = message.ttl;
-
-        tokio::spawn(async move {
-            // 根据设备类型选择推送平台
-            let result = match device_type.as_str() {
-                "ios" => Self::_send_apns(&device_token, &title, &body, data.as_ref(), badge, sound.as_deref(), priority, ttl).await,
-                "android" => Self::_send_fcm(&device_token, &title, &body, data.as_ref(), priority, ttl).await,
-                _ => {
-                    tracing::warn!("Unsupported device type: {}", device_type);
-                    Err(anyhow::anyhow!("Unsupported device type"))
-                }
-            };
-
-            // 更新推送状态
-            if let Err(e) = result {
-                let _ = self.repository.update_push_status(msg_id, "failed", Some(&e.to_string())).await;
-            } else {
-                let _ = self.repository.update_push_status(msg_id, "sent", None).await;
+        // 根据设备类型选择推送平台并发送
+        let result = match message.device_type.as_str() {
+            "ios" => {
+                Self::send_apns(
+                    &message.device_token,
+                    &message.title,
+                    &message.body,
+                    message.data.as_ref(),
+                    message.badge,
+                    message.sound.as_deref(),
+                )
+                .await
             }
-        });
+            "android" => {
+                Self::send_fcm(
+                    &message.device_token,
+                    &message.title,
+                    &message.body,
+                    message.data.as_ref(),
+                )
+                .await
+            }
+            "web" => {
+                Self::send_web_push(
+                    &message.device_token,
+                    &message.title,
+                    &message.body,
+                    message.data.as_ref(),
+                )
+                .await
+            }
+            _ => {
+                tracing::warn!("Unsupported device type: {}", message.device_type);
+                Err(anyhow::anyhow!(
+                    "Unsupported device type: {}",
+                    message.device_type
+                ))
+            }
+        };
 
-        Ok(message)
+        // 更新推送状态
+        if let Err(e) = &result {
+            self.repository
+                .update_push_status(message.id, "failed", Some(&e.to_string()))
+                .await?;
+            // Return updated message
+            let mut updated = message.clone();
+            updated.status = "failed".to_string();
+            updated.failed_at = Some(chrono::Utc::now());
+            updated.error = Some(e.to_string());
+            Ok(updated)
+        } else {
+            self.repository
+                .update_push_status(message.id, "sent", None)
+                .await?;
+            let mut updated = message.clone();
+            updated.status = "sent".to_string();
+            updated.sent_at = Some(chrono::Utc::now());
+            Ok(updated)
+        }
     }
 
     /// 批量发送推送消息
-    /// 
-    /// # 参数
-    /// - `request`: 批量推送请求
-    /// 
-    /// # 返回
-    /// - `Result<BatchPushResponse>`: 批量推送响应
     pub async fn batch_send_push(&self, request: BatchPushRequest) -> Result<BatchPushResponse> {
         let mut succeeded = Vec::new();
         let mut failed = Vec::new();
@@ -107,7 +123,7 @@ impl PushService {
                 Ok(msg) => succeeded.push(msg.id),
                 Err(e) => {
                     tracing::error!("Failed to send push: {:?}", e);
-                    failed.push(Uuid::new_v4()); // 生成一个UUID占位
+                    failed.push(Uuid::new_v4());
                 }
             }
         }
@@ -116,12 +132,6 @@ impl PushService {
     }
 
     /// 使用模板发送推送
-    /// 
-    /// # 参数
-    /// - `request`: 模板推送请求
-    /// 
-    /// # 返回
-    /// - `Result<PushMessage>`: 推送消息记录
     pub async fn send_template_push(&self, request: TemplatePushRequest) -> Result<PushMessage> {
         // 获取模板
         let template = self
@@ -130,9 +140,9 @@ impl PushService {
             .await?
             .context("Template not found")?;
 
-        // 渲染模板（简单的字符串替换，实际可以使用模板引擎如tera）
-        let title = self._render_template(&template.title_template, &request.variables);
-        let body = self._render_template(&template.body_template, &request.variables);
+        // 渲染模板（简单字符串替换）
+        let title = Self::render_template(&template.title_template, &request.variables);
+        let body = Self::render_template(&template.body_template, &request.variables);
 
         // 构建推送请求
         let push_request = CreatePushRequest {
@@ -152,14 +162,6 @@ impl PushService {
     }
 
     /// 获取用户推送历史
-    /// 
-    /// # 参数
-    /// - `user_id`: 用户ID
-    /// - `page`: 页码
-    /// - `page_size`: 每页大小
-    /// 
-    /// # 返回
-    /// - `Result<Vec<PushMessage>>`: 推送消息列表
     pub async fn get_user_push_history(
         &self,
         user_id: Uuid,
@@ -167,16 +169,12 @@ impl PushService {
         page_size: i64,
     ) -> Result<Vec<PushMessage>> {
         let offset = (page - 1) * page_size;
-        self.repository.get_user_push_messages(user_id, page_size, offset).await
+        self.repository
+            .get_user_push_messages(user_id, page_size, offset)
+            .await
     }
 
     /// 创建推送模板
-    /// 
-    /// # 参数
-    /// - `request`: 模板创建请求
-    /// 
-    /// # 返回
-    /// - `Result<PushTemplate>`: 推送模板
     pub async fn create_template(&self, request: CreateTemplateRequest) -> Result<PushTemplate> {
         let template_id = Uuid::new_v4();
         let now = chrono::Utc::now();
@@ -197,32 +195,16 @@ impl PushService {
     }
 
     /// 获取所有推送模板
-    /// 
-    /// # 返回
-    /// - `Result<Vec<PushTemplate>>`: 模板列表
     pub async fn list_templates(&self) -> Result<Vec<PushTemplate>> {
         self.repository.list_templates().await
     }
 
     /// 删除推送模板
-    /// 
-    /// # 参数
-    /// - `name`: 模板名称
-    /// 
-    /// # 返回
-    /// - `Result<bool>`: 是否删除成功
     pub async fn delete_template(&self, name: &str) -> Result<bool> {
         self.repository.delete_template(name).await
     }
 
     /// 获取推送统计
-    /// 
-    /// # 参数
-    /// - `start_date`: 开始日期
-    /// - `end_date`: 结束日期
-    /// 
-    /// # 返回
-    /// - `Result<PushStats>`: 推送统计数据
     pub async fn get_push_stats(
         &self,
         start_date: Option<chrono::DateTime<chrono::Utc>>,
@@ -232,12 +214,6 @@ impl PushService {
     }
 
     /// 清理过期推送记录
-    /// 
-    /// # 参数
-    /// - `days`: 保留天数
-    /// 
-    /// # 返回
-    /// - `Result<u64>`: 删除的记录数
     pub async fn cleanup_old_messages(&self, days: i64) -> Result<u64> {
         self.repository.cleanup_old_messages(days).await
     }
@@ -245,90 +221,73 @@ impl PushService {
     // 内部方法
 
     /// 渲染模板（简单实现）
-    fn _render_template(template: &str, variables: &serde_json::Value) -> String {
+    fn render_template(template: &str, variables: &serde_json::Value) -> String {
         let mut result = template.to_string();
-        
+
         if let Some(obj) = variables.as_object() {
             for (key, value) in obj {
                 let placeholder = format!("{{{{{}}}}}", key);
-                let replacement = value.as_str().unwrap_or(&value.to_string());
-                result = result.replace(&placeholder, replacement);
+                let owned = value.as_str().map(|s| s.to_string()).unwrap_or_else(|| value.to_string());
+                result = result.replace(&placeholder, &owned);
             }
         }
-        
+
         result
     }
 
-    /// 发送APNs推送
-    async fn _send_apns(
+    /// 发送APNs推送（模拟实现，生产环境需集成apns2）
+    async fn send_apns(
         device_token: &str,
         title: &str,
         body: &str,
-        data: Option<&serde_json::Value>,
-        badge: Option<i32>,
-        sound: Option<&str>,
-        priority: Option<i32>,
-        ttl: Option<i32>,
+        _data: Option<&serde_json::Value>,
+        _badge: Option<i32>,
+        _sound: Option<&str>,
     ) -> Result<()> {
-        // TODO: 实现APNs推送
-        // 需要集成 apns2 或类似库
         tracing::info!(
             "Sending APNs push to {}: {} - {}",
             device_token,
             title,
             body
         );
-        
-        // 模拟推送成功
+        // TODO: 实现真实APNs推送
+        // 需要集成 apns2 或类似库
         Ok(())
     }
 
-    /// 发送FCM推送
-    async fn _send_fcm(
+    /// 发送FCM推送（模拟实现，生产环境需集成FCM SDK）
+    async fn send_fcm(
         device_token: &str,
         title: &str,
         body: &str,
-        data: Option<&serde_json::Value>,
-        priority: Option<i32>,
-        ttl: Option<i32>,
+        _data: Option<&serde_json::Value>,
     ) -> Result<()> {
-        // TODO: 实现FCM推送
-        // 需要集成 fcm或使用REST API
         tracing::info!(
             "Sending FCM push to {}: {} - {}",
             device_token,
             title,
             body
         );
-        
-        // 模拟推送成功
+        // TODO: 实现真实FCM推送
+        // 需要集成 fcm 或使用 REST API
         Ok(())
     }
 
-    /// 发送极光推送
-    async fn _send_jpush(
+    /// 发送Web Push（模拟实现，生产环境需集成web-push）
+    async fn send_web_push(
         device_token: &str,
         title: &str,
         body: &str,
-        data: Option<&serde_json::Value>,
+        _data: Option<&serde_json::Value>,
     ) -> Result<()> {
-        // TODO: 实现极光推送
-        // 需要集成极光推送SDK
         tracing::info!(
-            "Sending JPush to {}: {} - {}",
+            "Sending Web Push to {}: {} - {}",
             device_token,
             title,
             body
         );
-        
-        // 模拟推送成功
+        // TODO: 实现Web Push
+        // 需要集成 web-push 库
         Ok(())
-    }
-}
-
-// 为修复编译错误，添加必要的字段访问
-impl PushRepository {
-    fn get_pool(&self) -> &PgPool {
-        &self.pool
     }
 }

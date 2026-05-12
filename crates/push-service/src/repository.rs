@@ -21,7 +21,7 @@ impl PushRepository {
                                      badge, sound, priority, ttl, created_at, status)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending')
             RETURNING *
-            "#
+            "#,
         )
         .bind(msg.id)
         .bind(msg.user_id)
@@ -56,7 +56,7 @@ impl PushRepository {
                 UPDATE push_messages
                 SET status = $1, sent_at = $2
                 WHERE id = $3
-                "#
+                "#,
             )
             .bind(status)
             .bind(now)
@@ -69,7 +69,7 @@ impl PushRepository {
                 UPDATE push_messages
                 SET status = $1, failed_at = $2, error = $3
                 WHERE id = $4
-                "#
+                "#,
             )
             .bind(status)
             .bind(now)
@@ -87,7 +87,7 @@ impl PushRepository {
         let message = sqlx::query_as::<_, PushMessage>(
             r#"
             SELECT * FROM push_messages WHERE id = $1
-            "#
+            "#,
         )
         .bind(message_id)
         .fetch_optional(&self.pool)
@@ -109,7 +109,7 @@ impl PushRepository {
             WHERE user_id = $1
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
-            "#
+            "#,
         )
         .bind(user_id)
         .bind(limit)
@@ -126,9 +126,9 @@ impl PushRepository {
             r#"
             INSERT INTO push_templates (id, name, title_template, body_template, data_template,
                                        sound, badge, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING *
-            "#
+            "#,
         )
         .bind(template.id)
         .bind(&template.name)
@@ -137,6 +137,8 @@ impl PushRepository {
         .bind(&template.data_template)
         .bind(&template.sound)
         .bind(template.badge)
+        .bind(template.created_at)
+        .bind(template.updated_at)
         .fetch_one(&self.pool)
         .await?;
 
@@ -148,7 +150,7 @@ impl PushRepository {
         let template = sqlx::query_as::<_, PushTemplate>(
             r#"
             SELECT * FROM push_templates WHERE name = $1
-            "#
+            "#,
         )
         .bind(name)
         .fetch_optional(&self.pool)
@@ -163,7 +165,7 @@ impl PushRepository {
             r#"
             SELECT * FROM push_templates
             ORDER BY created_at DESC
-            "#
+            "#,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -176,7 +178,7 @@ impl PushRepository {
         let result = sqlx::query(
             r#"
             DELETE FROM push_templates WHERE name = $1
-            "#
+            "#,
         )
         .bind(name)
         .execute(&self.pool)
@@ -191,7 +193,7 @@ impl PushRepository {
         start_date: Option<chrono::DateTime<chrono::Utc>>,
         end_date: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<PushStats> {
-        // 总发送数
+        // 总发送数和失败数
         let (total_sent, total_failed): (i64, i64) = sqlx::query_as(
             r#"
             SELECT
@@ -200,7 +202,7 @@ impl PushRepository {
             FROM push_messages
             WHERE ($1::timestamptz IS NULL OR created_at >= $1)
               AND ($2::timestamptz IS NULL OR created_at <= $2)
-            "#
+            "#,
         )
         .bind(start_date)
         .bind(end_date)
@@ -218,7 +220,7 @@ impl PushRepository {
             WHERE ($1::timestamptz IS NULL OR created_at >= $1)
               AND ($2::timestamptz IS NULL OR created_at <= $2)
             GROUP BY device_type
-            "#
+            "#,
         )
         .bind(start_date)
         .bind(end_date)
@@ -238,7 +240,7 @@ impl PushRepository {
             GROUP BY DATE(created_at)
             ORDER BY date DESC
             LIMIT 30
-            "#
+            "#,
         )
         .bind(start_date)
         .bind(end_date)
@@ -261,7 +263,7 @@ impl PushRepository {
             r#"
             DELETE FROM push_messages
             WHERE created_at < $1
-            "#
+            "#,
         )
         .bind(cutoff_date)
         .execute(&self.pool)

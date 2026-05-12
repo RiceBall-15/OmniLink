@@ -7,14 +7,16 @@ edition.workspace = true
 # Workspace dependencies
 tokio.workspace = true
 axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
-
-# Push service dependencies
-reqwest = { version = "0.11", features = ["json"] }
+tracing-subscriber.workspace = true
+sqlx.workspace = true
+anyhow.workspace = true
 
 # Internal dependencies
 common = { path = "../common" }
