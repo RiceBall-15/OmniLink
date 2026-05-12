@@ -450,3 +450,72 @@ pub async fn is_group_owner(
         None => Ok(false),
     }
 }
+
+/// 切换会话归档状态
+pub async fn toggle_archive_conversation(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+    is_archived: bool,
+) -> Result<ConversationEntity> {
+    let now = chrono::Utc::now();
+
+    let conversation = sqlx::query_as::<_, ConversationEntity>(
+        r#"
+        UPDATE conversations
+        SET is_archived = $1, updated_at = $2
+        WHERE id = $3
+        RETURNING *
+        "#
+    )
+    .bind(is_archived)
+    .bind(now)
+    .bind(conversation_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("更新归档状态失败: {}", e))?;
+
+    Ok(conversation)
+}
+
+/// 搜索用户的会话（按名称模糊匹配）
+pub async fn search_conversations(
+    pool: &PgPool,
+    user_id: &Uuid,
+    query: &str,
+    include_archived: bool,
+) -> Result<Vec<ConversationEntity>> {
+    let search_pattern = format!("%{}%", query);
+
+    let conversations = if include_archived {
+        sqlx::query_as::<_, ConversationEntity>(
+            r#"
+            SELECT DISTINCT c.* FROM conversations c
+            INNER JOIN conversation_participants cp ON c.id = cp.conversation_id
+            WHERE cp.user_id = $1
+            AND c.name ILIKE $2
+            ORDER BY c.updated_at DESC
+            "#
+        )
+        .bind(user_id)
+        .bind(&search_pattern)
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query_as::<_, ConversationEntity>(
+            r#"
+            SELECT DISTINCT c.* FROM conversations c
+            INNER JOIN conversation_participants cp ON c.id = cp.conversation_id
+            WHERE cp.user_id = $1
+            AND c.name ILIKE $2
+            AND c.is_archived = FALSE
+            ORDER BY c.updated_at DESC
+            "#
+        )
+        .bind(user_id)
+        .bind(&search_pattern)
+        .fetch_all(pool)
+        .await
+    };
+
+    conversations.map_err(|e| anyhow::anyhow!("搜索会话失败: {}", e))
+}

@@ -1,6 +1,6 @@
 use axum::{
     Router,
-    routing::{get, post, put},
+    routing::{get, post, put, delete},
     Extension,
     extract::{State, Path, Query},
     Json,
@@ -38,6 +38,14 @@ async fn main() -> anyhow::Result<()> {
     // 初始化数据库表
     init_database(&pool).await?;
 
+    // 确保 is_archived 列存在（兼容已有数据库）
+    sqlx::query(
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE NOT NULL"
+    )
+    .execute(&pool)
+    .await
+    .ok(); // 忽略错误，列可能已存在
+
     // 创建路由
     let app = Router::new()
         // 健康检查
@@ -66,6 +74,12 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/members/:member_id", delete(remove_group_member_with_auth))
         .route("/api/im/conversations/:id/group", put(update_group_info_with_auth))
         .route("/api/im/conversations/:id/announcement", get(get_group_announcement_with_auth).put(update_group_announcement_with_auth))
+
+        // 会话管理增强（置顶、免打扰、归档、搜索）
+        .route("/api/im/conversations/:id/pin", put(toggle_pin_with_auth))
+        .route("/api/im/conversations/:id/mute", put(toggle_mute_with_auth))
+        .route("/api/im/conversations/:id/archive", put(toggle_archive_with_auth))
+        .route("/api/im/conversations/search", get(search_conversations_with_auth))
 
         // 添加数据库连接池到状态
         .with_state(pool);
@@ -270,6 +284,49 @@ async fn update_group_announcement_with_auth(
     conversation::update_group_announcement_handler(State(pool), Extension(user_id), Path(conversation_id), announcement).await
 }
 
+/// 切换会话置顶状态（包装认证中间件）
+async fn toggle_pin_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::toggle_pin(State(pool), Extension(user_id), Path(conversation_id), Json(req)).await
+}
+
+/// 切换会话免打扰状态（包装认证中间件）
+async fn toggle_mute_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::toggle_mute(State(pool), Extension(user_id), Path(conversation_id), Json(req)).await
+}
+
+/// 切换会话归档状态（包装认证中间件）
+async fn toggle_archive_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::toggle_archive(State(pool), Extension(user_id), Path(conversation_id), Json(req)).await
+}
+
+/// 搜索会话（包装认证中间件）
+async fn search_conversations_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    axum::extract::Query(query): axum::extract::Query<im_api::models::conversation::SearchConversationsQuery>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::search(State(pool), Extension(user_id), axum::extract::Query(query)).await
+}
+
 /// 初始化数据库表
 async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     info!("Initializing database tables...");
@@ -306,6 +363,7 @@ async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
             unread_count INTEGER DEFAULT 0 NOT NULL,
             is_pinned BOOLEAN DEFAULT FALSE NOT NULL,
             is_muted BOOLEAN DEFAULT FALSE NOT NULL,
+            is_archived BOOLEAN DEFAULT FALSE NOT NULL,
             created_at TIMESTAMP WITH TIME ZONE NOT NULL,
             updated_at TIMESTAMP WITH TIME ZONE NOT NULL
         );

@@ -9,9 +9,12 @@ use sqlx::PgPool;
 use crate::models::auth::ApiResponse;
 use crate::models::conversation::{
     Conversation, CreateConversationRequest, CreateConversationParams, ConversationType,
+    SearchConversationsQuery,
 };
 use crate::db::conversation::{
     create_conversation, get_conversations_by_user, get_conversation_by_id,
+    toggle_pin_conversation, toggle_mute_conversation, toggle_archive_conversation,
+    search_conversations,
 };
 use crate::db::message::get_last_message;
 
@@ -602,6 +605,242 @@ pub async fn update_group_announcement_handler(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::error("UPDATE_ANNOUNCEMENT_FAILED", format!("更新群公告失败: {}", e))),
+        ),
+    }
+}
+
+/// 切换会话置顶状态
+pub async fn toggle_pin(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    match crate::db::conversation::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_PARTICIPANT", "您不是该会话的参与者")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    }
+
+    let is_pinned = req.get("isPinned").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    match toggle_pin_conversation(&pool, &conv_uuid, is_pinned).await {
+        Ok(conv) => {
+            let conversation = conv.to_conversation();
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::to_value(conversation).unwrap())),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("TOGGLE_PIN_FAILED", format!("更新置顶状态失败: {}", e))),
+        ),
+    }
+}
+
+/// 切换会话免打扰状态
+pub async fn toggle_mute(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    match crate::db::conversation::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_PARTICIPANT", "您不是该会话的参与者")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    }
+
+    let is_muted = req.get("isMuted").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    match toggle_mute_conversation(&pool, &conv_uuid, is_muted).await {
+        Ok(conv) => {
+            let conversation = conv.to_conversation();
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::to_value(conversation).unwrap())),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("TOGGLE_MUTE_FAILED", format!("更新免打扰状态失败: {}", e))),
+        ),
+    }
+}
+
+/// 切换会话归档状态
+pub async fn toggle_archive(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    match crate::db::conversation::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_PARTICIPANT", "您不是该会话的参与者")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    }
+
+    let is_archived = req.get("isArchived").and_then(|v| v.as_bool()).unwrap_or(true);
+
+    match toggle_archive_conversation(&pool, &conv_uuid, is_archived).await {
+        Ok(conv) => {
+            let conversation = conv.to_conversation();
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::to_value(conversation).unwrap())),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("TOGGLE_ARCHIVE_FAILED", format!("更新归档状态失败: {}", e))),
+        ),
+    }
+}
+
+/// 搜索会话
+pub async fn search(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Query(query): axum::extract::Query<SearchConversationsQuery>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    if query.q.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("EMPTY_QUERY", "搜索关键词不能为空")),
+        );
+    }
+
+    match search_conversations(&pool, &user_uuid, &query.q, query.include_archived).await {
+        Ok(conversation_entities) => {
+            let mut conversations: Vec<Conversation> = Vec::new();
+
+            for conv_entity in conversation_entities {
+                let mut conversation = conv_entity.to_conversation();
+
+                // 获取最后一条消息
+                if let Ok(Some(last_msg_entity)) = get_last_message(&pool, &conv_entity.id).await {
+                    conversation.last_message = Some(last_msg_entity.to_message());
+                }
+
+                conversations.push(conversation);
+            }
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "conversations": conversations,
+                    "total": conversations.len()
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("SEARCH_CONVERSATIONS_FAILED", format!("搜索会话失败: {}", e))),
         ),
     }
 }

@@ -58,6 +58,8 @@ pub struct Conversation {
     pub is_pinned: bool,
     #[serde(rename = "isMuted")]
     pub is_muted: bool,
+    #[serde(rename = "isArchived")]
+    pub is_archived: bool,
     #[serde(rename = "createdAt")]
     pub created_at: String,
     #[serde(rename = "updatedAt")]
@@ -72,9 +74,11 @@ pub struct ConversationEntity {
     pub type_: String,
     pub name: Option<String>,
     pub avatar: Option<String>,
+    pub created_by: Option<Uuid>,
     pub unread_count: i32,
     pub is_pinned: bool,
     pub is_muted: bool,
+    pub is_archived: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -91,6 +95,7 @@ impl ConversationEntity {
             unread_count: self.unread_count,
             is_pinned: self.is_pinned,
             is_muted: self.is_muted,
+            is_archived: self.is_archived,
             created_at: self.created_at.to_rfc3339(),
             updated_at: self.updated_at.to_rfc3339(),
         }
@@ -125,4 +130,14 @@ pub struct UpdateConversationRequest {
     pub is_pinned: Option<bool>,
     #[serde(rename = "isMuted")]
     pub is_muted: Option<bool>,
+    #[serde(rename = "isArchived")]
+    pub is_archived: Option<bool>,
+}
+
+/// 会话搜索请求参数
+#[derive(Debug, Deserialize)]
+pub struct SearchConversationsQuery {
+    pub q: String,
+    #[serde(default)]
+    pub include_archived: bool,
 }
