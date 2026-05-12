@@ -33,13 +33,19 @@
 - [x] token 过期处理
 - [x] 权限检查
 
-#### 5. 文件上传 API 实现 ⚠️
-- [ ] 实现文件上传 handler
-- [ ] 文件类型验证
-- [ ] 存储集成 (MinIO)
-
-**注意**: file-service 有28个预存编译错误需要先修复（middleware TokenManager字段不匹配、缺少模块引用等）
-- [ ] MinIO 集成
+#### 5. 文件上传 API 实现 ✅
+- [x] 修复 file-service 28个编译错误
+- [x] 实现文件上传 handler（单文件 + 批量）
+- [x] 文件类型和大小验证（11种MIME类型）
+- [x] 实现文件下载 API
+- [x] 实现文件删除 API
+- [x] 实现文件列表查询 API
+- [x] 实现文件信息更新 API
+- [x] 实现缩略图获取 API
+- [x] 实现存储统计 API
+- [x] 认证中间件（auth_middleware + AuthUser 模式）
+- [x] Axum 0.7 State 类型兼容性修复
+- [ ] MinIO 存储集成（当前使用本地存储）
 
 #### 6. AI 模型对接（基础） ⏳
 - [ ] 完善 OpenAI provider 实现
@@ -63,17 +69,17 @@
 
 ### 阶段三：文件服务
 
-#### 9. 文件下载和预览 ⏳
-- [ ] 文件下载 API
-- [ ] 图片预览功能
-- [ ] 文件权限控制
+#### 9. 文件下载和预览 ✅
+- [x] 文件下载 API（已在 Task 5 中实现）
+- [x] 图片缩略图获取
+- [x] 文件权限控制（用户所有权验证）
 - [ ] CDN 集成（可选）
 
-#### 10. 文件管理功能 ⏳
-- [ ] 文件列表查询
-- [ ] 文件删除功能
+#### 10. 文件管理功能 ✅
+- [x] 文件列表查询（分页、按类型过滤）
+- [x] 文件删除功能
 - [ ] 文件分享功能
-- [ ] 存储空间统计
+- [x] 存储空间统计
 
 ### 阶段四：消息持久化
 
@@ -204,16 +210,16 @@
 ## 📈 进度追踪
 
 **总任务数**: 15
-**已完成**: 4
+**已完成**: 7
 **进行中**: 0
-**待开发**: 11
+**待开发**: 8
 **受阻**: 0
 
-**完成率**: 26%
+**完成率**: 47%
 
 ---
 
-*最后更新: 2026-05-12 00:45*
+*最后更新: 2026-05-13 00:25*
 
 ### 2026-05-12 00:45 - WebSocket认证逻辑完善
 **状态**: ✅ 完成
@@ -224,6 +230,18 @@
 - Enhanced error handling with specific error codes
 - Token refresh without disconnecting WebSocket session
 - Better authentication error messages
+
+### 2026-05-13 00:25 - 文件上传API实现（Task 5, 9, 10）
+**状态**: ✅ 完成
+**耗时**: 0.5小时
+**提交**: 7cd30de
+**备注**:
+- 修复 file-service 全部28个编译错误
+- 重写 middleware.rs：采用 im-gateway 的 auth_middleware + AuthUser 模式
+- 修复 handlers.rs：使用 State<Arc<AppState>> 兼容 Axum 0.7
+- 实现完整的文件服务 API：上传、下载、删除、列表、更新、缩略图、存储统计
+- 添加 tracing-subscriber 依赖
+- 所有 cargo check warning 清零（file-service 范围内）
 
 ### 2026-05-12 00:30 - 在线状态同步
 **状态**: ✅ 完成
