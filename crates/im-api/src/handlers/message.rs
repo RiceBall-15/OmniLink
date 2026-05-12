@@ -152,12 +152,14 @@ pub async fn send_message(
     }
 
     // 创建消息参数
+    let reply_to_uuid = req.reply_to.and_then(|s| s.parse::<Uuid>().ok());
+
     let params = CreateMessageParams {
         conversation_id: conv_uuid,
         sender_id: sender_uuid,
         content: req.content,
         type_: req.type_,
-        reply_to: None,
+        reply_to: reply_to_uuid,
         metadata: None,
     };
 

@@ -153,6 +153,9 @@ pub struct SendMessageRequest {
     pub content: String,
     #[serde(rename = "type")]
     pub type_: MessageType,
+    /// 回复的消息 ID（可选）
+    #[serde(rename = "replyTo", skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
 }
 
 /// 编辑消息请求
