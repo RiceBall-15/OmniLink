@@ -224,3 +224,99 @@ pub async fn count_unread_messages(
 
     Ok(count)
 }
+
+/// 搜索会话中的消息（关键词搜索）
+pub async fn search_messages_in_conversation(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+    keyword: &str,
+    page: i64,
+    limit: i64,
+) -> Result<Vec<MessageEntity>> {
+    let offset = (page - 1) * limit;
+    let search_pattern = format!("%{}%", keyword);
+
+    let messages = sqlx::query_as::<_, MessageEntity>(
+        r#"
+        SELECT * FROM messages
+        WHERE conversation_id = $1
+        AND content ILIKE $2
+        ORDER BY created_at DESC
+        LIMIT $3 OFFSET $4
+        "#
+    )
+    .bind(conversation_id)
+    .bind(&search_pattern)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("搜索消息失败: {}", e))?;
+
+    Ok(messages)
+}
+
+/// 搜索用户所有会话中的消息
+pub async fn search_user_messages(
+    pool: &PgPool,
+    user_id: &Uuid,
+    keyword: &str,
+    page: i64,
+    limit: i64,
+) -> Result<Vec<MessageEntity>> {
+    let offset = (page - 1) * limit;
+    let search_pattern = format!("%{}%", keyword);
+
+    let messages = sqlx::query_as::<_, MessageEntity>(
+        r#"
+        SELECT m.* FROM messages m
+        JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id
+        WHERE cp.user_id = $1
+        AND m.content ILIKE $2
+        ORDER BY m.created_at DESC
+        LIMIT $3 OFFSET $4
+        "#
+    )
+    .bind(user_id)
+    .bind(&search_pattern)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("搜索消息失败: {}", e))?;
+
+    Ok(messages)
+}
+
+/// 获取消息统计
+pub async fn get_message_stats(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+) -> Result<MessageStats> {
+    let stats = sqlx::query_as::<_, MessageStats>(
+        r#"
+        SELECT 
+            COUNT(*) as total_count,
+            COUNT(DISTINCT sender_id) as sender_count,
+            MIN(created_at) as first_message_at,
+            MAX(created_at) as last_message_at
+        FROM messages
+        WHERE conversation_id = $1
+        "#
+    )
+    .bind(conversation_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取消息统计失败: {}", e))?;
+
+    Ok(stats)
+}
+
+/// 消息统计结构
+#[derive(Debug, sqlx::FromRow)]
+pub struct MessageStats {
+    pub total_count: i64,
+    pub sender_count: i64,
+    pub first_message_at: Option<chrono::NaiveDateTime>,
+    pub last_message_at: Option<chrono::NaiveDateTime>,
+}

@@ -57,6 +57,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/messages/:msg_id/recall", post(recall_message_with_auth))
         .route("/api/im/conversations/:id/read", post(mark_as_read_with_auth))
 
+        // 消息搜索和统计
+        .route("/api/im/conversations/:id/messages/search", get(search_messages_with_auth))
+        .route("/api/im/conversations/:id/messages/stats", get(get_message_stats_with_auth))
+
         // 添加数据库连接池到状态
         .with_state(pool);
 
@@ -175,6 +179,27 @@ async fn mark_as_read_with_auth(
     message::mark_as_read_handler(State(pool), Extension(user_id), Path(conversation_id)).await
 }
 
+/// 搜索消息（包装认证中间件）
+async fn search_messages_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+    Query(query): Query<message::SearchMessagesQuery>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::search_messages(State(pool), Extension(user_id), Path(conversation_id), Query(query)).await
+}
+
+/// 获取消息统计（包装认证中间件）
+async fn get_message_stats_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::get_message_stats_handler(State(pool), Extension(user_id), Path(conversation_id)).await
+}
+
 /// 初始化数据库表
 async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     info!("Initializing database tables...");
@@ -242,6 +267,9 @@ async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     // 创建消息表
     sqlx::query(
         r#"
+        -- 启用pg_trgm扩展（用于ILIKE搜索优化）
+        CREATE EXTENSION IF NOT EXISTS pg_trgm;
+        
         CREATE TABLE IF NOT EXISTS messages (
             id UUID PRIMARY KEY,
             conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
@@ -260,6 +288,9 @@ async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
         CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at DESC);
+        
+        -- 创建消息内容搜索索引（GIN索引，用于ILIKE搜索）
+        CREATE INDEX IF NOT EXISTS idx_messages_content_gin ON messages USING gin (content gin_trgm_ops);
         "#,
     )
     .execute(pool)

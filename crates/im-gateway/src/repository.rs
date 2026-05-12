@@ -239,6 +239,93 @@ impl MessageRepository {
 
         Ok(result)
     }
+
+    /// 搜索消息（支持关键词搜索）
+    pub async fn search_messages(
+        &self,
+        conversation_id: Uuid,
+        keyword: &str,
+        limit: i32,
+        offset: i32,
+    ) -> Result<Vec<Message>> {
+        let messages = sqlx::query_as::<_, Message>(
+            r#"
+            SELECT * FROM messages 
+            WHERE conversation_id = $1 
+            AND content ILIKE $2
+            ORDER BY created_at DESC
+            LIMIT $3 OFFSET $4
+            "#
+        )
+        .bind(conversation_id)
+        .bind(format!("%{}%", keyword))
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e))?;
+
+        Ok(messages)
+    }
+
+    /// 搜索用户的所有对话中的消息
+    pub async fn search_user_messages(
+        &self,
+        user_id: Uuid,
+        keyword: &str,
+        limit: i32,
+        offset: i32,
+    ) -> Result<Vec<Message>> {
+        let messages = sqlx::query_as::<_, Message>(
+            r#"
+            SELECT m.* FROM messages m
+            JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id
+            WHERE cp.user_id = $1
+            AND m.content ILIKE $2
+            ORDER BY m.created_at DESC
+            LIMIT $3 OFFSET $4
+            "#
+        )
+        .bind(user_id)
+        .bind(format!("%{}%", keyword))
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e))?;
+
+        Ok(messages)
+    }
+
+    /// 获取消息统计
+    pub async fn get_message_stats(&self, conversation_id: Uuid) -> Result<MessageStats> {
+        let stats = sqlx::query_as::<_, MessageStats>(
+            r#"
+            SELECT 
+                COUNT(*) as total_count,
+                COUNT(DISTINCT sender_id) as sender_count,
+                MIN(created_at) as first_message_at,
+                MAX(created_at) as last_message_at
+            FROM messages 
+            WHERE conversation_id = $1
+            "#
+        )
+        .bind(conversation_id)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| AppError::Database(e))?;
+
+        Ok(stats)
+    }
+}
+
+/// 消息统计
+#[derive(Debug, sqlx::FromRow)]
+pub struct MessageStats {
+    pub total_count: i64,
+    pub sender_count: i64,
+    pub first_message_at: Option<chrono::NaiveDateTime>,
+    pub last_message_at: Option<chrono::NaiveDateTime>,
 }
 
 /// 对话仓库

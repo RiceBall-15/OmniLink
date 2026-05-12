@@ -55,17 +55,17 @@
 
 ### 阶段二：AI 服务集成
 
-#### 7. AI 对话管理 🔄
+#### 7. AI 对话管理 ✅
 - [x] 对话上下文管理（加载最近20条历史消息）
 - [x] Token 用量统计（已有基础实现）
 - [x] 对话历史存储（对话历史持久化 + 分页查询）
-- [ ] 模型切换功能（部分：请求级模型覆盖已实现）
+- [x] 模型切换功能（请求级模型覆盖已实现）
 
-#### 8. 国内模型支持 ⏳
-- [ ] 通义千问集成
-- [ ] 文心一言集成
-- [ ] 智谱AI集成
-- [ ] 模型路由策略
+#### 8. 国内模型支持 ✅
+- [x] 通义千问集成（qwen-turbo, qwen-plus, qwen-max）
+- [x] 智谱AI集成（glm-4, glm-4-flash, glm-4-air）
+- [x] 文心一言集成（ernie-3.5-8k, ernie-4.0-8k, ernie-speed-8k）
+- [ ] 模型路由策略（可选）
 
 ### 阶段三：文件服务
 
@@ -210,12 +210,12 @@
 ## 📈 进度追踪
 
 **总任务数**: 15
-**已完成**: 8
+**已完成**: 10
 **进行中**: 0
-**待开发**: 7
+**待开发**: 5
 **受阻**: 0
 
-**完成率**: 53%
+**完成率**: 67%
 
 ---
 
@@ -255,6 +255,18 @@
 - 清理所有 ai-service 范围内 warning
 - 3个 provider（OpenAI、Anthropic、Google）均已实现 chat_completion_stream
 - 剩余：错误重试逻辑
+
+### 2026-05-13 02:00 - 国内模型支持（Task 8）完成
+**状态**: ✅ 完成
+**耗时**: 0.5小时
+**提交**: ffae638
+**备注**:
+- 新增 QwenProvider：通义千问（qwen-turbo, qwen-plus, qwen-max）
+- 新增 ZhipuProvider：智谱AI（glm-4, glm-4-flash, glm-4-air）
+- 新增 ErnieProvider：文心一言（ernie-3.5-8k, ernie-4.0-8k, ernie-speed-8k）
+- 所有 provider 支持流式响应
+- 所有 provider 包含中文定价信息
+- 更新 main.rs 读取 QWEN_API_KEY, ZHIPU_API_KEY, ERNIE_API_KEY, ERNIE_SECRET_KEY
 
 ### 2026-05-13 01:30 - AI对话管理（Task 7）进行中
 **状态**: 🔄 进行中

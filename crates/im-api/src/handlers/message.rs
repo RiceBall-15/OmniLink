@@ -381,3 +381,161 @@ pub async fn mark_as_read_handler(
         ),
     }
 }
+
+/// 搜索消息请求
+#[derive(Debug, Deserialize)]
+pub struct SearchMessagesQuery {
+    pub keyword: String,
+    #[serde(default = "default_page")]
+    pub page: i64,
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+}
+
+/// 搜索会话中的消息
+pub async fn search_messages(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Path(conversation_id): Path<String>,
+    Query(query): Query<SearchMessagesQuery>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    // 解析会话 ID
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 解析用户 ID
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    let is_participant = match crate::db::conversation::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(result) => result,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    };
+
+    if !is_participant {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::error("FORBIDDEN", "您不是此会话的参与者")),
+        );
+    }
+
+    // 验证搜索关键词
+    if query.keyword.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("EMPTY_KEYWORD", "搜索关键词不能为空")),
+        );
+    }
+
+    // 搜索消息
+    match crate::db::message::search_messages_in_conversation(
+        &pool,
+        &conv_uuid,
+        &query.keyword,
+        query.page,
+        query.limit,
+    )
+    .await
+    {
+        Ok(messages) => {
+            let message_list: Vec<Message> = messages.iter().map(|m| m.to_message()).collect();
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "messages": message_list,
+                    "keyword": query.keyword,
+                    "page": query.page,
+                    "limit": query.limit,
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("SEARCH_FAILED", format!("搜索消息失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取消息统计
+pub async fn get_message_stats_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Path(conversation_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    // 解析会话 ID
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 解析用户 ID
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    let is_participant = match crate::db::conversation::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(result) => result,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    };
+
+    if !is_participant {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::error("FORBIDDEN", "您不是此会话的参与者")),
+        );
+    }
+
+    // 获取统计
+    match crate::db::message::get_message_stats(&pool, &conv_uuid).await {
+        Ok(stats) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "total_count": stats.total_count,
+                "sender_count": stats.sender_count,
+                "first_message_at": stats.first_message_at,
+                "last_message_at": stats.last_message_at,
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("GET_STATS_FAILED", format!("获取消息统计失败: {}", e))),
+        ),
+    }
+}
