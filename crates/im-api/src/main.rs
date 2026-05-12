@@ -61,6 +61,12 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/messages/search", get(search_messages_with_auth))
         .route("/api/im/conversations/:id/messages/stats", get(get_message_stats_with_auth))
 
+        // 群组管理
+        .route("/api/im/conversations/:id/members", get(get_group_members_with_auth).post(add_group_members_with_auth))
+        .route("/api/im/conversations/:id/members/:member_id", delete(remove_group_member_with_auth))
+        .route("/api/im/conversations/:id/group", put(update_group_info_with_auth))
+        .route("/api/im/conversations/:id/announcement", get(get_group_announcement_with_auth).put(update_group_announcement_with_auth))
+
         // 添加数据库连接池到状态
         .with_state(pool);
 
@@ -198,6 +204,70 @@ async fn get_message_stats_with_auth(
 ) -> impl IntoResponse {
     let user_id = auth.user_id;
     message::get_message_stats_handler(State(pool), Extension(user_id), Path(conversation_id)).await
+}
+
+/// 获取群组成员列表（包装认证中间件）
+async fn get_group_members_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::get_group_members(State(pool), Extension(user_id), Path(conversation_id)).await
+}
+
+/// 添加群组成员（包装认证中间件）
+async fn add_group_members_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::add_group_members(State(pool), Extension(user_id), Path(conversation_id), Json(req)).await
+}
+
+/// 移除群组成员（包装认证中间件）
+async fn remove_group_member_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path((conversation_id, member_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::remove_group_member(State(pool), Extension(user_id), Path((conversation_id, member_id))).await
+}
+
+/// 更新群组信息（包装认证中间件）
+async fn update_group_info_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::update_group_info(State(pool), Extension(user_id), Path(conversation_id), Json(req)).await
+}
+
+/// 获取群公告（包装认证中间件）
+async fn get_group_announcement_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::get_group_announcement(State(pool), Extension(user_id), Path(conversation_id)).await
+}
+
+/// 更新群公告（包装认证中间件）
+async fn update_group_announcement_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    let announcement = req.get("announcement").and_then(|v| v.as_str()).unwrap_or("");
+    conversation::update_group_announcement_handler(State(pool), Extension(user_id), Path(conversation_id), announcement).await
 }
 
 /// 初始化数据库表

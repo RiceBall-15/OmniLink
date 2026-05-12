@@ -182,3 +182,426 @@ pub async fn create_conversation_handler(
         ),
     }
 }
+
+/// 获取群组成员列表
+pub async fn get_group_members(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    match crate::db::conversation::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_PARTICIPANT", "您不是该会话的参与者")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    }
+
+    // 获取参与者列表
+    match crate::db::conversation::get_conversation_participants(&pool, &conv_uuid).await {
+        Ok(participants) => {
+            let participant_ids: Vec<String> = participants.iter().map(|id| id.to_string()).collect();
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "conversation_id": conversation_id,
+                    "members": participant_ids,
+                    "count": participants.len()
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("GET_MEMBERS_FAILED", format!("获取成员列表失败: {}", e))),
+        ),
+    }
+}
+
+/// 添加群组成员
+pub async fn add_group_members(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是群主
+    match crate::db::conversation::is_group_owner(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_GROUP_OWNER", "只有群主可以添加成员")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_OWNER_FAILED", format!("检查群主失败: {}", e))),
+            );
+        }
+    }
+
+    // 解析要添加的用户 ID 列表
+    let user_ids: Vec<Uuid> = match req.get("user_ids").and_then(|v| v.as_array()) {
+        Some(ids) => {
+            let mut parsed_ids = Vec::new();
+            for id_value in ids {
+                if let Some(id_str) = id_value.as_str() {
+                    match id_str.parse::<Uuid>() {
+                        Ok(uuid) => parsed_ids.push(uuid),
+                        Err(_) => {
+                            return (
+                                StatusCode::BAD_REQUEST,
+                                Json(ApiResponse::error("INVALID_USER_ID", format!("无效的用户 ID: {}", id_str))),
+                            );
+                        }
+                    }
+                }
+            }
+            parsed_ids
+        }
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("MISSING_USER_IDS", "必须指定要添加的用户 ID 列表")),
+            );
+        }
+    };
+
+    if user_ids.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("EMPTY_USER_IDS", "用户 ID 列表不能为空")),
+        );
+    }
+
+    // 批量添加成员
+    match crate::db::conversation::add_participants(&pool, &conv_uuid, &user_ids).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "message": "成员添加成功",
+                "added_count": user_ids.len()
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("ADD_MEMBERS_FAILED", format!("添加成员失败: {}", e))),
+        ),
+    }
+}
+
+/// 移除群组成员
+pub async fn remove_group_member(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path((conversation_id, member_id)): axum::extract::Path<(String, String)>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    let member_uuid = match member_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_MEMBER_ID", "无效的成员 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是群主
+    match crate::db::conversation::is_group_owner(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            // 群主可以移除任何人，普通成员只能移除自己
+            if user_uuid != member_uuid {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(ApiResponse::error("NOT_GROUP_OWNER", "只有群主可以移除其他成员")),
+                );
+            }
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_OWNER_FAILED", format!("检查群主失败: {}", e))),
+            );
+        }
+    }
+
+    // 移除成员
+    match crate::db::conversation::remove_participant(&pool, &conv_uuid, &member_uuid).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "message": "成员移除成功"
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("REMOVE_MEMBER_FAILED", format!("移除成员失败: {}", e))),
+        ),
+    }
+}
+
+/// 更新群组信息
+pub async fn update_group_info(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是群主
+    match crate::db::conversation::is_group_owner(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_GROUP_OWNER", "只有群主可以更新群组信息")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_OWNER_FAILED", format!("检查群主失败: {}", e))),
+            );
+        }
+    }
+
+    let name = req.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let avatar = req.get("avatar").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let announcement = req.get("announcement").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+    // 更新基本信息
+    match crate::db::conversation::update_conversation(&pool, &conv_uuid, name, avatar).await {
+        Ok(_) => {}
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("UPDATE_GROUP_FAILED", format!("更新群组信息失败: {}", e))),
+            );
+        }
+    }
+
+    // 更新公告（如果有）
+    if let Some(announcement_text) = announcement {
+        match crate::db::conversation::update_group_announcement(&pool, &conv_uuid, &announcement_text).await {
+            Ok(_) => {}
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::error("UPDATE_ANNOUNCEMENT_FAILED", format!("更新群公告失败: {}", e))),
+                );
+            }
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(ApiResponse::success(serde_json::json!({
+            "message": "群组信息更新成功"
+        }))),
+    )
+}
+
+/// 获取群公告
+pub async fn get_group_announcement(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    match crate::db::conversation::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_PARTICIPANT", "您不是该会话的参与者")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    }
+
+    match crate::db::conversation::get_group_announcement(&pool, &conv_uuid).await {
+        Ok(announcement) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "announcement": announcement
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("GET_ANNOUNCEMENT_FAILED", format!("获取群公告失败: {}", e))),
+        ),
+    }
+}
+
+/// 更新群公告（处理器）
+pub async fn update_group_announcement_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<String>,
+    announcement: &str,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是群主
+    match crate::db::conversation::is_group_owner(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_GROUP_OWNER", "只有群主可以更新群公告")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_OWNER_FAILED", format!("检查群主失败: {}", e))),
+            );
+        }
+    }
+
+    match crate::db::conversation::update_group_announcement(&pool, &conv_uuid, announcement).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "message": "群公告更新成功"
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("UPDATE_ANNOUNCEMENT_FAILED", format!("更新群公告失败: {}", e))),
+        ),
+    }
+}

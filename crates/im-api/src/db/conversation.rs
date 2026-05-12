@@ -256,3 +256,197 @@ pub async fn find_or_create_direct_conversation(
 
     create_conversation(pool, params).await
 }
+
+/// 获取会话参与者列表
+pub async fn get_conversation_participants(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+) -> Result<Vec<Uuid>> {
+    let participants = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT user_id FROM conversation_participants
+        WHERE conversation_id = $1
+        ORDER BY joined_at ASC
+        "#
+    )
+    .bind(conversation_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取参与者列表失败: {}", e))?;
+
+    Ok(participants)
+}
+
+/// 添加参与者到会话
+pub async fn add_participant(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+    user_id: &Uuid,
+) -> Result<()> {
+    let now = chrono::Utc::now();
+
+    // 检查是否已经是参与者
+    let exists = is_conversation_participant(pool, conversation_id, user_id).await?;
+    if exists {
+        return Ok(());
+    }
+
+    sqlx::query(
+        r#"
+        INSERT INTO conversation_participants (conversation_id, user_id, joined_at)
+        VALUES ($1, $2, $3)
+        "#
+    )
+    .bind(conversation_id)
+    .bind(user_id)
+    .bind(now)
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("添加参与者失败: {}", e))?;
+
+    Ok(())
+}
+
+/// 从会话中移除参与者
+pub async fn remove_participant(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+    user_id: &Uuid,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        DELETE FROM conversation_participants
+        WHERE conversation_id = $1 AND user_id = $2
+        "#
+    )
+    .bind(conversation_id)
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("移除参与者失败: {}", e))?;
+
+    Ok(())
+}
+
+/// 批量添加参与者
+pub async fn add_participants(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+    user_ids: &[Uuid],
+) -> Result<()> {
+    let now = chrono::Utc::now();
+
+    for user_id in user_ids {
+        // 检查是否已经是参与者
+        let exists = is_conversation_participant(pool, conversation_id, user_id).await?;
+        if !exists {
+            sqlx::query(
+                r#"
+                INSERT INTO conversation_participants (conversation_id, user_id, joined_at)
+                VALUES ($1, $2, $3)
+                "#
+            )
+            .bind(conversation_id)
+            .bind(user_id)
+            .bind(now)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow::anyhow!("添加参与者失败: {}", e))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// 获取参与者数量
+pub async fn get_participant_count(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+) -> Result<i64> {
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*) FROM conversation_participants
+        WHERE conversation_id = $1
+        "#
+    )
+    .bind(conversation_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取参与者数量失败: {}", e))?;
+
+    Ok(count)
+}
+
+/// 更新群公告
+pub async fn update_group_announcement(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+    announcement: &str,
+) -> Result<ConversationEntity> {
+    let now = chrono::Utc::now();
+
+    // 将公告存储在 conversations 表的 metadata 字段中
+    let conversation = sqlx::query_as::<_, ConversationEntity>(
+        r#"
+        UPDATE conversations
+        SET metadata = jsonb_set(
+            COALESCE(metadata, '{}'),
+            '{announcement}',
+            $1::jsonb
+        ),
+        updated_at = $2
+        WHERE id = $3
+        RETURNING *
+        "#
+    )
+    .bind(serde_json::json!(announcement))
+    .bind(now)
+    .bind(conversation_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("更新群公告失败: {}", e))?;
+
+    Ok(conversation)
+}
+
+/// 获取群公告
+pub async fn get_group_announcement(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+) -> Result<Option<String>> {
+    let result = sqlx::query_scalar::<_, Option<serde_json::Value>>(
+        r#"
+        SELECT metadata->'announcement' FROM conversations
+        WHERE id = $1
+        "#
+    )
+    .bind(conversation_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取群公告失败: {}", e))?;
+
+    match result {
+        Some(value) => {
+            if let Some(s) = value.as_str() {
+                Ok(Some(s.to_string()))
+            } else {
+                Ok(None)
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+/// 检查用户是否是群主或管理员（通过 created_by 字段判断）
+pub async fn is_group_owner(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+    user_id: &Uuid,
+) -> Result<bool> {
+    let conversation = get_conversation_by_id(pool, conversation_id).await?;
+    
+    match conversation {
+        Some(conv) => Ok(conv.created_by == Some(*user_id)),
+        None => Ok(false),
+    }
+}
