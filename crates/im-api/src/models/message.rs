@@ -86,6 +86,30 @@ impl std::str::FromStr for MessageStatus {
     }
 }
 
+/// 消息表情回应
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct MessageReaction {
+    pub id: Uuid,
+    pub message_id: Uuid,
+    pub user_id: Uuid,
+    pub emoji: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// 添加表情回应请求
+#[derive(Debug, Deserialize)]
+pub struct AddReactionRequest {
+    pub emoji: String,
+}
+
+/// 表情回应统计
+#[derive(Debug, Serialize)]
+pub struct ReactionSummary {
+    pub emoji: String,
+    pub count: i64,
+    pub users: Vec<Uuid>,
+}
+
 /// 消息实体（与前端接口完全匹配）
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Message {

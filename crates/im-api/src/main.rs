@@ -85,6 +85,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/messages/:msg_id", put(edit_message_with_auth))
         .route("/api/im/conversations/:id/messages/:msg_id/recall", post(recall_message_with_auth))
         .route("/api/im/conversations/:id/messages/:msg_id/forward", post(forward_message_with_auth))
+        .route("/api/im/messages/:msg_id/reactions", post(add_reaction_with_auth).get(get_reactions_with_auth))
+        .route("/api/im/messages/:msg_id/reactions/:emoji", delete(remove_reaction_with_auth))
         .route("/api/im/conversations/:id/read", post(mark_as_read_with_auth))
 
         // 消息搜索和统计
@@ -244,6 +246,36 @@ async fn forward_message_with_auth(
 ) -> impl IntoResponse {
     let user_id = auth.user_id;
     message::forward_message(State(pool), Extension(user_id), Path((conversation_id, message_id)), Json(req)).await
+}
+
+/// 添加表情回应（包装认证中间件）
+async fn add_reaction_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+    Json(req): Json<handlers::message::AddReactionRequest>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::add_reaction(State(pool), Extension(user_id), Path(message_id), Json(req)).await
+}
+
+/// 删除表情回应（包装认证中间件）
+async fn remove_reaction_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path((message_id, emoji)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::remove_reaction(State(pool), Extension(user_id), Path((message_id, emoji))).await
+}
+
+/// 获取表情回应列表（包装认证中间件）
+async fn get_reactions_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+) -> impl IntoResponse {
+    message::get_reactions(State(pool), Path(message_id)).await
 }
 
 /// 标记会话已读（包装认证中间件）

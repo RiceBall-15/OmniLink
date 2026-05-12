@@ -553,6 +553,238 @@ pub async fn get_message_stats_handler(
     }
 }
 
+/// 添加消息表情回应
+pub async fn add_reaction(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+    Json(req): Json<AddReactionRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let msg_uuid = match message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的消息ID")),
+            );
+        }
+    };
+
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    // 验证 emoji 非空
+    if req.emoji.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("INVALID_EMOJI", "表情不能为空")),
+        );
+    }
+
+    // 检查消息是否存在
+    let message = match sqlx::query_as::<_, crate::db::message::MessageEntity>(
+        "SELECT * FROM messages WHERE id = $1 AND deleted_at IS NULL"
+    )
+    .bind(msg_uuid)
+    .fetch_optional(&*pool)
+    .await
+    {
+        Ok(Some(msg)) => msg,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::error("MESSAGE_NOT_FOUND", "消息不存在")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("DB_ERROR", format!("查询消息失败: {}", e))),
+            );
+        }
+    };
+
+    // 检查用户是否在会话中
+    let is_member = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2)"
+    )
+    .bind(message.conversation_id)
+    .bind(user_uuid)
+    .fetch_one(&*pool)
+    .await
+    {
+        Ok(exists) => exists,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("DB_ERROR", format!("检查成员失败: {}", e))),
+            );
+        }
+    };
+
+    if !is_member {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::error("NOT_MEMBER", "您不是该会话的成员")),
+        );
+    }
+
+    // 插入或更新表情回应（使用 UPSERT）
+    let reaction_id = Uuid::new_v4();
+    match sqlx::query(
+        "INSERT INTO message_reactions (id, message_id, user_id, emoji, created_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (message_id, user_id, emoji) DO NOTHING
+         RETURNING id"
+    )
+    .bind(reaction_id)
+    .bind(msg_uuid)
+    .bind(user_uuid)
+    .bind(&req.emoji)
+    .fetch_optional(&*pool)
+    .await
+    {
+        Ok(_) => {
+            // 获取该消息的所有回应统计
+            match get_reaction_summaries(&pool, msg_uuid).await {
+                Ok(reactions) => (
+                    StatusCode::OK,
+                    Json(ApiResponse::success(serde_json::json!({
+                        "message_id": msg_uuid,
+                        "reactions": reactions,
+                    }))),
+                ),
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::error("DB_ERROR", format!("获取回应失败: {}", e))),
+                ),
+            }
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("DB_ERROR", format!("添加回应失败: {}", e))),
+        ),
+    }
+}
+
+/// 删除消息表情回应
+pub async fn remove_reaction(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path((message_id, emoji)): Path<(String, String)>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let msg_uuid = match message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的消息ID")),
+            );
+        }
+    };
+
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match sqlx::query(
+        "DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3"
+    )
+    .bind(msg_uuid)
+    .bind(user_uuid)
+    .bind(&emoji)
+    .execute(&*pool)
+    .await
+    {
+        Ok(_) => {
+            match get_reaction_summaries(&pool, msg_uuid).await {
+                Ok(reactions) => (
+                    StatusCode::OK,
+                    Json(ApiResponse::success(serde_json::json!({
+                        "message_id": msg_uuid,
+                        "reactions": reactions,
+                    }))),
+                ),
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::error("DB_ERROR", format!("获取回应失败: {}", e))),
+                ),
+            }
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("DB_ERROR", format!("删除回应失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取消息的表情回应列表
+pub async fn get_reactions(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let msg_uuid = match message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的消息ID")),
+            );
+        }
+    };
+
+    match get_reaction_summaries(&pool, msg_uuid).await {
+        Ok(reactions) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "message_id": msg_uuid,
+                "reactions": reactions,
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("DB_ERROR", format!("获取回应失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取消息回应统计的辅助函数
+async fn get_reaction_summaries(
+    pool: &PgPool,
+    message_id: Uuid,
+) -> Result<Vec<ReactionSummary>, sqlx::Error> {
+    let rows = sqlx::query_as::<_, (String, i64, Vec<Uuid>)>(
+        "SELECT emoji, COUNT(*) as count, array_agg(user_id) as users
+         FROM message_reactions
+         WHERE message_id = $1
+         GROUP BY emoji
+         ORDER BY count DESC"
+    )
+    .bind(message_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|(emoji, count, users)| ReactionSummary {
+        emoji,
+        count,
+        users,
+    }).collect())
+}
+
 /// 转发消息请求
 #[derive(Debug, Deserialize)]
 pub struct ForwardMessageRequest {
