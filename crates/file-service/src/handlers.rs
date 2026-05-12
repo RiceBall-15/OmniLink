@@ -50,14 +50,20 @@ pub async fn upload_file(
 ) -> Result<Json<ApiResponse<UploadResponse>>, StatusCode> {
     while let Some(field) = multipart.next_field().await.unwrap() {
         let filename = field.file_name().unwrap_or("file").to_string();
-        let file_size = field.bytes().await.unwrap().len() as i64;
-        let data = field.bytes().await.unwrap();
         let mime_type = field.content_type().unwrap_or("application/octet-stream").to_string();
+        let data = field.bytes().await.unwrap();
+        let file_size = data.len() as i64;
+
+        // 验证文件类型和大小
+        if let Err(e) = state.file_service.validate_file(&mime_type, file_size) {
+            tracing::warn!("File validation failed for {}: {}", filename, e);
+            return Ok(Json(ApiResponse::error(format!("File validation failed: {}", e))));
+        }
 
         match state
             .file_service
             .upload_file(
-                claims.user_id,
+                claims.sub,
                 filename,
                 file_size,
                 mime_type,
@@ -72,6 +78,7 @@ pub async fn upload_file(
                     file_url: state.file_service.generate_file_url(file_info.id),
                     thumbnail_url: file_info
                         .thumbnail_path
+                        .as_ref()
                         .map(|_| state.file_service.generate_thumbnail_url(file_info.id)),
                     file_info,
                 };
@@ -106,7 +113,7 @@ pub async fn batch_upload_files(
         match state
             .file_service
             .upload_file(
-                claims.user_id,
+                claims.sub,
                 filename.clone(),
                 file_size,
                 mime_type,
@@ -166,7 +173,7 @@ pub async fn delete_file(
 ) -> Result<Json<ApiResponse<bool>>, StatusCode> {
     match state
         .file_service
-        .delete_file(file_id, claims.user_id)
+        .delete_file(file_id, claims.sub)
         .await
     {
         Ok(deleted) => {
@@ -194,7 +201,7 @@ pub async fn list_files(
 
     match state
         .file_service
-        .get_files(claims.user_id, params.file_type, page, page_size)
+        .get_files(claims.sub, params.file_type, page, page_size)
         .await
     {
         Ok(response) => Ok(Json(ApiResponse::success(response))),
@@ -219,7 +226,7 @@ pub async fn update_file(
 
     match state
         .file_service
-        .update_file(file_id, claims.user_id, updates)
+        .update_file(file_id, claims.sub, updates)
         .await
     {
         Ok(Some(file_info)) => Ok(Json(ApiResponse::success(file_info))),
@@ -280,7 +287,7 @@ pub async fn get_storage_stats(
     State(state): State<AppState>,
     claims: Claims,
 ) -> Result<Json<ApiResponse<StorageStats>>, StatusCode> {
-    match state.file_service.get_storage_stats(claims.user_id).await {
+    match state.file_service.get_storage_stats(claims.sub).await {
         Ok(stats) => Ok(Json(ApiResponse::success(stats))),
         Err(e) => {
             tracing::error!("Failed to get storage stats: {:?}", e);

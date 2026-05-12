@@ -8,6 +8,24 @@ use uuid::Uuid;
 use super::models::*;
 use super::repository::{FileRepository, FileUpdate, TypeCount};
 
+/// 允许的文件类型和最大大小
+const ALLOWED_TYPES: &[(&str, u64)] = &[
+    ("image/jpeg", 20 * 1024 * 1024),     // 20MB
+    ("image/png", 20 * 1024 * 1024),
+    ("image/gif", 10 * 1024 * 1024),
+    ("image/webp", 20 * 1024 * 1024),
+    ("video/mp4", 500 * 1024 * 1024),      // 500MB
+    ("video/webm", 500 * 1024 * 1024),
+    ("audio/mpeg", 50 * 1024 * 1024),      // 50MB
+    ("audio/ogg", 50 * 1024 * 1024),
+    ("application/pdf", 100 * 1024 * 1024), // 100MB
+    ("application/zip", 200 * 1024 * 1024),
+    ("text/plain", 10 * 1024 * 1024),
+];
+
+/// 默认最大文件大小 (10MB)
+const DEFAULT_MAX_SIZE: u64 = 10 * 1024 * 1024;
+
 pub struct FileService {
     repository: FileRepository,
     upload_dir: PathBuf,
@@ -35,6 +53,31 @@ impl FileService {
         }
     }
 
+    /// 验证文件类型和大小
+    pub fn validate_file(&self, mime_type: &str, file_size: i64) -> Result<()> {
+        // 检查 MIME 类型是否允许
+        let max_size = ALLOWED_TYPES
+            .iter()
+            .find(|(t, _)| *t == mime_type)
+            .map(|(_, s)| *s)
+            .unwrap_or(DEFAULT_MAX_SIZE);
+
+        if file_size as u64 > max_size {
+            return Err(anyhow::anyhow!(
+                "File size {} exceeds maximum allowed size {} for type {}",
+                file_size,
+                max_size,
+                mime_type
+            ));
+        }
+
+        if file_size <= 0 {
+            return Err(anyhow::anyhow!("File is empty"));
+        }
+
+        Ok(())
+    }
+
     /// 上传文件
     pub async fn upload_file(
         &self,
@@ -45,6 +88,9 @@ impl FileService {
         data: Vec<u8>,
         is_public: bool,
     ) -> Result<FileInfo> {
+        // 验证文件
+        self.validate_file(&mime_type, file_size)?;
+
         // 生成唯一文件名
         let file_id = Uuid::new_v4();
         let ext = self._get_extension(&filename, &mime_type);
@@ -187,14 +233,14 @@ impl FileService {
             format!(".{}", ext.to_string_lossy())
         } else {
             match mime_type {
-                "image/jpeg" => ".jpg",
-                "image/png" => ".png",
-                "image/gif" => ".gif",
-                "image/webp" => ".webp",
-                "video/mp4" => ".mp4",
-                "video/webm" => ".webm",
-                "application/pdf" => ".pdf",
-                _ => ".bin",
+                "image/jpeg" => ".jpg".to_string(),
+                "image/png" => ".png".to_string(),
+                "image/gif" => ".gif".to_string(),
+                "image/webp" => ".webp".to_string(),
+                "video/mp4" => ".mp4".to_string(),
+                "video/webm" => ".webm".to_string(),
+                "application/pdf" => ".pdf".to_string(),
+                _ => ".bin".to_string(),
             }
         }
     }

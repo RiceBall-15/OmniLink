@@ -27,16 +27,18 @@
 - [x] WebSocket 状态广播
 - [x] 好友在线状态查询 API
 
-#### 4. WebSocket 认证逻辑完善 ⏳
-- [ ] JWT token 验证
-- [ ] 连接时认证
-- [ ] token 过期处理
-- [ ] 权限检查
+#### 4. WebSocket 认证逻辑完善 ✅
+- [x] JWT token 验证
+- [x] 连接时认证
+- [x] token 过期处理
+- [x] 权限检查
 
-#### 5. 文件上传 API 实现 ⏳
+#### 5. 文件上传 API 实现 ⚠️
 - [ ] 实现文件上传 handler
 - [ ] 文件类型验证
-- [ ] 文件大小限制
+- [ ] 存储集成 (MinIO)
+
+**注意**: file-service 有28个预存编译错误需要先修复（middleware TokenManager字段不匹配、缺少模块引用等）
 - [ ] MinIO 集成
 
 #### 6. AI 模型对接（基础） ⏳
@@ -202,16 +204,26 @@
 ## 📈 进度追踪
 
 **总任务数**: 15
-**已完成**: 3
+**已完成**: 4
 **进行中**: 0
-**待开发**: 12
+**待开发**: 11
 **受阻**: 0
 
-**完成率**: 20%
+**完成率**: 26%
 
 ---
 
-*最后更新: 2026-05-12 00:30*
+*最后更新: 2026-05-12 00:45*
+
+### 2026-05-12 00:45 - WebSocket认证逻辑完善
+**状态**: ✅ 完成
+**耗时**: 0.25小时
+**提交**: 10840cd
+**备注**: 
+- Added TokenRefresh and RefreshOk WebSocket message types
+- Enhanced error handling with specific error codes
+- Token refresh without disconnecting WebSocket session
+- Better authentication error messages
 
 ### 2026-05-12 00:30 - 在线状态同步
 **状态**: ✅ 完成

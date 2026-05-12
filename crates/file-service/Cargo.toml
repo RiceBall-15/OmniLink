@@ -15,3 +15,7 @@ tracing.workspace = true
 
 # Internal dependencies
 common = { path = "../common" }
+
+# Additional dependencies
+anyhow = "1"
+sqlx = { workspace = true, features = ["runtime-tokio-rustls", "postgres"] }
