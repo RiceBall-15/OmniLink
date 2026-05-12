@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    use validator::Validate;
 
     #[test]
     fn test_ws_message_serialization() {
@@ -16,7 +17,7 @@ mod tests {
 
         let json = serde_json::to_string(&message).unwrap();
         println!("WSMessage JSON: {}", json);
-        assert!(json.contains("\"message_type\":\"message\""));
+        assert!(json.contains("\"type\":\"message\""));
     }
 
     #[test]
@@ -66,8 +67,8 @@ mod tests {
             crate::models::WSMessageType::Connect,
             crate::models::WSMessageType::Connected,
             crate::models::WSMessageType::Message,
-            crate::models::WSMessageType::MessageRead,
-            crate::models::WSMessageType::Online,
+            crate::models::WSMessageType::Read,
+            crate::models::WSMessageType::StatusChange,
             crate::models::WSMessageType::Typing,
             crate::models::WSMessageType::Ping,
         ];

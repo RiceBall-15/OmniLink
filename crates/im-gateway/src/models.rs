@@ -258,3 +258,6 @@ pub struct UserStatusItem {
     pub status: String,
     pub last_seen: i64,
 }
+#[cfg(test)]
+#[path = "models_test.rs"]
+mod tests;
