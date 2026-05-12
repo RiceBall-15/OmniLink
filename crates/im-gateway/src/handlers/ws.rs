@@ -274,12 +274,17 @@ async fn handle_auth_message(
                     }
                 }
                 Err(e) => {
-                    tracing::warn!("Token validation failed: {}", e);
-                    send_error(
-                        tx,
-                        "Invalid or expired token".to_string(),
-                        "auth_failed".to_string(),
-                    );
+                    tracing::warn!("Token validation failed from {}: {}", addr, e);
+                    // 根据错误类型发送不同的错误信息
+                    let (error_msg, error_code) = match e {
+                        common::AppError::Auth(msg) if msg.contains("expired") => {
+                            ("Token expired, please refresh".to_string(), "token_expired".to_string())
+                        }
+                        _ => {
+                            ("Invalid token".to_string(), "auth_failed".to_string())
+                        }
+                    };
+                    send_error(tx, error_msg, error_code);
                 }
             }
         } else {
@@ -466,6 +471,50 @@ async fn handle_authenticated_message(
                     };
                     state.connection_manager.broadcast(status_change_msg).await;
                 }
+            }
+        }
+
+        WSMessageType::TokenRefresh => {
+            // 处理 Token 刷新 - 客户端发送新 token 来替换旧的
+            tracing::info!("User {} requesting token refresh", user_id);
+            if let Some(data) = &ws_msg.data {
+                if let Ok(refresh_req) = serde_json::from_value::<crate::models::TokenRefreshRequest>(data.clone()) {
+                    // 验证新 token 的有效性
+                    match state.token_manager.verify_token(&refresh_req.token) {
+                        Ok(new_claims) => {
+                            // 确认新 token 属于同一用户
+                            if new_claims.sub == user_id {
+                                tracing::info!("Token refreshed successfully for user {}", user_id);
+                                // 发送刷新成功响应
+                                let response = WSMessage {
+                                    message_type: WSMessageType::RefreshOk,
+                                    conversation_id: None,
+                                    message_id: None,
+                                    sender_id: Some(user_id),
+                                    content: Some("Token refreshed successfully".to_string()),
+                                    timestamp: Some(Utc::now().timestamp()),
+                                    data: Some(serde_json::json!({
+                                        "expires_at": new_claims.exp,
+                                    })),
+                                };
+                                if let Ok(json) = serde_json::to_string(&response) {
+                                    let _ = tx.send(Message::Text(json));
+                                }
+                            } else {
+                                tracing::warn!("Token refresh failed: user mismatch (expected {}, got {})", user_id, new_claims.sub);
+                                send_error(tx, "Token user mismatch".to_string(), "token_mismatch".to_string());
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Token refresh failed: invalid new token: {}", e);
+                            send_error(tx, "Invalid refresh token".to_string(), "invalid_token".to_string());
+                        }
+                    }
+                } else {
+                    send_error(tx, "Invalid refresh request format".to_string(), "invalid_request".to_string());
+                }
+            } else {
+                send_error(tx, "Token required for refresh".to_string(), "token_required".to_string());
             }
         }
 

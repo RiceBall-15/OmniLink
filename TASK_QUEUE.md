@@ -21,11 +21,11 @@
 - [x] WebSocket 广播通知
 - [x] 2分钟时间窗口限制
 
-#### 3. 在线状态同步 ⏳
-- [ ] 用户上线/下线状态管理
-- [ ] Redis 在线状态存储
-- [ ] WebSocket 状态广播
-- [ ] 好友在线状态查询 API
+#### 3. 在线状态同步 ✅
+- [x] 用户上线/下线状态管理
+- [x] Redis 在线状态存储
+- [x] WebSocket 状态广播
+- [x] 好友在线状态查询 API
 
 #### 4. WebSocket 认证逻辑完善 ⏳
 - [ ] JWT token 验证
@@ -202,13 +202,25 @@
 ## 📈 进度追踪
 
 **总任务数**: 15
-**已完成**: 2
+**已完成**: 3
 **进行中**: 0
-**待开发**: 13
+**待开发**: 12
 **受阻**: 0
 
-**完成率**: 13%
+**完成率**: 20%
 
 ---
 
-*最后更新: 2026-05-11 00:45*
+*最后更新: 2026-05-12 00:30*
+
+### 2026-05-12 00:30 - 在线状态同步
+**状态**: ✅ 完成
+**耗时**: 0.5小时
+**提交**: 6b1c5dc
+**备注**: 
+- Enhanced OnlineStatusManager with Redis-backed status storage
+- Added StatusChange WebSocket message type for real-time status broadcasts
+- Users now broadcast online/offline status to all connected clients
+- Added batch status query API (POST /users/status/batch)
+- Added background cleanup task for expired status (30s interval)
+- Status manager loads previous state from Redis on startup

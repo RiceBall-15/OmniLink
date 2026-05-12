@@ -49,6 +49,10 @@ pub enum WSMessageType {
     // 状态变更
     StatusChange, // "status_change" - 用户状态变更（上线/下线/忙碌/离开）
 
+    // 认证相关
+    TokenRefresh, // "token_refresh" - 刷新Token
+    RefreshOk,    // "refresh_ok" - Token刷新成功
+
     // 错误
     Error,        // "error" - 错误消息
 }
@@ -227,6 +231,12 @@ pub struct TypingRequest {
 #[derive(Debug, Deserialize)]
 pub struct StatusChangeRequest {
     pub status: String,  // online, away, busy, offline
+}
+
+/// Token 刷新请求
+#[derive(Debug, Deserialize)]
+pub struct TokenRefreshRequest {
+    pub token: String,  // 新的 access token
 }
 
 /// 批量状态查询请求
