@@ -90,7 +90,7 @@ impl UserRepository {
         .bind(now)
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))
+        .map_err(AppError::Database)
     }
 
     /// 更新用户资料
@@ -140,7 +140,7 @@ impl UserRepository {
         query_builder
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| AppError::Database(e))
+            .map_err(AppError::Database)
     }
 
     /// 更新密码
@@ -153,7 +153,7 @@ impl UserRepository {
         .bind(user_id)
         .execute(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(())
     }
@@ -167,7 +167,7 @@ impl UserRepository {
         .bind(user_id)
         .execute(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(())
     }
@@ -178,7 +178,7 @@ impl UserRepository {
             .bind(user_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| AppError::Database(e))?;
+            .map_err(AppError::Database)?;
 
         Ok(())
     }
@@ -253,7 +253,7 @@ impl DeviceRepository {
         .bind(now)
         .execute(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(())
     }
@@ -292,7 +292,7 @@ impl DeviceRepository {
         .bind(device_id)
         .execute(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(())
     }
@@ -306,7 +306,7 @@ impl DeviceRepository {
         .bind(device_id)
         .execute(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(())
     }
@@ -317,7 +317,7 @@ impl DeviceRepository {
             .bind(user_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| AppError::Database(e))?;
+            .map_err(AppError::Database)?;
 
         Ok(())
     }

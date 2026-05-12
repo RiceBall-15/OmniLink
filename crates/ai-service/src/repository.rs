@@ -71,7 +71,7 @@ impl AssistantRepository {
         .bind(now)
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))
+        .map_err(AppError::Database)
     }
 
     /// 更新助手
@@ -145,7 +145,7 @@ impl AssistantRepository {
         query_builder
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| AppError::Database(e))
+            .map_err(AppError::Database)
     }
 
     /// 删除助手
@@ -154,7 +154,7 @@ impl AssistantRepository {
             .bind(assistant_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| AppError::Database(e))?;
+            .map_err(AppError::Database)?;
 
         Ok(())
     }
@@ -209,7 +209,7 @@ impl TokenUsageRepository {
         .bind(now)
         .execute(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(())
     }
@@ -253,7 +253,7 @@ impl TokenUsageRepository {
         query_builder
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| AppError::Database(e))
+            .map_err(AppError::Database)
     }
 
     /// 获取总使用统计
@@ -345,7 +345,7 @@ impl ConversationMessageRepository {
         .bind(now)
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))
+        .map_err(AppError::Database)
     }
 
     /// 获取对话历史（最近N条消息）
@@ -367,7 +367,7 @@ impl ConversationMessageRepository {
         .bind(limit)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         // 反转为时间正序
         Ok(messages.into_iter().rev().collect())
@@ -379,7 +379,7 @@ impl ConversationMessageRepository {
             .bind(conversation_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| AppError::Database(e))?;
+            .map_err(AppError::Database)?;
         Ok(())
     }
 
@@ -391,7 +391,7 @@ impl ConversationMessageRepository {
         .bind(conversation_id)
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(count.0)
     }

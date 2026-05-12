@@ -44,7 +44,7 @@ impl MessageRepository {
         .bind(now)
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         // 更新对话的最后消息时间
         sqlx::query(
@@ -55,7 +55,7 @@ impl MessageRepository {
         .bind(conversation_id)
         .execute(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(message)
     }
@@ -93,7 +93,7 @@ impl MessageRepository {
         query_builder
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| AppError::Database(e))
+            .map_err(AppError::Database)
     }
 
     /// 获取单条消息
@@ -104,7 +104,7 @@ impl MessageRepository {
         .bind(message_id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(message)
     }
@@ -127,7 +127,7 @@ impl MessageRepository {
         .bind(now)
         .execute(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(())
     }
@@ -149,7 +149,7 @@ impl MessageRepository {
         .bind(now)
         .execute(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(())
     }
@@ -171,7 +171,7 @@ impl MessageRepository {
         .bind(message_id)
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(message)
     }
@@ -194,7 +194,7 @@ impl MessageRepository {
         .bind(message_id)
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(message)
     }
@@ -217,7 +217,7 @@ impl MessageRepository {
             .bind(user_id)
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| AppError::Database(e))?
+            .map_err(AppError::Database)?
         } else {
             sqlx::query_scalar::<_, i64>(
                 r#"
@@ -234,7 +234,7 @@ impl MessageRepository {
             .bind(user_id)
             .fetch_one(&self.pool)
             .await
-            .map_err(|e| AppError::Database(e))?
+            .map_err(AppError::Database)?
         };
 
         Ok(result)
@@ -263,7 +263,7 @@ impl MessageRepository {
         .bind(offset)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(messages)
     }
@@ -292,7 +292,7 @@ impl MessageRepository {
         .bind(offset)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(messages)
     }
@@ -313,7 +313,7 @@ impl MessageRepository {
         .bind(conversation_id)
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(stats)
     }
@@ -365,7 +365,7 @@ impl ConversationRepository {
         .bind(now)
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(conversation)
     }
@@ -378,7 +378,7 @@ impl ConversationRepository {
         .bind(conversation_id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(conversation)
     }
@@ -396,7 +396,7 @@ impl ConversationRepository {
         .bind(user_id)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(conversations)
     }
@@ -425,7 +425,7 @@ impl ConversationRepository {
         .bind(now)
         .fetch_one(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(participant)
     }
@@ -438,7 +438,7 @@ impl ConversationRepository {
         .bind(conversation_id)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(participants)
     }
@@ -452,7 +452,7 @@ impl ConversationRepository {
         .bind(user_id)
         .execute(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(())
     }

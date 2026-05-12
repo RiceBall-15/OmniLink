@@ -299,11 +299,10 @@ impl OnlineStatusManager {
         {
             let statuses = self.statuses.read().await;
             for (user_id, status) in statuses.iter() {
-                if matches!(status.status, UserStatus::Online | UserStatus::Away | UserStatus::Busy) {
-                    if now - status.last_seen > expiration_threshold {
+                if matches!(status.status, UserStatus::Online | UserStatus::Away | UserStatus::Busy)
+                    && now - status.last_seen > expiration_threshold {
                         to_remove.push(*user_id);
                     }
-                }
             }
         }
 

@@ -195,8 +195,7 @@ impl AIProvider for QwenProvider {
                         // 解析 SSE 格式
                         let lines: Vec<&str> = text.split('\n').collect();
                         for line in lines {
-                            if line.starts_with("data: ") {
-                                let data = &line[6..];
+                            if let Some(data) = line.strip_prefix("data: ") {
                                 if data.trim() == "[DONE]" {
                                     return Some(Ok(StreamChunk {
                                         content: String::new(),

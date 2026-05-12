@@ -108,7 +108,7 @@ pub fn encrypt_message(plaintext: &[u8], key: &[u8]) -> Result<EncryptedMessage,
 
     Ok(EncryptedMessage {
         ciphertext: general_purpose::STANDARD.encode(&ciphertext),
-        nonce: general_purpose::STANDARD.encode(&nonce_bytes),
+        nonce: general_purpose::STANDARD.encode(nonce_bytes),
         sender_id: Uuid::nil(), // 由调用者设置
         timestamp: chrono::Utc::now().timestamp(),
     })

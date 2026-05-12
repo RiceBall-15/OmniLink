@@ -21,7 +21,7 @@ impl UserRepository {
         .bind(user_id)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(user)
     }
@@ -38,7 +38,7 @@ impl UserRepository {
         .bind(user_ids)
         .fetch_all(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(users)
     }
@@ -51,7 +51,7 @@ impl UserRepository {
         .bind(email)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(user)
     }
@@ -64,7 +64,7 @@ impl UserRepository {
         .bind(username)
         .fetch_optional(&self.pool)
         .await
-        .map_err(|e| AppError::Database(e))?;
+        .map_err(AppError::Database)?;
 
         Ok(user)
     }

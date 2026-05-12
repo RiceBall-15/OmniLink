@@ -115,7 +115,7 @@ pub async fn encrypt_message(
         ),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<serde_json::Value>::error("ENCRYPT_FAILED", &format!("加密失败: {}", e))),
+            Json(ApiResponse::<serde_json::Value>::error("ENCRYPT_FAILED", format!("加密失败: {}", e))),
         ),
     }
 }
@@ -189,7 +189,7 @@ pub async fn decrypt_message(
         }
         Err(e) => (
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::<serde_json::Value>::error("DECRYPT_FAILED", &format!("解密失败: {}", e))),
+            Json(ApiResponse::<serde_json::Value>::error("DECRYPT_FAILED", format!("解密失败: {}", e))),
         ),
     }
 }
@@ -339,7 +339,7 @@ pub async fn store_encrypted_message(
         ),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<serde_json::Value>::error("STORE_FAILED", &format!("存储加密消息失败: {}", e))),
+            Json(ApiResponse::<serde_json::Value>::error("STORE_FAILED", format!("存储加密消息失败: {}", e))),
         ),
     }
 }
@@ -391,7 +391,7 @@ pub async fn get_encrypted_messages(
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<serde_json::Value>::error("FETCH_FAILED", &format!("获取加密消息失败: {}", e))),
+            Json(ApiResponse::<serde_json::Value>::error("FETCH_FAILED", format!("获取加密消息失败: {}", e))),
         ),
     }
 }

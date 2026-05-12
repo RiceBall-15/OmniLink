@@ -27,8 +27,8 @@ impl UsageRepository {
             "#
         )
         .bind(id)
-        .bind(&data.user_id)
-        .bind(&data.conversation_id)
+        .bind(data.user_id)
+        .bind(data.conversation_id)
         .bind(&data.model_name)
         .bind(&data.provider)
         .bind(data.prompt_tokens)
@@ -55,7 +55,7 @@ impl UsageRepository {
             "#
         )
         .bind(id)
-        .bind(&data.user_id)
+        .bind(data.user_id)
         .bind(&data.api_endpoint)
         .bind(&data.method)
         .bind(data.status_code)
