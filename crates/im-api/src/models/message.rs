@@ -5,7 +5,7 @@ use sqlx::FromRow;
 use serde_json::Value as JsonValue;
 
 /// 消息类型（与前端枚举匹配）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type, utoipa::ToSchema)]
 #[sqlx(type_name = "varchar", rename_all = "lowercase")]
 pub enum MessageType {
     #[serde(rename = "text")]
@@ -44,7 +44,7 @@ impl std::str::FromStr for MessageType {
 }
 
 /// 消息状态（与前端枚举匹配）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type, utoipa::ToSchema)]
 #[sqlx(type_name = "varchar", rename_all = "lowercase")]
 pub enum MessageStatus {
     #[serde(rename = "sending")]
@@ -87,7 +87,7 @@ impl std::str::FromStr for MessageStatus {
 }
 
 /// 消息实体（与前端接口完全匹配）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Message {
     #[serde(rename = "id")]
     pub id: String,
@@ -162,7 +162,7 @@ pub struct EditMessageRequest {
 }
 
 /// 在线状态（与前端枚举匹配）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type, utoipa::ToSchema)]
 #[sqlx(type_name = "varchar", rename_all = "lowercase")]
 pub enum OnlineStatus {
     #[serde(rename = "offline")]

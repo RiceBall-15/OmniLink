@@ -1,3 +1,11 @@
+//! 认证处理器模块
+//!
+//! 提供用户认证相关的 API 端点：
+//! - `POST /api/auth/register` - 用户注册
+//! - `POST /api/auth/login` - 用户登录
+//! - `GET /api/user/me` - 获取当前用户信息
+//! - `PUT /api/user/me` - 更新用户资料
+
 use axum::{
     extract::{Extension, State},
     http::StatusCode,

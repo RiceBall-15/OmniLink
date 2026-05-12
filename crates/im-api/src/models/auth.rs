@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use validator::Validate;
 
 /// 用户数据模型
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct User {
     #[serde(rename = "id")]
     pub id: String,
@@ -47,7 +47,7 @@ impl UserEntity {
 }
 
 /// 用户注册请求
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, utoipa::ToSchema)]
 pub struct RegisterRequest {
     #[validate(length(min = 3, max = 20, message = "用户名长度必须在 3-20 个字符之间"))]
     pub username: String,
@@ -58,7 +58,7 @@ pub struct RegisterRequest {
 }
 
 /// 用户登录请求
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, utoipa::ToSchema)]
 pub struct LoginRequest {
     #[validate(email(message = "邮箱格式不正确"))]
     pub email: String,
@@ -67,7 +67,7 @@ pub struct LoginRequest {
 }
 
 /// 登录响应
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct LoginResponse {
     pub token: String,
     pub user: User,

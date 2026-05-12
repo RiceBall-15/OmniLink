@@ -1,3 +1,14 @@
+//! 消息处理器模块
+//!
+//! 提供消息管理相关的 API 端点：
+//! - `GET /api/im/conversations/:id/messages` - 获取消息列表（分页）
+//! - `POST /api/im/conversations/:id/messages` - 发送消息
+//! - `PUT /api/im/conversations/:id/messages/:msg_id` - 编辑消息
+//! - `POST /api/im/conversations/:id/messages/:msg_id/recall` - 撤回消息
+//! - `POST /api/im/conversations/:id/read` - 标记已读
+//! - `GET /api/im/conversations/:id/messages/search` - 搜索消息
+//! - `GET /api/im/conversations/:id/messages/stats` - 消息统计
+
 use axum::{
     extract::{Extension, Path, Query, State},
     http::StatusCode,

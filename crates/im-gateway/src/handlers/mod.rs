@@ -1,3 +1,9 @@
+//! Gateway 请求处理器模块
+//!
+//! 提供 HTTP API 端点和 WebSocket 处理：
+//! - `ws`: WebSocket 连接处理和消息路由
+//! - HTTP API: 消息发送、历史查询、已读标记、会话管理等
+
 pub mod ws;
 
 use axum::{

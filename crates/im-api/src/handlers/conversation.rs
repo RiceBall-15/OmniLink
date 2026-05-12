@@ -1,3 +1,19 @@
+//! 会话处理器模块
+//!
+//! 提供会话管理相关的 API 端点：
+//! - `GET /api/im/conversations` - 获取会话列表
+//! - `POST /api/im/conversations` - 创建会话
+//! - `GET /api/im/conversations/search` - 搜索会话
+//! - `GET /api/im/conversations/:id/members` - 获取群组成员
+//! - `POST /api/im/conversations/:id/members` - 添加群组成员
+//! - `DELETE /api/im/conversations/:id/members/:uid` - 移除群组成员
+//! - `PUT /api/im/conversations/:id/group` - 更新群组信息
+//! - `GET/PUT /api/im/conversations/:id/announcement` - 群公告管理
+//! - `PUT /api/im/conversations/:id/pin` - 切换置顶
+//! - `PUT /api/im/conversations/:id/mute` - 切换免打扰
+//! - `PUT /api/im/conversations/:id/archive` - 切换归档
+//! - `POST/DELETE/GET /api/im/conversations/:id/tags/:tag_id` - 标签管理
+
 use axum::{
     extract::{Extension, State},
     http::StatusCode,

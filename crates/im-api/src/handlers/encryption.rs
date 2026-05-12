@@ -1,3 +1,15 @@
+//! 端到端加密处理器模块
+//!
+//! 提供加密相关的 API 端点：
+//! - `POST /api/im/encryption/keys` - 生成加密密钥对
+//! - `GET /api/im/encryption/session-key/:id` - 获取会话密钥
+//! - `POST /api/im/encryption/encrypt` - 加密消息
+//! - `POST /api/im/encryption/decrypt` - 解密消息
+//! - `GET /api/im/encryption/info` - 获取加密信息
+//! - `POST /api/im/encryption/key-exchange` - 密钥交换
+//! - `POST /api/im/encryption/store` - 存储加密消息
+//! - `GET /api/im/encryption/messages/:id` - 获取加密消息历史
+
 use axum::{
     extract::{Extension, State, Path},
     http::StatusCode,

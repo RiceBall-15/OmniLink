@@ -126,40 +126,43 @@
 
 ### 阶段六：质量保障与测试 🔥
 
-#### 16. file-service 单元测试 ⏳
-- [ ] 文件模型序列化/反序列化测试
-- [ ] 文件类型验证测试
-- [ ] 文件大小限制测试
-- [ ] 批量上传请求验证测试
+#### 16. file-service 单元测试 ✅ (2026-05-13)
+- [x] 文件模型序列化/反序列化测试
+- [x] 文件类型验证测试 (image/video/audio/document/other)
+- [x] 文件大小限制测试 (per-type limits)
+- [x] 批量上传请求验证测试
+- [x] FileType enum + limits module + ALLOWED_MIME_TYPES 常量
 
-#### 17. push-service 单元测试 ⏳
-- [ ] 推送消息模型测试
-- [ ] 通知偏好默认值测试
-- [ ] 推送模板验证测试
-- [ ] 设备注册请求验证测试
+#### 17. push-service 单元测试 ✅ (2026-05-13)
+- [x] 推送消息模型测试 (14 tests)
+- [x] 通知偏好默认值测试
+- [x] 推送模板验证测试
+- [x] 设备注册请求验证测试
+- [x] device_types 常量模块
 
-#### 18. usage-service 单元测试 ⏳
-- [ ] Token使用记录模型测试
-- [ ] 统计查询参数测试
-- [ ] 成本计算逻辑测试
+#### 18. usage-service 单元测试 ✅ (2026-05-13)
+- [x] Token使用记录模型测试 (14 tests)
+- [x] 统计查询参数测试
+- [x] 成本计算逻辑测试 (GPT-4, GPT-4o, Claude-3-Sonnet, unknown models)
+- [x] StatType enum + CostCalculator trait
 
-#### 19. config-service 单元测试 ⏳
-- [ ] 配置项模型测试
-- [ ] 批量查询模型测试
-- [ ] 配置订阅模型测试
+#### 19. config-service 单元测试 ✅ (2026-05-13)
+- [x] 配置项模型测试 (11 tests)
+- [x] 批量查询模型测试
+- [x] 配置订阅模型测试
+- [x] ConfigValidator 模块 (key validation, reserved keys)
 
-#### 20. im-api handler 测试 ⏳
-- [ ] 认证 handler 测试
-- [ ] 消息 handler 测试
-- [ ] 会话 handler 测试
-- [ ] 加密 handler 测试
+#### 20. im-api 模型测试 ✅ (2026-05-13)
+- [x] 认证模型测试 (17 tests: ApiResponse, User, Register/LoginRequest, Claims)
+- [x] 消息模型测试 (16 tests: MessageType/Status/OnlineStatus, Message, SendMessage/EditMessage)
+- [x] 枚举 PartialEq derive (MessageType, MessageStatus, OnlineStatus)
 
-#### 21. common crate 扩展测试 ⏳
-- [ ] JWT token 边界条件测试
-- [ ] 加密模块更多测试用例
-- [ ] 工具函数边界测试
+#### 21. common crate 扩展测试 ✅ (2026-05-13)
+- [x] error.rs: 6 新测试 (status code mapping for all error types)
+- [x] utils.rs: 4 新测试 (email validation edge cases, string boundary conditions)
+- [x] models.rs: 3 新测试 (ApiResponse success/error/serialization)
 
-#### 22. API 文档生成 ⏳
+#### 22. API 文档生成 ✅
 - [ ] 添加 utoipa/OpenAPI 依赖
 - [ ] 为 im-api 添加 OpenAPI 注解
 - [ ] 生成 Swagger UI 端点

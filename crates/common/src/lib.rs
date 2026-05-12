@@ -1,3 +1,14 @@
+//! OmniLink 公共库
+//!
+//! 提供跨服务共享的基础设施：
+//! - `error`: 统一错误类型和处理
+//! - `models`: 共享数据模型
+//! - `utils`: 工具函数（验证、格式化等）
+//! - `auth`: JWT 认证和密码管理
+//! - `db`: 数据库连接管理
+//! - `crypto`: 加密工具（ECDH 密钥交换、AES 加解密）
+//! - `middleware`: HTTP 认证中间件
+
 pub mod error;
 pub mod models;
 pub mod utils;

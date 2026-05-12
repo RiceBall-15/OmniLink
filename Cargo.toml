@@ -79,3 +79,7 @@ validator = { version = "0.16", features = ["derive"] }
 # 测试
 mockall = "0.12"
 tokio-test = "0.4"
+
+# API 文档
+utoipa = { version = "4", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "7", features = ["axum"] }

@@ -40,3 +40,7 @@ base64 = "0.21"
 # Startup dependencies
 tracing-subscriber.workspace = true
 dotenvy.workspace = true
+
+# API documentation
+utoipa.workspace = true
+utoipa-swagger-ui.workspace = true
