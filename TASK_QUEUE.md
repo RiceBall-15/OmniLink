@@ -272,15 +272,45 @@
 - 需要 MinIO 服务
 - 需要 Redis/PostgreSQL 运行
 
+### 阶段八：高级功能开发 🔥
+
+#### 29. 文件分享功能 ⏳
+- [ ] 添加 FileShare 模型（share_id, file_id, created_by, expires_at, max_downloads, download_count）
+- [ ] 实现创建分享链接 API（POST /api/files/:id/share）
+- [ ] 实现通过分享链接下载文件（GET /api/files/share/:share_id）
+- [ ] 实现获取分享信息 API（GET /api/files/share/:share_id/info）
+- [ ] 实现删除分享链接 API（DELETE /api/files/share/:share_id）
+- [ ] 分享链接过期和下载次数限制
+- [ ] 添加 file_shares 数据库表
+
+#### 30. 消息转发功能 ⏳
+- [ ] 添加 ForwardMessageRequest 模型
+- [ ] 实现消息转发 API（POST /api/im/conversations/:id/messages/:msg_id/forward）
+- [ ] 支持转发到多个会话
+- [ ] 转发消息保留原始发送者信息（metadata）
+- [ ] 添加 Forward 消息类型支持
+
+#### 31. 消息引用回复增强 ⏳
+- [ ] 增强 SendMessageRequest 支持 reply_to 字段
+- [ ] 在消息响应中返回被引用消息的摘要
+- [ ] 实现 get_message_with_reply_context 查询
+- [ ] 前端 reply_to 字段已在 Message 模型中存在
+
+#### 32. 用户输入状态指示器 ⏳
+- [ ] 添加 TypingStart/TypingStop WebSocket 消息类型
+- [ ] 实现输入状态广播（im-gateway）
+- [ ] 输入状态自动超时（10秒无操作自动停止）
+- [ ] 前端 TypingIndicator 组件
+
 ## 📈 进度追踪
 
-**总任务数**: 19
-**已完成**: 19
+**总任务数**: 32
+**已完成**: 28
 **进行中**: 0
-**待开发**: 0
+**待开发**: 4
 **受阻**: 0
 
-**完成率**: 100%
+**完成率**: 87.5%
 
 ---
 

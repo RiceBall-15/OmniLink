@@ -304,6 +304,143 @@ impl FileService {
             _ => Ok((None, None, None, None)),
         }
     }
+
+    // === 文件分享相关 ===
+
+    /// 创建文件分享链接
+    pub async fn create_share(
+        &self,
+        file_id: Uuid,
+        user_id: Uuid,
+        expires_in_hours: Option<i64>,
+        max_downloads: Option<i32>,
+    ) -> Result<(FileShare, String)> {
+        // 验证文件存在且属于用户
+        let file_info = self.repository.get_file(file_id).await?
+            .ok_or_else(|| anyhow::anyhow!("File not found"))?;
+
+        if file_info.user_id != user_id {
+            return Err(anyhow::anyhow!("Not authorized to share this file"));
+        }
+
+        // 生成分享 token（短 URL 友好）
+        let share_token = self.generate_share_token();
+
+        // 计算过期时间
+        let expires_at = expires_in_hours.map(|hours| {
+            chrono::Utc::now() + chrono::Duration::hours(hours)
+        });
+
+        let share = self.repository.create_share(
+            file_id,
+            user_id,
+            share_token.clone(),
+            expires_at,
+            max_downloads,
+        ).await?;
+
+        let share_url = format!("/api/files/share/{}", share_token);
+        Ok((share, share_url))
+    }
+
+    /// 通过分享链接下载文件
+    pub async fn download_shared_file(
+        &self,
+        share_token: &str,
+    ) -> Result<(FileInfo, Vec<u8>, FileShare)> {
+        // 获取分享记录
+        let share = self.repository.get_share_by_token(share_token).await?
+            .ok_or_else(|| anyhow::anyhow!("Share link not found or inactive"))?;
+
+        // 检查是否过期
+        if let Some(expires_at) = share.expires_at {
+            if chrono::Utc::now() > expires_at {
+                return Err(anyhow::anyhow!("Share link has expired"));
+            }
+        }
+
+        // 检查下载次数限制
+        if let Some(max) = share.max_downloads {
+            if share.download_count >= max {
+                return Err(anyhow::anyhow!("Download limit reached"));
+            }
+        }
+
+        // 获取文件
+        let file_info = self.repository.get_file(share.file_id).await?
+            .ok_or_else(|| anyhow::anyhow!("File not found"))?;
+
+        // 下载文件内容
+        let data = self.read_file(&file_info.file_path).await?;
+
+        // 增加下载次数
+        self.repository.increment_download_count(share.id).await?;
+
+        Ok((file_info, data, share))
+    }
+
+    /// 获取分享信息
+    pub async fn get_share_info(&self, share_token: &str) -> Result<ShareInfoResponse> {
+        let share = self.repository.get_share_by_token(share_token).await?
+            .ok_or_else(|| anyhow::anyhow!("Share link not found"))?;
+
+        let file_info = self.repository.get_file(share.file_id).await?
+            .ok_or_else(|| anyhow::anyhow!("File not found"))?;
+
+        let is_expired = share.expires_at
+            .map(|exp| chrono::Utc::now() > exp)
+            .unwrap_or(false);
+
+        let is_download_limit_reached = share.max_downloads
+            .map(|max| share.download_count >= max)
+            .unwrap_or(false);
+
+        Ok(ShareInfoResponse {
+            share_id: share.id,
+            file_id: share.file_id,
+            file_name: file_info.original_name,
+            file_size: file_info.file_size,
+            mime_type: file_info.mime_type,
+            created_by: share.created_by,
+            expires_at: share.expires_at.map(|t| t.to_rfc3339()),
+            max_downloads: share.max_downloads,
+            download_count: share.download_count,
+            is_expired,
+            is_download_limit_reached,
+            share_url: format!("/api/files/share/{}", share.share_token),
+        })
+    }
+
+    /// 删除分享链接
+    pub async fn delete_share(&self, share_id: Uuid, user_id: Uuid) -> Result<bool> {
+        self.repository.deactivate_share(share_id, user_id).await
+    }
+
+    /// 获取文件的所有分享
+    pub async fn get_file_shares(&self, file_id: Uuid, user_id: Uuid) -> Result<Vec<FileShare>> {
+        // 验证文件属于用户
+        let file_info = self.repository.get_file(file_id).await?
+            .ok_or_else(|| anyhow::anyhow!("File not found"))?;
+
+        if file_info.user_id != user_id {
+            return Err(anyhow::anyhow!("Not authorized"));
+        }
+
+        self.repository.get_file_shares(file_id).await
+    }
+
+    /// 生成分享 token
+    fn generate_share_token(&self) -> String {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        // 使用 UUID 的前 12 字符作为短 token
+        let uuid = Uuid::new_v4().to_string();
+        let token: String = uuid.chars().take(12).collect();
+        token
+    }
 }
 
 

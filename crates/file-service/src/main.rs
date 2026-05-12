@@ -43,7 +43,9 @@ async fn main() -> anyhow::Result<()> {
 
 fn create_router(app_state: Arc<AppState>, token_manager: Arc<TokenManager>) -> Router {
     let public_routes = Router::new()
-        .route("/health", get(health_check));
+        .route("/health", get(health_check))
+        .route("/api/files/share/{share_token}", get(download_shared_file))
+        .route("/api/files/share/{share_token}/info", get(get_share_info));
 
     let protected_routes = Router::new()
         .route("/api/files/upload", post(upload_file))
@@ -54,6 +56,9 @@ fn create_router(app_state: Arc<AppState>, token_manager: Arc<TokenManager>) -> 
         .route("/api/files", get(list_files))
         .route("/api/files/{file_id}/thumbnail", get(get_thumbnail))
         .route("/api/files/stats/storage", get(get_storage_stats))
+        .route("/api/files/{file_id}/shares", post(create_share))
+        .route("/api/files/{file_id}/shares", get(get_file_shares))
+        .route("/api/files/shares/{share_id}", delete(delete_share))
         .layer(middleware::from_fn_with_state(
             token_manager.clone(),
             auth_middleware,

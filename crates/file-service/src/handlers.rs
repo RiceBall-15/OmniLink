@@ -5,6 +5,7 @@ use axum::{
     response::{Response, IntoResponse},
 };
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -293,4 +294,122 @@ pub async fn get_storage_stats(
 /// 健康检查
 pub async fn health_check() -> &'static str {
     "File service is healthy"
+}
+
+/// 创建文件分享链接
+pub async fn create_share(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Path(file_id): Path<Uuid>,
+    Json(req): Json<CreateShareRequest>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
+    match state
+        .file_service
+        .create_share(file_id, auth_user.0.sub, req.expires_in_hours, req.max_downloads)
+        .await
+    {
+        Ok((share, share_url)) => {
+            Ok(Json(ApiResponse::success(serde_json::json!({
+                "share_id": share.id,
+                "share_token": share.share_token,
+                "share_url": share_url,
+                "expires_at": share.expires_at.map(|t| t.to_rfc3339()),
+                "max_downloads": share.max_downloads,
+                "created_at": share.created_at.to_rfc3339(),
+            }))))
+        }
+        Err(e) => {
+            tracing::error!("Failed to create share: {:?}", e);
+            if e.to_string().contains("Not authorized") {
+                Err(StatusCode::FORBIDDEN)
+            } else if e.to_string().contains("not found") {
+                Err(StatusCode::NOT_FOUND)
+            } else {
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    }
+}
+
+/// 通过分享链接下载文件（无需认证）
+pub async fn download_shared_file(
+    State(state): State<Arc<AppState>>,
+    Path(share_token): Path<String>,
+) -> Result<Response, StatusCode> {
+    match state
+        .file_service
+        .download_shared_file(&share_token)
+        .await
+    {
+        Ok((file_info, data, _share)) => {
+            let headers = [
+                ("Content-Type", file_info.mime_type.as_str()),
+                ("Content-Disposition", &format!("attachment; filename=\"{}\"", file_info.original_name)),
+                ("Content-Length", &file_info.file_size.to_string()),
+            ];
+            Ok((headers, data).into_response())
+        }
+        Err(e) => {
+            tracing::error!("Failed to download shared file: {:?}", e);
+            if e.to_string().contains("expired") || e.to_string().contains("limit reached") {
+                Err(StatusCode::GONE)
+            } else {
+                Err(StatusCode::NOT_FOUND)
+            }
+        }
+    }
+}
+
+/// 获取分享信息（无需认证）
+pub async fn get_share_info(
+    State(state): State<Arc<AppState>>,
+    Path(share_token): Path<String>,
+) -> Result<Json<ApiResponse<ShareInfoResponse>>, StatusCode> {
+    match state.file_service.get_share_info(&share_token).await {
+        Ok(info) => Ok(Json(ApiResponse::success(info))),
+        Err(e) => {
+            tracing::error!("Failed to get share info: {:?}", e);
+            Err(StatusCode::NOT_FOUND)
+        }
+    }
+}
+
+/// 删除分享链接
+pub async fn delete_share(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Path(share_id): Path<Uuid>,
+) -> Result<Json<ApiResponse<bool>>, StatusCode> {
+    match state.file_service.delete_share(share_id, auth_user.0.sub).await {
+        Ok(deleted) => {
+            if deleted {
+                Ok(Json(ApiResponse::success(true)))
+            } else {
+                Err(StatusCode::NOT_FOUND)
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to delete share: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// 获取文件的所有分享
+pub async fn get_file_shares(
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
+    Path(file_id): Path<Uuid>,
+) -> Result<Json<ApiResponse<Vec<FileShare>>>, StatusCode> {
+    match state.file_service.get_file_shares(file_id, auth_user.0.sub).await {
+        Ok(shares) => Ok(Json(ApiResponse::success(shares))),
+        Err(e) => {
+            tracing::error!("Failed to get file shares: {:?}", e);
+            if e.to_string().contains("Not authorized") {
+                Err(StatusCode::FORBIDDEN)
+            } else {
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
+    }
 }

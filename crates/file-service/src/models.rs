@@ -100,6 +100,44 @@ pub struct VideoProcessParams {
     pub thumbnail: Option<bool>,
 }
 
+/// 文件分享记录
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct FileShare {
+    pub id: Uuid,
+    pub file_id: Uuid,
+    pub created_by: Uuid,
+    pub share_token: String,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub max_downloads: Option<i32>,
+    pub download_count: i32,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+/// 创建分享请求
+#[derive(Debug, Deserialize)]
+pub struct CreateShareRequest {
+    pub expires_in_hours: Option<i64>,  // 过期时间（小时），None表示永不过期
+    pub max_downloads: Option<i32>,     // 最大下载次数，None表示不限制
+}
+
+/// 分享信息响应
+#[derive(Debug, Serialize)]
+pub struct ShareInfoResponse {
+    pub share_id: Uuid,
+    pub file_id: Uuid,
+    pub file_name: String,
+    pub file_size: i64,
+    pub mime_type: String,
+    pub created_by: Uuid,
+    pub expires_at: Option<String>,
+    pub max_downloads: Option<i32>,
+    pub download_count: i32,
+    pub is_expired: bool,
+    pub is_download_limit_reached: bool,
+    pub share_url: String,
+}
+
 /// 文件类型枚举
 #[derive(Debug, Clone, PartialEq)]
 pub enum FileType {

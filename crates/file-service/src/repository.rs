@@ -223,6 +223,110 @@ impl FileRepository {
 
         Ok(result.rows_affected())
     }
+
+    // === 文件分享相关 ===
+
+    /// 创建文件分享记录
+    pub async fn create_share(
+        &self,
+        file_id: Uuid,
+        created_by: Uuid,
+        share_token: String,
+        expires_at: Option<DateTime<Utc>>,
+        max_downloads: Option<i32>,
+    ) -> Result<FileShare> {
+        let share = sqlx::query_as::<_, FileShare>(
+            r#"
+            INSERT INTO file_shares (id, file_id, created_by, share_token, expires_at, max_downloads, download_count, is_active, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, 0, true, NOW())
+            RETURNING *
+            "#
+        )
+        .bind(Uuid::new_v4())
+        .bind(file_id)
+        .bind(created_by)
+        .bind(&share_token)
+        .bind(expires_at)
+        .bind(max_downloads)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(share)
+    }
+
+    /// 通过分享 token 获取分享记录
+    pub async fn get_share_by_token(&self, share_token: &str) -> Result<Option<FileShare>> {
+        let share = sqlx::query_as::<_, FileShare>(
+            r#"
+            SELECT * FROM file_shares WHERE share_token = $1 AND is_active = true
+            "#
+        )
+        .bind(share_token)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(share)
+    }
+
+    /// 通过 ID 获取分享记录
+    pub async fn get_share_by_id(&self, share_id: Uuid) -> Result<Option<FileShare>> {
+        let share = sqlx::query_as::<_, FileShare>(
+            r#"
+            SELECT * FROM file_shares WHERE id = $1
+            "#
+        )
+        .bind(share_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(share)
+    }
+
+    /// 增加下载次数
+    pub async fn increment_download_count(&self, share_id: Uuid) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE file_shares SET download_count = download_count + 1 WHERE id = $1
+            "#
+        )
+        .bind(share_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// 删除分享记录（软删除）
+    pub async fn deactivate_share(&self, share_id: Uuid, user_id: Uuid) -> Result<bool> {
+        let result = sqlx::query(
+            r#"
+            UPDATE file_shares SET is_active = false
+            WHERE id = $1 AND created_by = $2
+            "#
+        )
+        .bind(share_id)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// 获取文件的所有分享记录
+    pub async fn get_file_shares(&self, file_id: Uuid) -> Result<Vec<FileShare>> {
+        let shares = sqlx::query_as::<_, FileShare>(
+            r#"
+            SELECT * FROM file_shares
+            WHERE file_id = $1 AND is_active = true
+            ORDER BY created_at DESC
+            "#
+        )
+        .bind(file_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(shares)
+    }
 }
 
 /// 文件更新请求
