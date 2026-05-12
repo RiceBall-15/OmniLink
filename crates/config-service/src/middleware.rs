@@ -1,56 +1,54 @@
 use axum::{
-    extract::{Request, State},
-    http::StatusCode,
+    extract::{FromRequestParts, Request, State},
+    http::{request::Parts, StatusCode},
     middleware::Next,
     response::Response,
 };
+use common::auth::{Claims, TokenManager};
 use std::sync::Arc;
-use common::auth::{TokenManager, Claims};
 
+/// 认证中间件
 pub async fn auth_middleware(
     State(token_manager): State<Arc<TokenManager>>,
-    mut req: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let auth_header = req
+    let auth_header = request
         .headers()
         .get("Authorization")
-        .and_then(|h| h.to_str().ok());
+        .and_then(|header| header.to_str().ok())
+        .and_then(|header| header.strip_prefix("Bearer "));
 
-    let token = match auth_header {
-        Some(header) => {
-            if header.starts_with("Bearer ") {
-                Some(&header[7..])
-            } else {
-                None
+    if let Some(token) = auth_header {
+        match token_manager.verify_token(token) {
+            Ok(claims) => {
+                request.extensions_mut().insert(claims);
+                Ok(next.run(request).await)
             }
+            Err(_) => Err(StatusCode::UNAUTHORIZED),
         }
-        None => None,
-    };
-
-    let token = match token {
-        Some(t) => t,
-        None => {
-            tracing::warn!("Missing authorization token");
-            return Err(StatusCode::UNAUTHORIZED);
-        }
-    };
-
-    let claims = match TokenManager::verify_token(token_manager.secret(), token) {
-        Ok(claims) => claims,
-        Err(e) => {
-            tracing::warn!("Invalid token: {:?}", e);
-            return Err(StatusCode::UNAUTHORIZED);
-        }
-    };
-
-    req.extensions_mut().insert(claims);
-
-    Ok(next.run(req).await)
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
+    }
 }
 
-impl TokenManager {
-    fn secret(&self) -> &[u8] {
-        self.secret.as_bytes()
+/// 认证用户包装器，可直接作为 handler 参数提取
+#[derive(Debug, Clone)]
+pub struct AuthUser(pub Claims);
+
+#[axum::async_trait]
+impl<S> FromRequestParts<S> for AuthUser
+where
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        parts
+            .extensions
+            .get::<Claims>()
+            .cloned()
+            .map(AuthUser)
+            .ok_or(StatusCode::UNAUTHORIZED)
     }
 }

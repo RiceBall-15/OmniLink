@@ -39,7 +39,7 @@ pub async fn get_conversations(
     let tag_uuid = query.tag_id.and_then(|id| id.parse::<Uuid>().ok());
 
     // 获取会话列表（支持排序和标签过滤）
-    match db::conversation::get_conversations_by_user_sorted(
+    match db::get_conversations_by_user_sorted(
         &pool,
         &user_uuid,
         &sort_by,
@@ -59,7 +59,7 @@ pub async fn get_conversations(
                 }
 
                 // 获取会话标签
-                let tags = match db::conversation::get_conversation_tags(&pool, &conv_entity.id).await {
+                let tags = match db::get_conversation_tags(&pool, &conv_entity.id).await {
                     Ok(tags) => tags.into_iter().map(|t| serde_json::json!({
                         "id": t.id.to_string(),
                         "name": t.name,

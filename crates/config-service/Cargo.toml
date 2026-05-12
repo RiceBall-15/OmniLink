@@ -12,6 +12,10 @@ serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
 
 # HTTP client for callbacks
 reqwest.workspace = true

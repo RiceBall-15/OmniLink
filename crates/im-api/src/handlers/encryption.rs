@@ -1,6 +1,7 @@
 use axum::{
-    extract::{Extension, State},
+    extract::{Extension, State, Path},
     http::StatusCode,
+    response::IntoResponse,
     Json,
 };
 use uuid::Uuid;
@@ -40,7 +41,7 @@ pub async fn get_session_key(
         Err(_) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("无效的会话ID")),
+                Json(ApiResponse::<serde_json::Value>::error("INVALID_SESSION_ID", "无效的会话ID")),
             );
         }
     };
@@ -74,7 +75,7 @@ pub async fn encrypt_message(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("缺少消息内容")),
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_MESSAGE", "缺少消息内容")),
             );
         }
     };
@@ -84,7 +85,7 @@ pub async fn encrypt_message(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("缺少会话密钥")),
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_SESSION_KEY", "缺少会话密钥")),
             );
         }
     };
@@ -97,7 +98,7 @@ pub async fn encrypt_message(
         Err(_) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("无效的密钥格式")),
+                Json(ApiResponse::<serde_json::Value>::error("INVALID_KEY_FORMAT", "无效的密钥格式")),
             );
         }
     };
@@ -114,7 +115,7 @@ pub async fn encrypt_message(
         ),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::error(&format!("加密失败: {}", e))),
+            Json(ApiResponse::<serde_json::Value>::error("ENCRYPT_FAILED", &format!("加密失败: {}", e))),
         ),
     }
 }
@@ -130,7 +131,7 @@ pub async fn decrypt_message(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("缺少密文")),
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_CIPHERTEXT", "缺少密文")),
             );
         }
     };
@@ -140,7 +141,7 @@ pub async fn decrypt_message(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("缺少nonce")),
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_NONCE", "缺少nonce")),
             );
         }
     };
@@ -150,7 +151,7 @@ pub async fn decrypt_message(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("缺少会话密钥")),
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_SESSION_KEY", "缺少会话密钥")),
             );
         }
     };
@@ -163,7 +164,7 @@ pub async fn decrypt_message(
         Err(_) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("无效的密钥格式")),
+                Json(ApiResponse::<serde_json::Value>::error("INVALID_KEY_FORMAT", "无效的密钥格式")),
             );
         }
     };
@@ -188,7 +189,7 @@ pub async fn decrypt_message(
         }
         Err(e) => (
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::<()>::error(&format!("解密失败: {}", e))),
+            Json(ApiResponse::<serde_json::Value>::error("DECRYPT_FAILED", &format!("解密失败: {}", e))),
         ),
     }
 }
@@ -226,7 +227,7 @@ pub async fn key_exchange(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("缺少会话ID")),
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_SESSION_ID", "缺少会话ID")),
             );
         }
     };
@@ -236,7 +237,7 @@ pub async fn key_exchange(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("缺少公钥")),
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_PUBLIC_KEY", "缺少公钥")),
             );
         }
     };
@@ -278,14 +279,14 @@ pub async fn store_encrypted_message(
             Err(_) => {
                 return (
                     StatusCode::BAD_REQUEST,
-                    Json(ApiResponse::<()>::error("无效的会话ID")),
+                    Json(ApiResponse::<serde_json::Value>::error("INVALID_SESSION_ID", "无效的会话ID")),
                 );
             }
         },
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("缺少会话ID")),
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_SESSION_ID", "缺少会话ID")),
             );
         }
     };
@@ -295,7 +296,7 @@ pub async fn store_encrypted_message(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("缺少密文")),
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_CIPHERTEXT", "缺少密文")),
             );
         }
     };
@@ -305,7 +306,7 @@ pub async fn store_encrypted_message(
         None => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("缺少nonce")),
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_NONCE", "缺少nonce")),
             );
         }
     };
@@ -323,7 +324,7 @@ pub async fn store_encrypted_message(
     .bind(ciphertext)
     .bind(nonce)
     .bind(now.naive_utc())
-    .execute(&*pool)
+    .execute(&pool)
     .await;
     
     match result {
@@ -338,7 +339,7 @@ pub async fn store_encrypted_message(
         ),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::error(&format!("存储加密消息失败: {}", e))),
+            Json(ApiResponse::<serde_json::Value>::error("STORE_FAILED", &format!("存储加密消息失败: {}", e))),
         ),
     }
 }
@@ -354,17 +355,17 @@ pub async fn get_encrypted_messages(
         Err(_) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()>::error("无效的会话ID")),
+                Json(ApiResponse::<serde_json::Value>::error("INVALID_SESSION_ID", "无效的会话ID")),
             );
         }
     };
     
     // 从数据库获取加密消息
-    let messages = sqlx::query_as::<_, (Uuid, Uuid, String, String, chrono::NaiveDateTime)>(
+    let messages: Result<Vec<(Uuid, Uuid, String, String, chrono::NaiveDateTime)>, sqlx::Error> = sqlx::query_as(
         "SELECT id, sender_id, ciphertext, nonce, created_at FROM encrypted_messages WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 100"
     )
     .bind(conv_uuid)
-    .fetch_all(&*pool)
+    .fetch_all(&pool)
     .await;
     
     match messages {
@@ -390,7 +391,7 @@ pub async fn get_encrypted_messages(
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::error(&format!("获取加密消息失败: {}", e))),
+            Json(ApiResponse::<serde_json::Value>::error("FETCH_FAILED", &format!("获取加密消息失败: {}", e))),
         ),
     }
 }

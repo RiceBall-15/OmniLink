@@ -167,8 +167,10 @@ impl ConfigService {
             for sub in subs {
                 // 异步通知
                 if let Some(callback_url) = sub.callback_url {
+                    let config_json = serde_json::to_value(config).ok();
                     tokio::spawn(async move {
-                        let _ = reqwest::post(&callback_url, serde_json::to_vec(config)).await;
+                        let client = reqwest::Client::new();
+                        let _ = client.post(&callback_url).json(&config_json).send().await;
                     });
                 }
             }

@@ -3,7 +3,7 @@ use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
 /// 配置项
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ConfigItem {
     pub key: String,
     pub value: String,
@@ -27,7 +27,7 @@ pub struct UpdateConfigRequest {
 }
 
 /// 配置历史版本
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ConfigHistory {
     pub key: String,
     pub value: String,
@@ -60,7 +60,7 @@ pub struct BatchConfigResponse {
 }
 
 /// 配置订阅信息
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ConfigSubscription {
     pub id: Uuid,
     pub key: String,

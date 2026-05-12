@@ -4,10 +4,11 @@ use tokio::net::TcpListener;
 use tracing::info;
 
 use common::{auth::TokenManager, db::DatabaseManager};
-use crate::handlers::{AppState, *};
-use crate::middleware::auth_middleware;
+use config_service::handlers::{AppState, *};
+use config_service::middleware::auth_middleware;
 
-pub async fn run() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let database_url = std::env::var("DATABASE_URL")
@@ -24,7 +25,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     let token_manager = Arc::new(TokenManager::new(jwt_secret.as_bytes()));
 
-    let config_service = Arc::new(crate::services::ConfigService::new(pool));
+    let config_service = Arc::new(config_service::services::ConfigService::new(pool));
 
     // 预热缓存
     let _ = config_service.warmup_cache().await;
@@ -44,7 +45,17 @@ pub async fn run() -> anyhow::Result<()> {
 }
 
 fn create_router(app_state: Arc<AppState>, token_manager: Arc<TokenManager>) -> Router {
-    let public_routes = Router::new()
+    // Protected routes with auth middleware layer
+    let protected_routes = Router::new()
+        .route("/config/:key", post(set_config))
+        .route("/config/:key", delete(delete_config))
+        .route("/config/:key/restore/:version", post(restore_config_version))
+        .layer(middleware::from_fn_with_state(
+            token_manager.clone(),
+            auth_middleware,
+        ));
+
+    Router::new()
         .route("/health", get(health_check))
         .route("/config/:key", get(get_config))
         .route("/config", get(list_configs))
@@ -53,22 +64,10 @@ fn create_router(app_state: Arc<AppState>, token_manager: Arc<TokenManager>) -> 
         .route("/config/subscriptions", post(add_subscription))
         .route("/config/subscriptions/:id", delete(remove_subscription))
         .route("/config/:key/history", get(get_config_history))
-        .route("/config/warmup", post(warmup_cache));
-
-    let protected_routes = Router::new()
-        .route("/config/:key", post(set_config))
-        .route("/config/:key", delete(delete_config))
-        .route("/config/:key/restore/:version", post(restore_config_version))
-        .layer(middleware::from_fn_with_state(
-            token_manager.clone(),
-            auth_middleware,
-        ))
-        .with_state(app_state);
-
-    Router::new()
-        .merge(public_routes)
+        .route("/config/warmup", post(warmup_cache))
         .merge(protected_routes)
         .layer(middleware::from_fn(logging_middleware))
+        .with_state(app_state)
 }
 
 async fn logging_middleware(

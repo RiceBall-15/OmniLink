@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
-use common::auth::Claims;
+use crate::middleware::AuthUser;
 use crate::models::*;
 use crate::services::ConfigService;
 
@@ -43,7 +43,7 @@ impl<T> ApiResponse<T> {
 
 /// 获取配置项
 pub async fn get_config(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(key): Path<String>,
 ) -> Result<Json<ApiResponse<String>>, StatusCode> {
     match state.config_service.get_config(&key).await {
@@ -58,14 +58,14 @@ pub async fn get_config(
 
 /// 设置配置项（需要管理员权限）
 pub async fn set_config(
-    State(state): State<AppState>,
-    claims: Claims,
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
     Path(key): Path<String>,
     Json(req): Json<CreateConfigRequest>,
 ) -> Result<Json<ApiResponse<ConfigItem>>, StatusCode> {
     match state
         .config_service
-        .set_config(&key, &req.value, Some(claims.user_id))
+        .set_config(&key, &req.value, Some(auth_user.0.sub))
         .await
     {
         Ok(config) => Ok(Json(ApiResponse::success(config))),
@@ -78,8 +78,8 @@ pub async fn set_config(
 
 /// 删除配置项（需要管理员权限）
 pub async fn delete_config(
-    State(state): State<AppState>,
-    claims: Claims,
+    State(state): State<Arc<AppState>>,
+    _auth_user: AuthUser,
     Path(key): Path<String>,
 ) -> Result<Json<ApiResponse<bool>>, StatusCode> {
     match state.config_service.delete_config(&key).await {
@@ -99,7 +99,7 @@ pub async fn delete_config(
 
 /// 获取所有配置
 pub async fn list_configs(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<ApiResponse<Vec<ConfigItem>>>, StatusCode> {
     match state.config_service.list_configs().await {
         Ok(configs) => Ok(Json(ApiResponse::success(configs))),
@@ -112,7 +112,7 @@ pub async fn list_configs(
 
 /// 批量获取配置
 pub async fn batch_get_configs(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(req): Json<BatchConfigQuery>,
 ) -> Result<Json<ApiResponse<BatchConfigResponse>>, StatusCode> {
     match state
@@ -130,7 +130,7 @@ pub async fn batch_get_configs(
 
 /// 获取配置历史
 pub async fn get_config_history(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(key): Path<String>,
     Query(params): Query<HistoryParams>,
 ) -> Result<Json<ApiResponse<Vec<ConfigHistory>>>, StatusCode> {
@@ -156,13 +156,13 @@ pub struct HistoryParams {
 
 /// 恢复配置版本（需要管理员权限）
 pub async fn restore_config_version(
-    State(state): State<AppState>,
-    claims: Claims,
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
     Path((key, version)): Path<(String, i32)>,
 ) -> Result<Json<ApiResponse<ConfigItem>>, StatusCode> {
     match state
         .config_service
-        .restore_config_version(&key, version, Some(claims.user_id))
+        .restore_config_version(&key, version, Some(auth_user.0.sub))
         .await
     {
         Ok(Some(config)) => Ok(Json(ApiResponse::success(config))),
@@ -176,7 +176,7 @@ pub async fn restore_config_version(
 
 /// 添加配置订阅
 pub async fn add_subscription(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Json(req): Json<CreateSubscriptionRequest>,
 ) -> Result<Json<ApiResponse<ConfigSubscription>>, StatusCode> {
     match state.config_service.add_subscription(req).await {
@@ -190,7 +190,7 @@ pub async fn add_subscription(
 
 /// 获取配置订阅
 pub async fn get_subscriptions(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(key): Path<String>,
 ) -> Result<Json<ApiResponse<Vec<ConfigSubscription>>>, StatusCode> {
     match state.config_service.get_subscriptions(&key).await {
@@ -204,7 +204,7 @@ pub async fn get_subscriptions(
 
 /// 删除订阅
 pub async fn remove_subscription(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<bool>>, StatusCode> {
     match state.config_service.remove_subscription(id).await {
@@ -224,7 +224,7 @@ pub async fn remove_subscription(
 
 /// 预热缓存
 pub async fn warmup_cache(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<ApiResponse<String>>, StatusCode> {
     match state.config_service.warmup_cache().await {
         Ok(_) => Ok(Json(ApiResponse::success("Cache warmed up".to_string()))),

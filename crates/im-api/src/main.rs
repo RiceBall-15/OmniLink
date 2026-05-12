@@ -5,6 +5,7 @@ use axum::{
     extract::{State, Path, Query},
     Json,
     response::IntoResponse,
+    http::StatusCode,
 };
 use tokio::net::TcpListener;
 use tracing::info;
@@ -14,6 +15,7 @@ use sqlx::PgPool;
 use im_api::handlers::auth;
 use im_api::handlers::message;
 use im_api::handlers::conversation;
+use im_api::handlers::encryption;
 use im_api::middleware::auth::AuthUser;
 use im_api::models::auth::ApiResponse;
 
@@ -147,9 +149,10 @@ async fn update_me_with_auth(
 async fn get_conversations_with_auth(
     State(pool): State<PgPool>,
     auth: AuthUser,
+    Query(query): Query<im_api::models::conversation::GetConversationsQuery>,
 ) -> impl IntoResponse {
     let user_id = auth.user_id;
-    conversation::get_conversations(State(pool), Extension(user_id)).await
+    conversation::get_conversations(State(pool), Extension(user_id), Query(query)).await
 }
 
 /// 创建会话（包装认证中间件）
@@ -348,8 +351,11 @@ async fn generate_encryption_keys_with_auth(
     State(pool): State<PgPool>,
     auth: AuthUser,
 ) -> impl IntoResponse {
-    let user_id = auth.user_id;
-    encryption::generate_keys(State(pool), Extension(user_id)).await
+    let user_id = match auth.user_id.parse::<uuid::Uuid>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
+    };
+    encryption::generate_keys(State(pool), Extension(user_id)).await.into_response()
 }
 
 /// 获取会话密钥（包装认证中间件）
@@ -358,8 +364,11 @@ async fn get_session_key_with_auth(
     auth: AuthUser,
     Path(conversation_id): Path<String>,
 ) -> impl IntoResponse {
-    let user_id = auth.user_id;
-    encryption::get_session_key(State(pool), Extension(user_id), Path(conversation_id)).await
+    let user_id = match auth.user_id.parse::<uuid::Uuid>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
+    };
+    encryption::get_session_key(State(pool), Extension(user_id), Path(conversation_id)).await.into_response()
 }
 
 /// 加密消息（包装认证中间件）
@@ -368,8 +377,11 @@ async fn encrypt_message_with_auth(
     auth: AuthUser,
     Json(req): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let user_id = auth.user_id;
-    encryption::encrypt_message(State(pool), Extension(user_id), Json(req)).await
+    let user_id = match auth.user_id.parse::<uuid::Uuid>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
+    };
+    encryption::encrypt_message(State(pool), Extension(user_id), Json(req)).await.into_response()
 }
 
 /// 解密消息（包装认证中间件）
@@ -378,8 +390,11 @@ async fn decrypt_message_with_auth(
     auth: AuthUser,
     Json(req): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let user_id = auth.user_id;
-    encryption::decrypt_message(State(pool), Extension(user_id), Json(req)).await
+    let user_id = match auth.user_id.parse::<uuid::Uuid>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
+    };
+    encryption::decrypt_message(State(pool), Extension(user_id), Json(req)).await.into_response()
 }
 
 /// 获取加密信息（包装认证中间件）
@@ -387,8 +402,11 @@ async fn get_encryption_info_with_auth(
     State(pool): State<PgPool>,
     auth: AuthUser,
 ) -> impl IntoResponse {
-    let user_id = auth.user_id;
-    encryption::get_encryption_info(State(pool), Extension(user_id)).await
+    let user_id = match auth.user_id.parse::<uuid::Uuid>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
+    };
+    encryption::get_encryption_info(State(pool), Extension(user_id)).await.into_response()
 }
 
 /// 密钥交换（包装认证中间件）
@@ -397,8 +415,11 @@ async fn key_exchange_with_auth(
     auth: AuthUser,
     Json(req): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let user_id = auth.user_id;
-    encryption::key_exchange(State(pool), Extension(user_id), Json(req)).await
+    let user_id = match auth.user_id.parse::<uuid::Uuid>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
+    };
+    encryption::key_exchange(State(pool), Extension(user_id), Json(req)).await.into_response()
 }
 
 /// 存储加密消息（包装认证中间件）
@@ -407,8 +428,11 @@ async fn store_encrypted_message_with_auth(
     auth: AuthUser,
     Json(req): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let user_id = auth.user_id;
-    encryption::store_encrypted_message(State(pool), Extension(user_id), Json(req)).await
+    let user_id = match auth.user_id.parse::<uuid::Uuid>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
+    };
+    encryption::store_encrypted_message(State(pool), Extension(user_id), Json(req)).await.into_response()
 }
 
 /// 获取加密消息历史（包装认证中间件）
@@ -417,8 +441,11 @@ async fn get_encrypted_messages_with_auth(
     auth: AuthUser,
     Path(conversation_id): Path<String>,
 ) -> impl IntoResponse {
-    let user_id = auth.user_id;
-    encryption::get_encrypted_messages(State(pool), Extension(user_id), Path(conversation_id)).await
+    let user_id = match auth.user_id.parse::<uuid::Uuid>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
+    };
+    encryption::get_encrypted_messages(State(pool), Extension(user_id), Path(conversation_id)).await.into_response()
 }
 
 /// 创建标签（包装认证中间件）

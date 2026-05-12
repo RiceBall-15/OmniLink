@@ -34,6 +34,9 @@ email-validator = "0.1"
 # Internal dependencies
 common = { path = "../common" }
 
+# Base64 encoding/decoding for encryption handlers
+base64 = "0.21"
+
 # Startup dependencies
 tracing-subscriber.workspace = true
 dotenvy.workspace = true
