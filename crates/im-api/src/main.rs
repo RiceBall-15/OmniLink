@@ -81,6 +81,19 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/archive", put(toggle_archive_with_auth))
         .route("/api/im/conversations/search", get(search_conversations_with_auth))
 
+        // 标签管理
+        .route("/api/im/tags", get(get_tags_with_auth).post(create_tag_with_auth))
+        .route("/api/im/tags/:tag_id", delete(delete_tag_with_auth))
+        .route("/api/im/conversations/:id/tags/:tag_id", post(add_tag_to_conversation_with_auth).delete(remove_tag_from_conversation_with_auth))
+        .route("/api/im/conversations/:id/tags", get(get_conversation_tags_with_auth))
+
+        // 加密功能
+        .route("/api/im/encryption/keys", post(generate_encryption_keys_with_auth))
+        .route("/api/im/encryption/session-key/:conversation_id", get(get_session_key_with_auth))
+        .route("/api/im/encryption/encrypt", post(encrypt_message_with_auth))
+        .route("/api/im/encryption/decrypt", post(decrypt_message_with_auth))
+        .route("/api/im/encryption/info", get(get_encryption_info_with_auth))
+
         // 添加数据库连接池到状态
         .with_state(pool);
 
@@ -327,6 +340,113 @@ async fn search_conversations_with_auth(
     conversation::search(State(pool), Extension(user_id), axum::extract::Query(query)).await
 }
 
+/// 生成加密密钥对（包装认证中间件）
+async fn generate_encryption_keys_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    encryption::generate_keys(State(pool), Extension(user_id)).await
+}
+
+/// 获取会话密钥（包装认证中间件）
+async fn get_session_key_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    encryption::get_session_key(State(pool), Extension(user_id), Path(conversation_id)).await
+}
+
+/// 加密消息（包装认证中间件）
+async fn encrypt_message_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    encryption::encrypt_message(State(pool), Extension(user_id), Json(req)).await
+}
+
+/// 解密消息（包装认证中间件）
+async fn decrypt_message_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    encryption::decrypt_message(State(pool), Extension(user_id), Json(req)).await
+}
+
+/// 获取加密信息（包装认证中间件）
+async fn get_encryption_info_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    encryption::get_encryption_info(State(pool), Extension(user_id)).await
+}
+
+/// 创建标签（包装认证中间件）
+async fn create_tag_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<im_api::models::conversation::CreateTagRequest>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::create_tag_handler(State(pool), Extension(user_id), Json(req)).await
+}
+
+/// 获取用户的所有标签（包装认证中间件）
+async fn get_tags_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::get_tags_handler(State(pool), Extension(user_id)).await
+}
+
+/// 删除标签（包装认证中间件）
+async fn delete_tag_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(tag_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::delete_tag_handler(State(pool), Extension(user_id), Path(tag_id)).await
+}
+
+/// 给会话添加标签（包装认证中间件）
+async fn add_tag_to_conversation_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path((conversation_id, tag_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::add_tag_to_conversation_handler(State(pool), Extension(user_id), Path((conversation_id, tag_id))).await
+}
+
+/// 移除会话的标签（包装认证中间件）
+async fn remove_tag_from_conversation_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path((conversation_id, tag_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::remove_tag_from_conversation_handler(State(pool), Extension(user_id), Path((conversation_id, tag_id))).await
+}
+
+/// 获取会话的所有标签（包装认证中间件）
+async fn get_conversation_tags_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    conversation::get_conversation_tags_handler(State(pool), Extension(user_id), Path(conversation_id)).await
+}
+
 /// 初始化数据库表
 async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     info!("Initializing database tables...");
@@ -425,5 +545,77 @@ async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     .await?;
 
     info!("Database tables initialized successfully");
+
+    // 创建标签表
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS conversation_tags (
+            id UUID PRIMARY KEY,
+            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR(50) NOT NULL,
+            color VARCHAR(20),
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_conversation_tags_user_id ON conversation_tags(user_id);
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    // 创建会话-标签关联表
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS conversation_tag_links (
+            conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
+            tag_id UUID REFERENCES conversation_tags(id) ON DELETE CASCADE,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            PRIMARY KEY (conversation_id, tag_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_conversation_tag_links_tag_id ON conversation_tag_links(tag_id);
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    // 创建推送设备表
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS push_devices (
+            id UUID PRIMARY KEY,
+            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+            device_id VARCHAR(255) NOT NULL,
+            device_type VARCHAR(20) NOT NULL CHECK (device_type IN ('ios', 'android', 'web', 'desktop')),
+            push_token VARCHAR(500) NOT NULL,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            UNIQUE(user_id, device_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_push_devices_user_id ON push_devices(user_id);
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    // 创建推送配置表
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS push_config (
+            id UUID PRIMARY KEY,
+            config_key VARCHAR(100) UNIQUE NOT NULL,
+            config_value TEXT NOT NULL,
+            description VARCHAR(500),
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL
+        );
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    info!("Tag and push tables initialized successfully");
     Ok(())
 }

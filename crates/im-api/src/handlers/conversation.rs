@@ -9,19 +9,16 @@ use sqlx::PgPool;
 use crate::models::auth::ApiResponse;
 use crate::models::conversation::{
     Conversation, CreateConversationRequest, CreateConversationParams, ConversationType,
-    SearchConversationsQuery,
+    SearchConversationsQuery, GetConversationsQuery, CreateTagRequest,
 };
-use crate::db::conversation::{
-    create_conversation, get_conversations_by_user, get_conversation_by_id,
-    toggle_pin_conversation, toggle_mute_conversation, toggle_archive_conversation,
-    search_conversations,
-};
+use crate::db::conversation as db;
 use crate::db::message::get_last_message;
 
 /// 获取用户的会话列表
 pub async fn get_conversations(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
+    axum::extract::Query(query): axum::extract::Query<GetConversationsQuery>,
 ) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
     // 解析用户 ID
     let user_uuid = match user_id.parse::<Uuid>() {
@@ -34,10 +31,24 @@ pub async fn get_conversations(
         }
     };
 
-    // 获取会话列表
-    match get_conversations_by_user(&pool, &user_uuid).await {
+    // 解析排序参数
+    let sort_by = query.sort_by.unwrap_or_default().to_string();
+    let order = query.order.unwrap_or_default().to_string();
+
+    // 解析标签过滤
+    let tag_uuid = query.tag_id.and_then(|id| id.parse::<Uuid>().ok());
+
+    // 获取会话列表（支持排序和标签过滤）
+    match db::conversation::get_conversations_by_user_sorted(
+        &pool,
+        &user_uuid,
+        &sort_by,
+        &order,
+        tag_uuid.as_ref(),
+        query.include_archived,
+    ).await {
         Ok(conversation_entities) => {
-            let mut conversations: Vec<Conversation> = Vec::new();
+            let mut conversations: Vec<serde_json::Value> = Vec::new();
 
             for conv_entity in conversation_entities {
                 let mut conversation = conv_entity.to_conversation();
@@ -47,12 +58,29 @@ pub async fn get_conversations(
                     conversation.last_message = Some(last_msg_entity.to_message());
                 }
 
-                conversations.push(conversation);
+                // 获取会话标签
+                let tags = match db::conversation::get_conversation_tags(&pool, &conv_entity.id).await {
+                    Ok(tags) => tags.into_iter().map(|t| serde_json::json!({
+                        "id": t.id.to_string(),
+                        "name": t.name,
+                        "color": t.color,
+                    })).collect::<Vec<_>>(),
+                    Err(_) => vec![],
+                };
+
+                let mut conv_json = serde_json::to_value(&conversation).unwrap();
+                conv_json["tags"] = serde_json::json!(tags);
+                conversations.push(conv_json);
             }
 
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(conversations).unwrap())),
+                Json(ApiResponse::success(serde_json::json!({
+                    "conversations": conversations,
+                    "total": conversations.len(),
+                    "sort_by": sort_by,
+                    "order": order,
+                }))),
             )
         }
         Err(e) => (
@@ -171,7 +199,7 @@ pub async fn create_conversation_handler(
     };
 
     // 创建会话
-    match create_conversation(&pool, params).await {
+    match db::create_conversation(&pool, params).await {
         Ok(conv_entity) => {
             let conversation = conv_entity.to_conversation();
             (
@@ -655,7 +683,7 @@ pub async fn toggle_pin(
 
     let is_pinned = req.get("isPinned").and_then(|v| v.as_bool()).unwrap_or(false);
 
-    match toggle_pin_conversation(&pool, &conv_uuid, is_pinned).await {
+    match db::toggle_pin_conversation(&pool, &conv_uuid, is_pinned).await {
         Ok(conv) => {
             let conversation = conv.to_conversation();
             (
@@ -716,7 +744,7 @@ pub async fn toggle_mute(
 
     let is_muted = req.get("isMuted").and_then(|v| v.as_bool()).unwrap_or(false);
 
-    match toggle_mute_conversation(&pool, &conv_uuid, is_muted).await {
+    match db::toggle_mute_conversation(&pool, &conv_uuid, is_muted).await {
         Ok(conv) => {
             let conversation = conv.to_conversation();
             (
@@ -777,7 +805,7 @@ pub async fn toggle_archive(
 
     let is_archived = req.get("isArchived").and_then(|v| v.as_bool()).unwrap_or(true);
 
-    match toggle_archive_conversation(&pool, &conv_uuid, is_archived).await {
+    match db::toggle_archive_conversation(&pool, &conv_uuid, is_archived).await {
         Ok(conv) => {
             let conversation = conv.to_conversation();
             (
@@ -815,7 +843,7 @@ pub async fn search(
         );
     }
 
-    match search_conversations(&pool, &user_uuid, &query.q, query.include_archived).await {
+    match db::search_conversations(&pool, &user_uuid, &query.q, query.include_archived).await {
         Ok(conversation_entities) => {
             let mut conversations: Vec<Conversation> = Vec::new();
 
@@ -841,6 +869,331 @@ pub async fn search(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::error("SEARCH_CONVERSATIONS_FAILED", format!("搜索会话失败: {}", e))),
+        ),
+    }
+}
+
+// ==================== 标签相关处理器 ====================
+
+/// 创建标签
+pub async fn create_tag_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Json(req): Json<CreateTagRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    if req.name.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("EMPTY_NAME", "标签名称不能为空")),
+        );
+    }
+
+    match db::create_tag(&pool, &user_uuid, &req.name, req.color.as_deref()).await {
+        Ok(tag) => (
+            StatusCode::CREATED,
+            Json(ApiResponse::success(serde_json::json!({
+                "id": tag.id.to_string(),
+                "name": tag.name,
+                "color": tag.color,
+                "created_at": tag.created_at,
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("CREATE_TAG_FAILED", format!("创建标签失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取用户的所有标签
+pub async fn get_tags_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    match db::get_user_tags(&pool, &user_uuid).await {
+        Ok(tags) => {
+            let tags_json: Vec<serde_json::Value> = tags.into_iter().map(|t| {
+                serde_json::json!({
+                    "id": t.id.to_string(),
+                    "name": t.name,
+                    "color": t.color,
+                    "created_at": t.created_at,
+                })
+            }).collect();
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "tags": tags_json,
+                    "total": tags_json.len(),
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("GET_TAGS_FAILED", format!("获取标签列表失败: {}", e))),
+        ),
+    }
+}
+
+/// 删除标签
+pub async fn delete_tag_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(tag_id): axum::extract::Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let tag_uuid = match tag_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_TAG_ID", "无效的标签 ID")),
+            );
+        }
+    };
+
+    match db::delete_tag(&pool, &user_uuid, &tag_uuid).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "message": "标签删除成功"
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("DELETE_TAG_FAILED", format!("删除标签失败: {}", e))),
+        ),
+    }
+}
+
+/// 给会话添加标签
+pub async fn add_tag_to_conversation_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path((conversation_id, tag_id)): axum::extract::Path<(String, String)>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    let tag_uuid = match tag_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_TAG_ID", "无效的标签 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    match db::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_PARTICIPANT", "您不是该会话的参与者")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    }
+
+    match db::add_tag_to_conversation(&pool, &conv_uuid, &tag_uuid).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "message": "标签添加成功"
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("ADD_TAG_FAILED", format!("添加标签失败: {}", e))),
+        ),
+    }
+}
+
+/// 移除会话的标签
+pub async fn remove_tag_from_conversation_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path((conversation_id, tag_id)): axum::extract::Path<(String, String)>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    let tag_uuid = match tag_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_TAG_ID", "无效的标签 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    match db::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_PARTICIPANT", "您不是该会话的参与者")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    }
+
+    match db::remove_tag_from_conversation(&pool, &conv_uuid, &tag_uuid).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "message": "标签移除成功"
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("REMOVE_TAG_FAILED", format!("移除标签失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取会话的所有标签
+pub async fn get_conversation_tags_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    match db::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_PARTICIPANT", "您不是该会话的参与者")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    }
+
+    match db::get_conversation_tags(&pool, &conv_uuid).await {
+        Ok(tags) => {
+            let tags_json: Vec<serde_json::Value> = tags.into_iter().map(|t| {
+                serde_json::json!({
+                    "id": t.id.to_string(),
+                    "name": t.name,
+                    "color": t.color,
+                })
+            }).collect();
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "tags": tags_json,
+                    "total": tags_json.len(),
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("GET_TAGS_FAILED", format!("获取会话标签失败: {}", e))),
         ),
     }
 }

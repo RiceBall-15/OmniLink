@@ -141,3 +141,78 @@ pub struct SearchConversationsQuery {
     #[serde(default)]
     pub include_archived: bool,
 }
+
+/// 会话标签
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ConversationTag {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub color: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// 创建标签请求
+#[derive(Debug, Deserialize)]
+pub struct CreateTagRequest {
+    pub name: String,
+    pub color: Option<String>,
+}
+
+/// 会话-标签关联
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ConversationTagLink {
+    pub conversation_id: Uuid,
+    pub tag_id: Uuid,
+    pub created_at: DateTime<Utc>,
+}
+
+/// 会话排序选项
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ConversationSortBy {
+    #[default]
+    UpdatedAt,
+    CreatedAt,
+    Name,
+    UnreadCount,
+}
+
+impl std::fmt::Display for ConversationSortBy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConversationSortBy::UpdatedAt => write!(f, "updated_at"),
+            ConversationSortBy::CreatedAt => write!(f, "created_at"),
+            ConversationSortBy::Name => write!(f, "name"),
+            ConversationSortBy::UnreadCount => write!(f, "unread_count"),
+        }
+    }
+}
+
+/// 会话排序方向
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SortOrder {
+    #[default]
+    Desc,
+    Asc,
+}
+
+impl std::fmt::Display for SortOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SortOrder::Desc => write!(f, "DESC"),
+            SortOrder::Asc => write!(f, "ASC"),
+        }
+    }
+}
+
+/// 获取会话列表查询参数
+#[derive(Debug, Deserialize, Default)]
+pub struct GetConversationsQuery {
+    pub sort_by: Option<ConversationSortBy>,
+    pub order: Option<SortOrder>,
+    pub tag_id: Option<String>,
+    #[serde(default)]
+    pub include_archived: bool,
+}

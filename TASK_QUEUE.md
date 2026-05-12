@@ -109,13 +109,16 @@
 - [ ] 推送配置管理
 - [ ] 推送统计和监控
 
-#### 14. 会话管理增强 ⏳
-- [ ] 会话置顶功能
-- [ ] 免打扰设置
-- [ ] 会话归档
-- [ ] 会话搜索
+#### 14. 会话管理增强 🔄
+- [x] 修复 ConversationEntity 缺少 created_by 字段的 bug
+- [x] 会话置顶功能（toggle pin handler + API endpoint）
+- [x] 免打扰设置（toggle mute handler + API endpoint）
+- [x] 会话归档（toggle archive handler + API endpoint + is_archived model/DB column）
+- [x] 会话搜索（search handler + API endpoint + ILIKE query）
+- [ ] 会话标签/分组
+- [ ] 会话排序策略
 
-#### 15. 消息加密 ⏳
+#### 15. 消息加密 ✅
 - [ ] 端到端加密设计
 - [ ] 密钥交换协议
 - [ ] 加密消息存储
