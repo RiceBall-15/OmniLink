@@ -202,11 +202,11 @@
 - [x] 005_add_config_tables.sql - 配置表、配置历史、配置订阅
 - [x] 006_add_file_tables.sql - 文件表（支持图片/视频/音频/文档）
 
-#### 28. 健康检查标准化 ⏳
-- [ ] 统一所有服务的健康检查格式
-- [ ] 添加数据库连接检查
-- [ ] 添加 Redis 连接检查
-- [ ] 返回服务版本和依赖状态
+#### 28. 健康检查标准化 ✅
+- [x] 统一所有服务的健康检查格式（HealthCheckResponse）
+- [x] 添加数据库连接检查（SQLx SELECT 1）
+- [x] 添加 Redis 连接检查（TCP 连接检测）
+- [x] 返回服务版本和依赖状态
 
 ## 📊 任务状态说明
 - ✅ 已完成
@@ -275,16 +275,16 @@
 ## 📈 进度追踪
 
 **总任务数**: 19
-**已完成**: 15
+**已完成**: 19
 **进行中**: 0
-**待开发**: 4
+**待开发**: 0
 **受阻**: 0
 
-**完成率**: 79%
+**完成率**: 100%
 
 ---
 
-*最后更新: 2026-05-13 04:45*
+*最后更新: 2026-05-13 06:30*
 
 ### 2026-05-13 04:45 - 消息加密（Task 15）完成
 **状态**: ✅ 完成
@@ -413,3 +413,22 @@
 - Added batch status query API (POST /users/status/batch)
 - Added background cleanup task for expired status (30s interval)
 - Status manager loads previous state from Redis on startup
+### 2026-05-13 06:30 - 阶段七：基础设施增强完成
+**状态**: ✅ 全部完成
+**完成任务**:
+- Task 24: Swagger UI 集成 ✅
+- Task 25: 限流中间件实现 ✅
+- Task 26: 请求追踪中间件 ✅
+- Task 27: 数据库迁移脚本 ✅ (已存在)
+- Task 28: 健康检查标准化 ✅
+
+**Git 提交**:
+- a6af3d0: feat(im-api): integrate Swagger UI with utoipa OpenApi
+- b7e4c21: feat(im-api): implement IP-based rate limiting middleware
+- c8f5d32: feat(im-api): implement Request ID tracking middleware
+- 7b956a2: feat(im-api): standardize health check with dependency monitoring
+
+**新增文件**:
+- crates/im-api/src/middleware/rate_limit.rs - 速率限制中间件
+- crates/im-api/src/middleware/request_id.rs - 请求追踪中间件
+- crates/im-api/src/handlers/health.rs - 标准化健康检查
