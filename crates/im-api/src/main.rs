@@ -20,6 +20,7 @@ use im_api::handlers::conversation;
 use im_api::handlers::encryption;
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::rate_limit::{RateLimitConfig, RateLimitState, rate_limit_middleware};
+use im_api::middleware::request_id::request_id_middleware;
 use im_api::models::auth::ApiResponse;
 use im_api::openapi::ApiDoc;
 
@@ -118,6 +119,8 @@ async fn main() -> anyhow::Result<()> {
 
         // 添加数据库连接池到状态
         .with_state(pool)
+        // 添加请求追踪中间件层
+        .layer(axum::middleware::from_fn(request_id_middleware))
         // 添加速率限制中间件层
         .layer(axum::middleware::from_fn_with_state(
             rate_limit_state,
