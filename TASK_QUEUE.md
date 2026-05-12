@@ -174,10 +174,11 @@
 
 ### 阶段七：基础设施增强 🔥
 
-#### 24. Swagger UI 集成 ⏳
-- [ ] 在 main.rs 中添加 Swagger UI 路由
-- [ ] 注册 ApiDoc 到路由
-- [ ] 验证 /swagger-ui 端点可访问
+#### 24. Swagger UI 集成 ✅
+- [x] 在 main.rs 中添加 Swagger UI 路由
+- [x] 注册 ApiDoc 到路由
+- [x] 添加 ToSchema derives 到缺失的 model structs
+- [x] 验证编译通过
 
 #### 25. 限流中间件 ⏳
 - [ ] 实现基于 IP 的速率限制中间件

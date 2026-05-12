@@ -19,6 +19,7 @@ use im_api::handlers::message;
 use im_api::handlers::conversation;
 use im_api::handlers::encryption;
 use im_api::middleware::auth::AuthUser;
+use im_api::middleware::rate_limit::{RateLimitConfig, RateLimitState, rate_limit_middleware};
 use im_api::models::auth::ApiResponse;
 use im_api::openapi::ApiDoc;
 
@@ -53,6 +54,13 @@ async fn main() -> anyhow::Result<()> {
 
     // 创建 OpenAPI 文档
     let openapi = ApiDoc::openapi();
+
+    // 创建速率限制状态
+    let rate_limit_config = RateLimitConfig {
+        max_requests: 100,
+        window_duration: std::time::Duration::from_secs(60),
+    };
+    let rate_limit_state = RateLimitState::new(rate_limit_config);
 
     // 创建路由
     let app = Router::new()
@@ -109,7 +117,12 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/encryption/messages/:conversation_id", get(get_encrypted_messages_with_auth))
 
         // 添加数据库连接池到状态
-        .with_state(pool);
+        .with_state(pool)
+        // 添加速率限制中间件层
+        .layer(axum::middleware::from_fn_with_state(
+            rate_limit_state,
+            rate_limit_middleware,
+        ));
 
     let listener = TcpListener::bind("0.0.0.0:8002").await?;
     info!("IM API listening on http://0.0.0.0:8002");
