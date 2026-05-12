@@ -84,6 +84,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/messages", get(get_messages_with_auth).post(send_message_with_auth))
         .route("/api/im/conversations/:id/messages/:msg_id", put(edit_message_with_auth))
         .route("/api/im/conversations/:id/messages/:msg_id/recall", post(recall_message_with_auth))
+        .route("/api/im/conversations/:id/messages/:msg_id/forward", post(forward_message_with_auth))
         .route("/api/im/conversations/:id/read", post(mark_as_read_with_auth))
 
         // 消息搜索和统计
@@ -232,6 +233,17 @@ async fn recall_message_with_auth(
 ) -> impl IntoResponse {
     let user_id = auth.user_id;
     message::recall_message_handler(State(pool), Extension(user_id), Path((conversation_id, message_id))).await
+}
+
+/// 转发消息（包装认证中间件）
+async fn forward_message_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path((conversation_id, message_id)): Path<(String, String)>,
+    Json(req): Json<im_api::handlers::message::ForwardMessageRequest>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::forward_message(State(pool), Extension(user_id), Path((conversation_id, message_id)), Json(req)).await
 }
 
 /// 标记会话已读（包装认证中间件）
