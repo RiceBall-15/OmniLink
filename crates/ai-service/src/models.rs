@@ -2,25 +2,18 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 use uuid::Uuid;
 use chrono::Utc;
-
 /// AI对话请求
 #[derive(Debug, Deserialize, Validate)]
 pub struct ChatRequest {
-    #[validate(length(min = 1))]
     pub conversation_id: Uuid,
-
-    #[validate(length(min = 1))]
     pub assistant_id: Uuid,
 
     #[validate(length(min = 1))]
     pub message: String,
 
     pub stream: Option<bool>,
-
     pub temperature: Option<f32>,
-
     pub max_tokens: Option<i32>,
-
     pub model_id: Option<String>,
 }
 

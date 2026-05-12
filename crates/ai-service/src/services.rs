@@ -1,12 +1,12 @@
-use super::super::providers::{AIProvider, AIMessage, MessageRole, ChatOptions, OpenAIProvider, AnthropicProvider, GoogleProvider};
-use super::super::models::{
+use super::providers::{AIProvider, AIMessage, MessageRole, ChatOptions, OpenAIProvider, AnthropicProvider, GoogleProvider};
+use super::models::{
     ChatRequest, ChatResponse, ChatStreamResponse,
     CreateAssistantRequest, CreateAssistantResponse, AssistantsListResponse,
     UpdateAssistantRequest, AssistantInfo,
     ConversationHistoryResponse, MessageHistory,
     TokenUsageResponse, ModelUsage, ModelsResponse, ModelConfig
 };
-use super::super::repository::{AssistantRepository, TokenUsageRepository, TokenUsageSummary};
+use super::repository::{AssistantRepository, TokenUsageRepository, TokenUsageSummary};
 use common::{AppError, Result, Claims};
 use uuid::Uuid;
 use chrono::Utc;

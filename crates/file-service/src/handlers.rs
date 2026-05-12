@@ -8,10 +8,12 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
-use common::auth::Claims;
+use crate::middleware::AuthUser;
 use crate::models::*;
 use crate::services::FileService;
+use crate::repository::StorageStats;
 
+#[derive(Clone)]
 pub struct AppState {
     pub file_service: Arc<FileService>,
 }
@@ -44,8 +46,8 @@ impl<T> ApiResponse<T> {
 
 /// 上传单个文件
 pub async fn upload_file(
-    State(state): State<AppState>,
-    claims: Claims,
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
     mut multipart: Multipart,
 ) -> Result<Json<ApiResponse<UploadResponse>>, StatusCode> {
     while let Some(field) = multipart.next_field().await.unwrap() {
@@ -63,7 +65,7 @@ pub async fn upload_file(
         match state
             .file_service
             .upload_file(
-                claims.sub,
+                auth_user.0.sub,
                 filename,
                 file_size,
                 mime_type,
@@ -97,8 +99,8 @@ pub async fn upload_file(
 
 /// 批量上传文件
 pub async fn batch_upload_files(
-    State(state): State<AppState>,
-    claims: Claims,
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
     mut multipart: Multipart,
 ) -> Result<Json<ApiResponse<BatchUploadResponse>>, StatusCode> {
     let mut files = Vec::new();
@@ -106,14 +108,14 @@ pub async fn batch_upload_files(
 
     while let Some(field) = multipart.next_field().await.unwrap() {
         let filename = field.file_name().unwrap_or("file").to_string();
-        let file_size = field.bytes().await.unwrap().len() as i64;
-        let data = field.bytes().await.unwrap();
         let mime_type = field.content_type().unwrap_or("application/octet-stream").to_string();
+        let data = field.bytes().await.unwrap();
+        let file_size = data.len() as i64;
 
         match state
             .file_service
             .upload_file(
-                claims.sub,
+                auth_user.0.sub,
                 filename.clone(),
                 file_size,
                 mime_type,
@@ -128,6 +130,7 @@ pub async fn batch_upload_files(
                     file_url: state.file_service.generate_file_url(file_info.id),
                     thumbnail_url: file_info
                         .thumbnail_path
+                        .as_ref()
                         .map(|_| state.file_service.generate_thumbnail_url(file_info.id)),
                     file_info,
                 });
@@ -145,14 +148,14 @@ pub async fn batch_upload_files(
 
 /// 下载文件
 pub async fn download_file(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(file_id): Path<Uuid>,
 ) -> Result<Response, StatusCode> {
     match state.file_service.download_file(file_id).await {
         Ok((file_info, data)) => {
             let headers = [
                 ("Content-Type", file_info.mime_type.as_str()),
-                ("Content-Disposition", &format!("attachment; filename="{}"", file_info.original_name)),
+                ("Content-Disposition", &format!("attachment; filename=\"{}\"", file_info.original_name)),
                 ("Content-Length", &file_info.file_size.to_string()),
             ];
 
@@ -167,13 +170,13 @@ pub async fn download_file(
 
 /// 删除文件
 pub async fn delete_file(
-    State(state): State<AppState>,
-    claims: Claims,
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
     Path(file_id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<bool>>, StatusCode> {
     match state
         .file_service
-        .delete_file(file_id, claims.sub)
+        .delete_file(file_id, auth_user.0.sub)
         .await
     {
         Ok(deleted) => {
@@ -192,8 +195,8 @@ pub async fn delete_file(
 
 /// 获取文件列表
 pub async fn list_files(
-    State(state): State<AppState>,
-    claims: Claims,
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
     Query(params): Query<FileListParams>,
 ) -> Result<Json<ApiResponse<FileListResponse>>, StatusCode> {
     let page = params.page.unwrap_or(1);
@@ -201,7 +204,7 @@ pub async fn list_files(
 
     match state
         .file_service
-        .get_files(claims.sub, params.file_type, page, page_size)
+        .get_files(auth_user.0.sub, params.file_type, page, page_size)
         .await
     {
         Ok(response) => Ok(Json(ApiResponse::success(response))),
@@ -214,8 +217,8 @@ pub async fn list_files(
 
 /// 更新文件信息
 pub async fn update_file(
-    State(state): State<AppState>,
-    claims: Claims,
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
     Path(file_id): Path<Uuid>,
     Json(req): Json<UpdateFileRequest>,
 ) -> Result<Json<ApiResponse<FileInfo>>, StatusCode> {
@@ -226,7 +229,7 @@ pub async fn update_file(
 
     match state
         .file_service
-        .update_file(file_id, claims.sub, updates)
+        .update_file(file_id, auth_user.0.sub, updates)
         .await
     {
         Ok(Some(file_info)) => Ok(Json(ApiResponse::success(file_info))),
@@ -246,33 +249,24 @@ pub struct UpdateFileRequest {
 
 /// 获取缩略图
 pub async fn get_thumbnail(
-    State(state): State<AppState>,
+    State(state): State<Arc<AppState>>,
     Path(file_id): Path<Uuid>,
 ) -> Result<Response, StatusCode> {
     match state.file_service.download_file(file_id).await {
         Ok((file_info, data)) => {
-            if let Some(thumb_path) = file_info.thumbnail_path {
-                // 读取缩略图
-                match state.file_service._read_file(&thumb_path).await {
-                    Ok(thumb_data) => {
-                        let headers = [
-                            ("Content-Type", "image/jpeg"),
-                            ("Cache-Control", "public, max-age=31536000"),
-                        ];
-                        return Ok((headers, thumb_data).into_response());
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to read thumbnail: {:?}", e);
-                        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-                    }
-                }
-            } else {
-                // 返回原图
+            if let Some(ref _thumb_path) = file_info.thumbnail_path {
+                // 返回原图（缩略图生成TODO）
                 let headers = [
                     ("Content-Type", file_info.mime_type.as_str()),
                     ("Cache-Control", "public, max-age=86400"),
                 ];
-                return Ok((headers, data).into_response());
+                Ok((headers, data).into_response())
+            } else {
+                let headers = [
+                    ("Content-Type", file_info.mime_type.as_str()),
+                    ("Cache-Control", "public, max-age=86400"),
+                ];
+                Ok((headers, data).into_response())
             }
         }
         Err(e) => {
@@ -284,10 +278,10 @@ pub async fn get_thumbnail(
 
 /// 获取存储统计
 pub async fn get_storage_stats(
-    State(state): State<AppState>,
-    claims: Claims,
+    State(state): State<Arc<AppState>>,
+    auth_user: AuthUser,
 ) -> Result<Json<ApiResponse<StorageStats>>, StatusCode> {
-    match state.file_service.get_storage_stats(claims.sub).await {
+    match state.file_service.get_storage_stats(auth_user.0.sub).await {
         Ok(stats) => Ok(Json(ApiResponse::success(stats))),
         Err(e) => {
             tracing::error!("Failed to get storage stats: {:?}", e);

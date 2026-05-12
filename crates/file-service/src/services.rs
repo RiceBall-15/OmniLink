@@ -5,8 +5,9 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
+
 use super::models::*;
-use super::repository::{FileRepository, FileUpdate, TypeCount};
+use super::repository::{FileRepository, FileUpdate};
 
 /// 允许的文件类型和最大大小
 const ALLOWED_TYPES: &[(&str, u64)] = &[
@@ -42,8 +43,9 @@ impl FileService {
 
         // 确保上传目录存在
         let path = PathBuf::from(&upload_dir);
+        let path_clone = path.clone();
         tokio::spawn(async move {
-            let _ = fs::create_dir_all(&path).await;
+            let _ = fs::create_dir_all(&path_clone).await;
         });
 
         Self {
@@ -139,7 +141,7 @@ impl FileService {
             .await?
             .context("File not found")?;
 
-        let data = self._read_file(&file_info.file_path).await?;
+        let data = self.read_file(&file_info.file_path).await?;
 
         Ok((file_info, data))
     }
@@ -275,7 +277,7 @@ impl FileService {
         Ok(())
     }
 
-    async fn _read_file(&self, path: &str) -> Result<Vec<u8>> {
+    pub async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
         let full_path = self.upload_dir.join(path);
         fs::read(&full_path).await.map_err(Into::into)
     }
@@ -287,7 +289,7 @@ impl FileService {
 
     async fn _process_media(
         &self,
-        path: &str,
+        _path: &str,
         file_type: &str,
     ) -> Result<(Option<i32>, Option<i32>, Option<i32>, Option<String>)> {
         match file_type {
@@ -304,17 +306,5 @@ impl FileService {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileListResponse {
-    pub files: Vec<FileInfo>,
-    pub total: i64,
-    pub page: i64,
-    pub page_size: i64,
-}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StorageStats {
-    pub total_size: i64,
-    pub file_count: i64,
-    pub by_type: Vec<TypeCount>,
-}
+

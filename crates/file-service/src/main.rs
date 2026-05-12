@@ -4,10 +4,11 @@ use tokio::net::TcpListener;
 use tracing::info;
 
 use common::{auth::TokenManager, db::DatabaseManager};
-use crate::handlers::{AppState, *};
-use crate::middleware::auth_middleware;
+use file_service::handlers::{AppState, *};
+use file_service::middleware::auth_middleware;
 
-pub async fn run() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let database_url = std::env::var("DATABASE_URL")
@@ -24,7 +25,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     let token_manager = Arc::new(TokenManager::new(jwt_secret.as_bytes()));
 
-    let file_service = Arc::new(crate::services::FileService::new(pool));
+    let file_service = Arc::new(file_service::services::FileService::new(pool));
 
     let app_state = Arc::new(AppState {
         file_service,
@@ -45,14 +46,14 @@ fn create_router(app_state: Arc<AppState>, token_manager: Arc<TokenManager>) -> 
         .route("/health", get(health_check));
 
     let protected_routes = Router::new()
-        .route("/files/upload", post(upload_file))
-        .route("/files/batch-upload", post(batch_upload_files))
-        .route("/files/:file_id", get(download_file))
-        .route("/files/:file_id", delete(delete_file))
-        .route("/files/:file_id", put(update_file))
-        .route("/files", get(list_files))
-        .route("/files/:file_id/thumbnail", get(get_thumbnail))
-        .route("/files/stats/storage", get(get_storage_stats))
+        .route("/api/files/upload", post(upload_file))
+        .route("/api/files/batch-upload", post(batch_upload_files))
+        .route("/api/files/{file_id}", get(download_file))
+        .route("/api/files/{file_id}", delete(delete_file))
+        .route("/api/files/{file_id}", put(update_file))
+        .route("/api/files", get(list_files))
+        .route("/api/files/{file_id}/thumbnail", get(get_thumbnail))
+        .route("/api/files/stats/storage", get(get_storage_stats))
         .layer(middleware::from_fn_with_state(
             token_manager.clone(),
             auth_middleware,
