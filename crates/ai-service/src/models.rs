@@ -165,3 +165,6 @@ pub struct ModelConfig {
 pub struct ModelsResponse {
     pub models: Vec<ModelConfig>,
 }
+#[cfg(test)]
+#[path = "models_test.rs"]
+mod tests;

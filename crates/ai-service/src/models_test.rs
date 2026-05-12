@@ -1,7 +1,9 @@
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::models::{ChatRequest, CreateAssistantRequest};
+    use validator::Validate;
+    use uuid::Uuid;
 
     #[test]
     fn test_chat_request_validation_valid() {

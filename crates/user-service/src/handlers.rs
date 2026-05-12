@@ -194,3 +194,7 @@ pub async fn delete_account(
         .map(|_| Json(ApiResponse::success(())))
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))
 }
+
+#[cfg(test)]
+#[path = "handlers_test.rs"]
+mod tests;

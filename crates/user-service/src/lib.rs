@@ -6,4 +6,3 @@ pub mod middleware;
 pub mod jwt;
 pub mod password;
 pub mod error;
-pub mod handlers_test;
