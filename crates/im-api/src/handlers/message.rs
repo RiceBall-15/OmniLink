@@ -15,7 +15,7 @@ use axum::{
     Json,
 };
 use uuid::Uuid;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::models::auth::ApiResponse;
@@ -400,10 +400,201 @@ pub async fn mark_as_read_handler(
 #[derive(Debug, Deserialize)]
 pub struct SearchMessagesQuery {
     pub keyword: String,
+    pub conversation_id: Option<String>,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
     #[serde(default = "default_page")]
     pub page: i64,
     #[serde(default = "default_limit")]
     pub limit: i64,
+}
+
+/// 全局搜索消息请求
+#[derive(Debug, Deserialize)]
+pub struct GlobalSearchMessagesQuery {
+    /// 搜索关键词（必填）
+    pub q: String,
+    /// 可选：限制到特定会话
+    pub conversation_id: Option<String>,
+    /// 可选：起始时间（ISO 8601 格式）
+    pub start_date: Option<String>,
+    /// 可选：结束时间（ISO 8601 格式）
+    pub end_date: Option<String>,
+    #[serde(default = "default_page")]
+    pub page: i64,
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+}
+
+/// 搜索结果项（含高亮和会话信息）
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct SearchResultItem {
+    /// 消息信息
+    pub message: Message,
+    /// 消息所属会话 ID
+    #[serde(rename = "conversationId")]
+    pub conversation_id: String,
+    /// 高亮后的消息片段（关键词用 <mark> 标签包裹）
+    #[serde(rename = "highlightedContent")]
+    pub highlighted_content: String,
+}
+
+/// 全局搜索响应
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct GlobalSearchResponse {
+    pub results: Vec<SearchResultItem>,
+    pub total: i64,
+    pub page: i64,
+    pub limit: i64,
+    pub keyword: String,
+}
+
+/// 高亮搜索关键词（在文本中用 <mark> 标签包裹关键词，保留上下文）
+fn highlight_keyword(text: &str, keyword: &str, context_chars: usize) -> String {
+    if keyword.is_empty() {
+        return text.chars().take(context_chars * 2).collect::<String>();
+    }
+
+    let lower_text = text.to_lowercase();
+    let lower_keyword = keyword.to_lowercase();
+
+    if let Some(pos) = lower_text.find(&lower_keyword) {
+        let start = pos.saturating_sub(context_chars);
+        let end = (pos + keyword.len() + context_chars).min(text.len());
+
+        let prefix = if start > 0 { "..." } else { "" };
+        let suffix = if end < text.len() { "..." } else { "" };
+
+        // 安全地切片（避免截断 UTF-8 字符）
+        let snippet: String = text.chars().skip(
+            text[..start].chars().count()
+        ).take(
+            text[start..end].chars().count()
+        ).collect();
+
+        // 在 snippet 中高亮关键词（大小写不敏感）
+        let mut result = String::new();
+        let mut last_end = 0;
+        let snippet_lower = snippet.to_lowercase();
+        let keyword_lower = keyword.to_lowercase();
+        let mut search_from = 0;
+        while let Some(p) = snippet_lower[search_from..].find(&keyword_lower) {
+            let abs_pos = search_from + p;
+            result.push_str(&snippet[last_end..abs_pos]);
+            result.push_str("<mark>");
+            result.push_str(&snippet[abs_pos..abs_pos + keyword.len()]);
+            result.push_str("</mark>");
+            last_end = abs_pos + keyword.len();
+            search_from = abs_pos + keyword.len();
+        }
+        result.push_str(&snippet[last_end..]);
+
+        format!("{}{}{}", prefix, result, suffix)
+    } else {
+        // 没找到关键词，返回前 N 个字符
+        let snippet: String = text.chars().take(context_chars * 2).collect();
+        if text.chars().count() > context_chars * 2 {
+            format!("{}...", snippet)
+        } else {
+            snippet
+        }
+    }
+}
+
+/// 全局搜索消息（跨会话搜索，支持按会话过滤和时间范围过滤）
+pub async fn search_all_messages(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Query(query): Query<GlobalSearchMessagesQuery>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    // 解析用户 ID
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    // 验证搜索关键词
+    if query.q.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("EMPTY_QUERY", "搜索关键词不能为空")),
+        );
+    }
+
+    // 如果指定了会话ID，验证用户是否是该会话参与者
+    if let Some(ref conv_id_str) = query.conversation_id {
+        if let Ok(conv_uuid) = conv_id_str.parse::<Uuid>() {
+            let is_participant = match crate::db::conversation::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+                Ok(result) => result,
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+                    );
+                }
+            };
+            if !is_participant {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(ApiResponse::error("FORBIDDEN", "您不是此会话的参与者")),
+                );
+            }
+        }
+    }
+
+    // 执行搜索
+    let conv_uuid = query.conversation_id.as_ref().and_then(|s| s.parse::<Uuid>().ok());
+
+    let messages = if let Some(ref conv_id) = conv_uuid {
+        // 搜索特定会话
+        crate::db::message::search_messages_in_conversation(
+            &pool, conv_id, &query.q,
+            query.start_date.as_deref(), query.end_date.as_deref(),
+            query.page, query.limit,
+        ).await
+    } else {
+        // 跨会话全局搜索
+        crate::db::message::search_user_messages(
+            &pool, &user_uuid, &query.q,
+            query.start_date.as_deref(), query.end_date.as_deref(),
+            query.page, query.limit,
+        ).await
+    };
+
+    match messages {
+        Ok(msg_entities) => {
+            let total = msg_entities.len() as i64;
+            let results: Vec<SearchResultItem> = msg_entities.iter().map(|m| {
+                let message = m.to_message();
+                let highlighted = highlight_keyword(&m.content, &query.q, 40);
+                SearchResultItem {
+                    message,
+                    conversation_id: m.conversation_id.to_string(),
+                    highlighted_content: highlighted,
+                }
+            }).collect();
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "results": results,
+                    "total": total,
+                    "page": query.page,
+                    "limit": query.limit,
+                    "keyword": query.q,
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("SEARCH_FAILED", format!("搜索消息失败: {}", e))),
+        ),
+    }
 }
 
 /// 搜索会话中的消息
@@ -461,11 +652,13 @@ pub async fn search_messages(
         );
     }
 
-    // 搜索消息
+    // 搜索消息（带时间范围过滤）
     match crate::db::message::search_messages_in_conversation(
         &pool,
         &conv_uuid,
         &query.keyword,
+        query.start_date.as_deref(),
+        query.end_date.as_deref(),
         query.page,
         query.limit,
     )
@@ -968,5 +1161,395 @@ pub async fn forward_message(
                 "errors": if errors.is_empty() { None } else { Some(errors) },
             }))),
         )
+    }
+}
+
+// ==================== 会话置顶消息 ====================
+
+/// 置顶消息请求
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct PinMessageRequest {
+    /// 要置顶的消息 ID
+    #[serde(rename = "messageId")]
+    pub message_id: String,
+}
+
+/// 置顶消息响应
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct PinnedMessageItem {
+    /// 置顶记录 ID
+    pub id: String,
+    /// 消息信息
+    pub message: Message,
+    /// 置顶人 ID
+    #[serde(rename = "pinnedBy")]
+    pub pinned_by: String,
+    /// 置顶时间
+    #[serde(rename = "pinnedAt")]
+    pub pinned_at: String,
+}
+
+/// 数据库中的置顶消息实体
+#[derive(Debug, Clone, FromRow)]
+pub struct PinnedMessageEntity {
+    pub id: Uuid,
+    pub conversation_id: Uuid,
+    pub message_id: Uuid,
+    pub pinned_by: Uuid,
+    pub pinned_at: DateTime<Utc>,
+}
+
+/// 置顶一条消息到会话
+pub async fn pin_message(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Path(conversation_id): Path<String>,
+    Json(request): Json<PinMessageRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    // 解析 ID
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    let msg_uuid = match request.message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_MESSAGE_ID", "无效的消息 ID")),
+            );
+        }
+    };
+
+    // 验证用户是会话参与者
+    let is_participant = match crate::db::conversation::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(result) => result,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    };
+
+    if !is_participant {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::error("FORBIDDEN", "您不是此会话的参与者")),
+        );
+    }
+
+    // 验证消息存在且属于该会话
+    let msg_exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM messages WHERE id = $1 AND conversation_id = $2)"
+    )
+    .bind(&msg_uuid)
+    .bind(&conv_uuid)
+    .fetch_one(&pool)
+    .await;
+
+    match msg_exists {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::error("MESSAGE_NOT_FOUND", "消息不存在或不属于此会话")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_MESSAGE_FAILED", format!("检查消息失败: {}", e))),
+            );
+        }
+    }
+
+    // 插入置顶记录（如果已置顶则返回冲突）
+    let result = sqlx::query_as::<_, PinnedMessageEntity>(
+        r#"
+        INSERT INTO pinned_messages (conversation_id, message_id, pinned_by)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (conversation_id, message_id) DO NOTHING
+        RETURNING id, conversation_id, message_id, pinned_by, pinned_at
+        "#
+    )
+    .bind(&conv_uuid)
+    .bind(&msg_uuid)
+    .bind(&user_uuid)
+    .fetch_optional(&pool)
+    .await;
+
+    match result {
+        Ok(Some(entity)) => {
+            // 获取消息详情用于响应
+            let msg_entity = sqlx::query_as::<_, crate::models::message::MessageEntity>(
+                "SELECT * FROM messages WHERE id = $1"
+            )
+            .bind(&msg_uuid)
+            .fetch_one(&pool)
+            .await;
+
+            match msg_entity {
+                Ok(msg) => {
+                    (
+                        StatusCode::CREATED,
+                        Json(ApiResponse::success(serde_json::json!({
+                            "id": entity.id.to_string(),
+                            "message": msg.to_message(),
+                            "pinnedBy": entity.pinned_by.to_string(),
+                            "pinnedAt": entity.pinned_at.to_rfc3339(),
+                        }))),
+                    )
+                }
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::error("FETCH_MESSAGE_FAILED", format!("获取消息详情失败: {}", e))),
+                ),
+            }
+        }
+        Ok(None) => {
+            // 已经置顶了，返回现有记录
+            let existing = sqlx::query_as::<_, PinnedMessageEntity>(
+                "SELECT id, conversation_id, message_id, pinned_by, pinned_at FROM pinned_messages WHERE conversation_id = $1 AND message_id = $2"
+            )
+            .bind(&conv_uuid)
+            .bind(&msg_uuid)
+            .fetch_one(&pool)
+            .await;
+
+            match existing {
+                Ok(entity) => {
+                    let msg_entity = sqlx::query_as::<_, crate::models::message::MessageEntity>(
+                        "SELECT * FROM messages WHERE id = $1"
+                    )
+                    .bind(&msg_uuid)
+                    .fetch_one(&pool)
+                    .await;
+
+                    match msg_entity {
+                        Ok(msg) => (
+                            StatusCode::OK,
+                            Json(ApiResponse::success(serde_json::json!({
+                                "id": entity.id.to_string(),
+                                "message": msg.to_message(),
+                                "pinnedBy": entity.pinned_by.to_string(),
+                                "pinnedAt": entity.pinned_at.to_rfc3339(),
+                                "alreadyPinned": true,
+                            }))),
+                        ),
+                        Err(e) => (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ApiResponse::error("FETCH_MESSAGE_FAILED", format!("获取消息详情失败: {}", e))),
+                        ),
+                    }
+                }
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::error("FETCH_PINNED_FAILED", format!("获取置顶记录失败: {}", e))),
+                ),
+            }
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("PIN_FAILED", format!("置顶消息失败: {}", e))),
+        ),
+    }
+}
+
+/// 取消置顶消息
+pub async fn unpin_message(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Path((conversation_id, message_id)): Path<(String, String)>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    let msg_uuid = match message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_MESSAGE_ID", "无效的消息 ID")),
+            );
+        }
+    };
+
+    // 验证用户是会话参与者
+    let is_participant = match crate::db::conversation::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(result) => result,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    };
+
+    if !is_participant {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::error("FORBIDDEN", "您不是此会话的参与者")),
+        );
+    }
+
+    // 删除置顶记录
+    let result = sqlx::query(
+        "DELETE FROM pinned_messages WHERE conversation_id = $1 AND message_id = $2"
+    )
+    .bind(&conv_uuid)
+    .bind(&msg_uuid)
+    .execute(&pool)
+    .await;
+
+    match result {
+        Ok(rows) => {
+            if rows.rows_affected() > 0 {
+                (
+                    StatusCode::OK,
+                    Json(ApiResponse::success(serde_json::json!({
+                        "message": "已取消置顶",
+                        "conversationId": conversation_id,
+                        "messageId": message_id,
+                    }))),
+                )
+            } else {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ApiResponse::error("NOT_PINNED", "该消息未被置顶")),
+                )
+            }
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("UNPIN_FAILED", format!("取消置顶失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取会话的置顶消息列表
+pub async fn get_pinned_messages(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Path(conversation_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    // 验证用户是会话参与者
+    let is_participant = match crate::db::conversation::is_conversation_participant(&pool, &conv_uuid, &user_uuid).await {
+        Ok(result) => result,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_PARTICIPANT_FAILED", format!("检查参与者失败: {}", e))),
+            );
+        }
+    };
+
+    if !is_participant {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::error("FORBIDDEN", "您不是此会话的参与者")),
+        );
+    }
+
+    // 查询置顶消息（联表获取消息详情）
+    let pinned = sqlx::query_as::<_, PinnedMessageEntity>(
+        r#"
+        SELECT id, conversation_id, message_id, pinned_by, pinned_at
+        FROM pinned_messages
+        WHERE conversation_id = $1
+        ORDER BY pinned_at DESC
+        "#
+    )
+    .bind(&conv_uuid)
+    .fetch_all(&pool)
+    .await;
+
+    match pinned {
+        Ok(entities) => {
+            let mut items: Vec<serde_json::Value> = Vec::new();
+            for entity in &entities {
+                // 获取消息详情
+                let msg = sqlx::query_as::<_, crate::models::message::MessageEntity>(
+                    "SELECT * FROM messages WHERE id = $1"
+                )
+                .bind(&entity.message_id)
+                .fetch_optional(&pool)
+                .await;
+
+                if let Ok(Some(msg_entity)) = msg {
+                    items.push(serde_json::json!({
+                        "id": entity.id.to_string(),
+                        "message": msg_entity.to_message(),
+                        "pinnedBy": entity.pinned_by.to_string(),
+                        "pinnedAt": entity.pinned_at.to_rfc3339(),
+                    }));
+                }
+            }
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "pinnedMessages": items,
+                    "total": items.len(),
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("FETCH_PINNED_FAILED", format!("获取置顶消息失败: {}", e))),
+        ),
     }
 }

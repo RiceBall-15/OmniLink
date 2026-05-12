@@ -108,13 +108,18 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/messages", get(get_messages_with_auth).post(send_message_with_auth))
         .route("/api/im/conversations/:id/messages/:msg_id", put(edit_message_with_auth))
         .route("/api/im/conversations/:id/messages/:msg_id/recall", post(recall_message_with_auth))
-        .route("/api/im/conversations/:id/messages/:msg_id/forward", post(forward_message_with_auth))
-        .route("/api/im/messages/:msg_id/reactions", post(add_reaction_with_auth).get(get_reactions_with_auth))
+        // 消息表情回应
+        .route("/api/im/messages/:id/reactions", post(add_reaction_with_auth).delete(remove_reaction_with_auth).get(get_reactions_with_auth))
+
+        // 会话置顶消息
+        .route("/api/im/conversations/:id/pinned-messages", get(get_pinned_messages_with_auth).post(pin_message_with_auth))
+        .route("/api/im/conversations/:id/pinned-messages/:msg_id", delete(unpin_message_with_auth))
         .route("/api/im/messages/:msg_id/reactions/:emoji", delete(remove_reaction_with_auth))
         .route("/api/im/conversations/:id/read", post(mark_as_read_with_auth))
 
         // 消息搜索和统计
         .route("/api/im/conversations/:id/messages/search", get(search_messages_with_auth))
+        .route("/api/im/messages/search", get(global_search_messages_with_auth))
         .route("/api/im/conversations/:id/messages/stats", get(get_message_stats_with_auth))
 
         // 群组管理
@@ -351,6 +356,47 @@ async fn search_messages_with_auth(
 ) -> impl IntoResponse {
     let user_id = auth.user_id;
     message::search_messages(State(pool), Extension(user_id), Path(conversation_id), Query(query)).await
+}
+
+/// 全局搜索消息（跨会话搜索，包装认证中间件）
+async fn global_search_messages_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Query(query): Query<message::GlobalSearchMessagesQuery>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::search_all_messages(State(pool), Extension(user_id), Query(query)).await
+}
+
+/// 置顶消息（包装认证中间件）
+async fn pin_message_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+    Json(request): Json<message::PinMessageRequest>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::pin_message(State(pool), Extension(user_id), Path(conversation_id), Json(request)).await
+}
+
+/// 取消置顶消息（包装认证中间件）
+async fn unpin_message_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path((conversation_id, message_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::unpin_message(State(pool), Extension(user_id), Path((conversation_id, message_id))).await
+}
+
+/// 获取置顶消息列表（包装认证中间件）
+async fn get_pinned_messages_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::get_pinned_messages(State(pool), Extension(user_id), Path(conversation_id)).await
 }
 
 /// 获取消息统计（包装认证中间件）
@@ -831,5 +877,30 @@ async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     .await?;
 
     info!("Tag and push tables initialized successfully");
+
+    // 创建会话置顶消息表
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS pinned_messages (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+            pinned_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            pinned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(conversation_id, message_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pinned_messages_conversation 
+            ON pinned_messages(conversation_id, pinned_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_pinned_messages_message 
+            ON pinned_messages(message_id);
+        CREATE INDEX IF NOT EXISTS idx_pinned_messages_pinned_by 
+            ON pinned_messages(pinned_by);
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    info!("Pinned messages table initialized successfully");
     Ok(())
 }

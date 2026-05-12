@@ -335,19 +335,19 @@
 - [x] 权限检查：只有 Owner/Admin 可以管理成员
 - [x] Admin 不能管理其他 Admin/Owner
 
-#### 39. 消息搜索增强 ⏳
-- [ ] 实现全文搜索 API（GET /api/im/messages/search?q=keyword）
-- [ ] 支持按会话过滤搜索结果
-- [ ] 支持按时间范围过滤
-- [ ] 搜索结果高亮显示
-- [ ] 添加 PostgreSQL 全文搜索索引
+#### 39. 消息搜索增强 ✅
+- [x] 实现全文搜索 API（GET /api/im/messages/search?q=keyword）
+- [x] 支持按会话过滤搜索结果
+- [x] 支持按时间范围过滤
+- [x] 搜索结果高亮显示
+- [x] 添加 PostgreSQL 全文搜索索引
 
-#### 40. 会话置顶消息 ⏳
-- [ ] 添加 PinnedMessage 模型（conversation_id, message_id, pinned_by, created_at）
-- [ ] 实现置顶消息 API（POST /api/im/conversations/:id/pinned-messages）
-- [ ] 实现取消置顶 API（DELETE /api/im/conversations/:id/pinned-messages/:msg_id）
-- [ ] 实现获取置顶消息列表（GET /api/im/conversations/:id/pinned-messages）
-- [ ] 添加 pinned_messages 数据库表
+#### 40. 会话置顶消息 ✅
+- [x] 添加 PinnedMessage 模型（conversation_id, message_id, pinned_by, created_at）
+- [x] 实现置顶消息 API（POST /api/im/conversations/:id/pinned-messages）
+- [x] 实现取消置顶 API（DELETE /api/im/conversations/:id/pinned-messages/:msg_id）
+- [x] 实现获取置顶消息列表（GET /api/im/conversations/:id/pinned-messages）
+- [x] 添加 pinned_messages 数据库表
 **状态**: ✅ 完成
 **耗时**: 0.25小时
 **提交**: 多个commits

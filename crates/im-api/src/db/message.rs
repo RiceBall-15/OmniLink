@@ -230,28 +230,52 @@ pub async fn search_messages_in_conversation(
     pool: &PgPool,
     conversation_id: &Uuid,
     keyword: &str,
+    start_date: Option<&str>,
+    end_date: Option<&str>,
     page: i64,
     limit: i64,
 ) -> Result<Vec<MessageEntity>> {
     let offset = (page - 1) * limit;
     let search_pattern = format!("%{}%", keyword);
 
-    let messages = sqlx::query_as::<_, MessageEntity>(
-        r#"
-        SELECT * FROM messages
-        WHERE conversation_id = $1
-        AND content ILIKE $2
-        ORDER BY created_at DESC
-        LIMIT $3 OFFSET $4
-        "#
-    )
-    .bind(conversation_id)
-    .bind(&search_pattern)
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| anyhow::anyhow!("搜索消息失败: {}", e))?;
+    let mut query = String::from(
+        "SELECT * FROM messages WHERE conversation_id = $1 AND content ILIKE $2"
+    );
+
+    let mut param_count = 3;
+    let mut has_start = false;
+
+    if start_date.is_some() {
+        query.push_str(&format!(" AND created_at >= ${}", param_count));
+        param_count += 1;
+        has_start = true;
+    }
+
+    if end_date.is_some() {
+        query.push_str(&format!(" AND created_at <= ${}", param_count));
+        param_count += 1;
+    }
+
+    query.push_str(&format!(" ORDER BY created_at DESC LIMIT ${} OFFSET ${}", param_count, param_count + 1));
+
+    let mut sql_query = sqlx::query_as::<_, MessageEntity>(&query)
+        .bind(conversation_id)
+        .bind(&search_pattern);
+
+    if let Some(start) = start_date {
+        sql_query = sql_query.bind(start);
+    }
+
+    if let Some(end) = end_date {
+        sql_query = sql_query.bind(end);
+    }
+
+    let messages = sql_query
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("搜索消息失败: {}", e))?;
 
     Ok(messages)
 }
@@ -261,29 +285,52 @@ pub async fn search_user_messages(
     pool: &PgPool,
     user_id: &Uuid,
     keyword: &str,
+    start_date: Option<&str>,
+    end_date: Option<&str>,
     page: i64,
     limit: i64,
 ) -> Result<Vec<MessageEntity>> {
     let offset = (page - 1) * limit;
     let search_pattern = format!("%{}%", keyword);
 
-    let messages = sqlx::query_as::<_, MessageEntity>(
-        r#"
-        SELECT m.* FROM messages m
-        JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id
-        WHERE cp.user_id = $1
-        AND m.content ILIKE $2
-        ORDER BY m.created_at DESC
-        LIMIT $3 OFFSET $4
-        "#
-    )
-    .bind(user_id)
-    .bind(&search_pattern)
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(pool)
-    .await
-    .map_err(|e| anyhow::anyhow!("搜索消息失败: {}", e))?;
+    let mut query = String::from(
+        "SELECT m.* FROM messages m \
+         JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id \
+         WHERE cp.user_id = $1 AND m.content ILIKE $2"
+    );
+
+    let mut param_count = 3;
+
+    if start_date.is_some() {
+        query.push_str(&format!(" AND m.created_at >= ${}", param_count));
+        param_count += 1;
+    }
+
+    if end_date.is_some() {
+        query.push_str(&format!(" AND m.created_at <= ${}", param_count));
+        param_count += 1;
+    }
+
+    query.push_str(&format!(" ORDER BY m.created_at DESC LIMIT ${} OFFSET ${}", param_count, param_count + 1));
+
+    let mut sql_query = sqlx::query_as::<_, MessageEntity>(&query)
+        .bind(user_id)
+        .bind(&search_pattern);
+
+    if let Some(start) = start_date {
+        sql_query = sql_query.bind(start);
+    }
+
+    if let Some(end) = end_date {
+        sql_query = sql_query.bind(end);
+    }
+
+    let messages = sql_query
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("搜索消息失败: {}", e))?;
 
     Ok(messages)
 }
