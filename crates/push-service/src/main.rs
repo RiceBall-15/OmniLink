@@ -46,15 +46,28 @@ async fn main() -> Result<()> {
         .route("/push/batch", post(handlers::batch_send_push))
         .route("/push/template", post(handlers::send_template_push))
         .route("/push/history", get(handlers::get_user_push_history))
+        .route("/push/test", post(handlers::send_test_push))
         // 模板管理接口
         .route("/templates", post(handlers::create_template))
         .route("/templates", get(handlers::list_templates))
         .route("/templates/{name}", delete(handlers::delete_template))
-        // 统计和清理接口
+        // 设备管理接口
+        .route("/devices", post(handlers::register_device))
+        .route("/devices", get(handlers::get_user_devices))
+        .route("/devices/{id}", delete(handlers::unregister_device))
+        // 通知偏好接口
+        .route("/preferences", get(handlers::get_notification_preferences))
+        .route("/preferences", post(handlers::update_notification_preferences))
+        // 推送配置管理接口
+        .route("/configs", get(handlers::get_push_configs))
+        .route("/configs", post(handlers::upsert_push_config))
+        .route("/configs/{key}", delete(handlers::delete_push_config))
+        // 统计、监控和清理接口
         .route("/stats", get(handlers::get_push_stats))
+        .route("/health", get(handlers::get_push_health))
         .route("/cleanup/{days}", post(handlers::cleanup_old_messages))
         // 健康检查
-        .route("/health", get(handlers::health_check))
+        .route("/ping", get(handlers::health_check))
         // 添加中间件
         .layer(
             ServiceBuilder::new()

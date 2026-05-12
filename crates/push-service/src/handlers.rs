@@ -222,3 +222,159 @@ pub async fn cleanup_old_messages(
 pub async fn health_check() -> &'static str {
     "Push service is healthy"
 }
+
+// ==================== 设备管理 ====================
+
+/// 注册设备
+pub async fn register_device(
+    State(state): State<AppState>,
+    Json(req): Json<RegisterDeviceRequest>,
+) -> Result<Json<ApiResponse<DeviceInfo>>, StatusCode> {
+    let device_id = Uuid::new_v4();
+    let now = chrono::Utc::now();
+    
+    let device = DeviceInfo {
+        id: device_id,
+        user_id: Uuid::nil(), // In production, from JWT
+        device_type: req.device_type,
+        device_token: req.device_token,
+        device_name: req.device_name,
+        app_version: req.app_version,
+        os_version: req.os_version,
+        is_active: true,
+        last_active_at: now,
+        created_at: now,
+    };
+    
+    // TODO: Save to database
+    Ok(Json(ApiResponse::success(device)))
+}
+
+/// 获取用户设备列表
+pub async fn get_user_devices(
+    State(_state): State<AppState>,
+) -> Result<Json<ApiResponse<Vec<DeviceInfo>>>, StatusCode> {
+    // TODO: Implement device listing from database
+    Ok(Json(ApiResponse::success(vec![])))
+}
+
+/// 注销设备
+pub async fn unregister_device(
+    State(_state): State<AppState>,
+    Path(device_id): Path<Uuid>,
+) -> Result<Json<ApiResponse<bool>>, StatusCode> {
+    // TODO: Implement device unregistration
+    tracing::info!("Unregistering device: {}", device_id);
+    Ok(Json(ApiResponse::success(true)))
+}
+
+// ==================== 通知偏好 ====================
+
+/// 获取通知偏好
+pub async fn get_notification_preferences(
+    State(_state): State<AppState>,
+) -> Result<Json<ApiResponse<NotificationPreferences>>, StatusCode> {
+    // TODO: Load from database
+    Ok(Json(ApiResponse::success(NotificationPreferences::default())))
+}
+
+/// 更新通知偏好
+pub async fn update_notification_preferences(
+    State(_state): State<AppState>,
+    Json(req): Json<UpdateNotificationPreferencesRequest>,
+) -> Result<Json<ApiResponse<NotificationPreferences>>, StatusCode> {
+    let mut prefs = NotificationPreferences::default();
+    
+    if let Some(v) = req.enable_notifications {
+        prefs.enable_notifications = v;
+    }
+    if let Some(v) = req.enable_message_notifications {
+        prefs.enable_message_notifications = v;
+    }
+    if let Some(v) = req.enable_system_notifications {
+        prefs.enable_system_notifications = v;
+    }
+    if let Some(v) = req.enable_promotional_notifications {
+        prefs.enable_promotional_notifications = v;
+    }
+    if let Some(v) = req.enable_reminder_notifications {
+        prefs.enable_reminder_notifications = v;
+    }
+    prefs.quiet_hours_start = req.quiet_hours_start;
+    prefs.quiet_hours_end = req.quiet_hours_end;
+    prefs.updated_at = chrono::Utc::now();
+    
+    // TODO: Save to database
+    Ok(Json(ApiResponse::success(prefs)))
+}
+
+// ==================== 推送配置管理 ====================
+
+/// 获取所有推送配置
+pub async fn get_push_configs(
+    State(_state): State<AppState>,
+) -> Result<Json<ApiResponse<Vec<PushConfigItem>>>, StatusCode> {
+    // TODO: Load from database
+    Ok(Json(ApiResponse::success(vec![])))
+}
+
+/// 创建/更新推送配置
+pub async fn upsert_push_config(
+    State(_state): State<AppState>,
+    Json(req): Json<UpsertPushConfigRequest>,
+) -> Result<Json<ApiResponse<PushConfigItem>>, StatusCode> {
+    let now = chrono::Utc::now();
+    let config = PushConfigItem {
+        id: Uuid::new_v4(),
+        config_key: req.config_key,
+        config_value: req.config_value,
+        description: req.description,
+        created_at: now,
+        updated_at: now,
+    };
+    
+    // TODO: Save to database
+    Ok(Json(ApiResponse::success(config)))
+}
+
+/// 删除推送配置
+pub async fn delete_push_config(
+    State(_state): State<AppState>,
+    Path(key): Path<String>,
+) -> Result<Json<ApiResponse<bool>>, StatusCode> {
+    // TODO: Delete from database
+    tracing::info!("Deleting push config: {}", key);
+    Ok(Json(ApiResponse::success(true)))
+}
+
+// ==================== 增强监控 ====================
+
+/// 获取推送健康状态
+pub async fn get_push_health(
+    State(_state): State<AppState>,
+) -> Result<Json<ApiResponse<PushHealthStatus>>, StatusCode> {
+    // TODO: Implement real health monitoring
+    let health = PushHealthStatus {
+        total_devices: 0,
+        active_devices: 0,
+        devices_by_type: vec![],
+        recent_failures: 0,
+        success_rate: 100.0,
+    };
+    Ok(Json(ApiResponse::success(health)))
+}
+
+/// 发送测试推送
+pub async fn send_test_push(
+    State(state): State<AppState>,
+    Json(req): Json<CreatePushRequest>,
+) -> Result<Json<ApiResponse<PushMessage>>, StatusCode> {
+    tracing::info!("Sending test push to device: {}", req.device_token);
+    match state.push_service.send_push(req).await {
+        Ok(message) => Ok(Json(ApiResponse::success(message))),
+        Err(e) => {
+            tracing::error!("Failed to send test push: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}

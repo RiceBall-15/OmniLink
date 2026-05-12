@@ -165,3 +165,51 @@ impl Default for NotificationPreferences {
         }
     }
 }
+
+/// 推送配置项
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct PushConfigItem {
+    pub id: Uuid,
+    pub config_key: String,
+    pub config_value: String,
+    pub description: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// 创建/更新推送配置请求
+#[derive(Debug, Deserialize)]
+pub struct UpsertPushConfigRequest {
+    pub config_key: String,
+    pub config_value: String,
+    pub description: Option<String>,
+}
+
+/// 更新通知偏好请求
+#[derive(Debug, Deserialize)]
+pub struct UpdateNotificationPreferencesRequest {
+    pub enable_notifications: Option<bool>,
+    pub enable_message_notifications: Option<bool>,
+    pub enable_system_notifications: Option<bool>,
+    pub enable_promotional_notifications: Option<bool>,
+    pub enable_reminder_notifications: Option<bool>,
+    pub quiet_hours_start: Option<String>,
+    pub quiet_hours_end: Option<String>,
+}
+
+/// 推送健康状态
+#[derive(Debug, Serialize)]
+pub struct PushHealthStatus {
+    pub total_devices: i64,
+    pub active_devices: i64,
+    pub devices_by_type: Vec<DeviceTypeCount>,
+    pub recent_failures: i64,
+    pub success_rate: f64,
+}
+
+/// 按设备类型计数
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct DeviceTypeCount {
+    pub device_type: String,
+    pub count: i64,
+}
