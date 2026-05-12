@@ -79,11 +79,7 @@ impl ErnieProvider {
     }
 
     /// 获取 access_token
-    async fn get_access_token(&mut self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(token) = &self.access_token {
-            return Ok(token.clone());
-        }
-
+    async fn get_access_token(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let url = format!(
             "{}/oauth/2.0/token?grant_type=client_credentials&client_id={}&client_secret={}",
             self.base_url, self.api_key, self.secret_key
@@ -102,7 +98,6 @@ impl ErnieProvider {
             .ok_or("无法获取 access_token")?
             .to_string();
 
-        self.access_token = Some(access_token.clone());
         Ok(access_token)
     }
 
@@ -145,7 +140,7 @@ impl AIProvider for ErnieProvider {
     }
 
     async fn chat_completion(
-        &mut self,
+        &self,
         messages: &[AIMessage],
         options: &ChatOptions,
     ) -> Result<ChatCompletion, Box<dyn std::error::Error + Send + Sync>> {
@@ -196,7 +191,7 @@ impl AIProvider for ErnieProvider {
     }
 
     async fn chat_completion_stream(
-        &mut self,
+        &self,
         messages: &[AIMessage],
         options: &ChatOptions,
     ) -> Result<Pin<Box<dyn futures::Stream<Item = Result<StreamChunk, Box<dyn std::error::Error + Send + Sync>>> + Send>>, Box<dyn std::error::Error + Send + Sync>> {

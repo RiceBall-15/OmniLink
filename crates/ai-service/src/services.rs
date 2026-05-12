@@ -1,11 +1,39 @@
-use super::providers::{AIProvider, AIMessage, MessageRole, ChatOptions, OpenAIProvider, AnthropicProvider, GoogleProvider, QwenProvider, ZhipuProvider, ErnieProvider};
+use std::sync::Arc;
+use std::collections::HashMap;
+use std::pin::Pin;
+use tokio::sync::RwLock;
+use uuid::Uuid;
+use chrono::Utc;
+use anyhow::{Result, anyhow};
+
+use super::providers::{AIProvider, AIMessage, MessageRole, ChatOptions, StreamChunk, OpenAIProvider, AnthropicProvider, GoogleProvider, QwenProvider, ZhipuProvider, ErnieProvider};
 use super::models::{
     ChatRequest, ChatResponse, ChatStreamResponse,
-    ModelsResponse, ModelInfo,
+    ModelsResponse, ModelConfig,
     CreateAssistantRequest, UpdateAssistantRequest, AssistantInfo, AssistantsListResponse,
-    TokenUsageResponse, TokenUsageSummary as TokenUsageSummaryResponse,
+    TokenUsageResponse, ModelUsage, MessageHistory, ConversationHistoryResponse, CreateAssistantResponse,
 };
-use super::repository::{AssistantRepository, TokenUsageRepository, ConversationMessageRepository};
+use super::repository::{AssistantRepository, TokenUsageRepository, ConversationMessageRepository, TokenUsageSummary};
+
+/// AI服务错误类型
+#[derive(Debug)]
+pub enum AppError {
+    NotFound(String),
+    Internal(String),
+    _Unauthorized(String),
+}
+
+impl std::fmt::Display for AppError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
+            AppError::Internal(msg) => write!(f, "Internal error: {}", msg),
+            AppError::_Unauthorized(msg) => write!(f, "Unauthorized: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for AppError {}
 
 /// AI服务
 pub struct AIService {
@@ -223,8 +251,8 @@ impl AIService {
         let providers = self.providers.read().await;
         providers
             .get(provider_name)
-            .ok_or_else(|| AppError::NotFound(format!("Provider {} not found", provider_name)))
             .cloned()
+            .ok_or_else(|| anyhow!("Provider {} not found", provider_name))
     }
 
     /// 发送AI对话请求
@@ -234,7 +262,7 @@ impl AIService {
             .assistant_repository
             .find_by_id(request.assistant_id)
             .await?
-            .ok_or_else(|| AppError::NotFound("Assistant not found".to_string()))?;
+            .ok_or_else(|| anyhow!("Assistant not found"))?;
 
         // 构建消息列表
         let mut messages = vec![];
@@ -293,7 +321,7 @@ impl AIService {
         let model_config = model_configs
             .iter()
             .find(|m| m.id == effective_model_id)
-            .ok_or_else(|| AppError::NotFound(format!("Model config not found: {}", effective_model_id)))?;
+            .ok_or_else(|| anyhow!("Model config not found: {}", effective_model_id))?;
 
         // 获取提供商
         let provider = self.get_provider(&model_config.provider).await?;
@@ -331,7 +359,7 @@ impl AIService {
                 }
             }
         }
-        let completion = completion.ok_or_else(|| AppError::Internal("AI API failed after max retries".to_string()))?;
+        let completion = completion.ok_or_else(|| anyhow!("AI API failed after max retries"))?;
 
         // 保存助手回复到数据库
         let saved_message = self.conversation_message_repository
@@ -387,7 +415,7 @@ impl AIService {
             .assistant_repository
             .find_by_id(request.assistant_id)
             .await?
-            .ok_or_else(|| AppError::NotFound("Assistant not found".to_string()))?;
+            .ok_or_else(|| anyhow!("Assistant not found"))?;
 
         // 构建消息列表
         let mut messages = vec![];
@@ -446,7 +474,7 @@ impl AIService {
         let model_config = model_configs
             .iter()
             .find(|m| m.id == effective_model_id)
-            .ok_or_else(|| AppError::NotFound(format!("Model config not found: {}", effective_model_id)))?;
+            .ok_or_else(|| anyhow!("Model config not found: {}", effective_model_id))?;
 
         // 获取提供商
         let provider = self.get_provider(&model_config.provider).await?;
@@ -465,7 +493,7 @@ impl AIService {
         let stream = provider
             .chat_completion_stream(&messages, &options)
             .await
-            .map_err(|e| AppError::Internal(format!("{}", e)))?;
+            .map_err(|e| anyhow!("{}", e))?;
 
         Ok(stream)
     }
@@ -687,6 +715,7 @@ impl AIService {
     pub async fn clear_conversation(&self, conversation_id: Uuid) -> Result<()> {
         self.conversation_message_repository
             .clear_conversation(conversation_id)
-            .await
+            .await?;
+        Ok(())
     }
 }
