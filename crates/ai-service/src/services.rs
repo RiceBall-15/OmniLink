@@ -167,8 +167,30 @@ impl AIService {
             frequency_penalty: Some(0.0),
         };
 
-        // 调用AI API
-        let completion = provider.chat_completion(&messages, &options).await.map_err(|e| AppError::Internal(format!("{}", e)))?;
+        // 调用AI API（带重试和指数退避）
+        let max_retries = 3u32;
+        let mut completion = None;
+        for attempt in 0..=max_retries {
+            match provider.chat_completion(&messages, &options).await {
+                Ok(result) => {
+                    completion = Some(result);
+                    break;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "chat_completion failed (attempt {}/{}): {}",
+                        attempt + 1,
+                        max_retries + 1,
+                        e
+                    );
+                    if attempt < max_retries {
+                        let delay_ms = 1000 * (1 << attempt);
+                        tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                    }
+                }
+            }
+        }
+        let completion = completion.ok_or_else(|| AppError::Internal("AI API failed after max retries".to_string()))?;
 
         // 保存消息到数据库（简化版）
         let message_id = Uuid::new_v4();
