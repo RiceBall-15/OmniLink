@@ -148,7 +148,7 @@ impl MessageEntity {
 }
 
 /// 发送消息请求
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct SendMessageRequest {
     pub content: String,
     #[serde(rename = "type")]
@@ -156,7 +156,7 @@ pub struct SendMessageRequest {
 }
 
 /// 编辑消息请求
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct EditMessageRequest {
     pub content: String,
 }

@@ -10,6 +10,8 @@ use axum::{
 use tokio::net::TcpListener;
 use tracing::info;
 use sqlx::PgPool;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 // 导入模块 - 使用 im_api:: 前缀访问库模块
 use im_api::handlers::auth;
@@ -18,6 +20,7 @@ use im_api::handlers::conversation;
 use im_api::handlers::encryption;
 use im_api::middleware::auth::AuthUser;
 use im_api::models::auth::ApiResponse;
+use im_api::openapi::ApiDoc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -48,10 +51,16 @@ async fn main() -> anyhow::Result<()> {
     .await
     .ok(); // 忽略错误，列可能已存在
 
+    // 创建 OpenAPI 文档
+    let openapi = ApiDoc::openapi();
+
     // 创建路由
     let app = Router::new()
         // 健康检查
         .route("/health", get(health_check))
+
+        // Swagger UI
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", openapi))
 
         // 认证路由
         .route("/api/auth/register", post(auth::register))

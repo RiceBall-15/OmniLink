@@ -9,17 +9,6 @@ use utoipa::OpenApi;
         contact(name = "OmniLink Team", email = "dev@omnilink.com"),
         license(name = "MIT")
     ),
-    paths(
-        // Auth endpoints
-        crate::handlers::auth::register,
-        crate::handlers::auth::login,
-        // Message endpoints
-        crate::handlers::message::send_message,
-        crate::handlers::message::get_messages,
-        crate::handlers::message::edit_message,
-        crate::handlers::message::recall_message,
-        crate::handlers::message::search_messages,
-    ),
     components(schemas(
         // Auth models
         crate::models::auth::RegisterRequest,
