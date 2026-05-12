@@ -5,8 +5,10 @@
 //! - `message`: 消息管理（发送、编辑、撤回、搜索）
 //! - `conversation`: 会话管理（创建、列表、搜索、标签）
 //! - `encryption`: 端到端加密（密钥管理、消息加解密）
+//! - `health`: 健康检查（服务状态、依赖检查）
 
 pub mod auth;
 pub mod message;
 pub mod conversation;
 pub mod encryption;
+pub mod health;

@@ -187,19 +187,20 @@
 - [x] 应用到 im-api 路由
 - [x] 包含完整单元测试
 
-#### 26. 请求追踪中间件 ⏳
-- [ ] 实现 Request ID 中间件
-- [ ] 支持 X-Request-ID header
-- [ ] 将 request_id 注入 tracing span
-- [ ] 返回 X-Request-ID 在响应 header 中
+#### 26. 请求追踪中间件 ✅
+- [x] 实现 Request ID 中间件
+- [x] 支持 X-Request-ID header
+- [x] 注入 request_id 到 tracing span
+- [x] 在响应中返回 X-Request-ID
 
-#### 27. 数据库迁移脚本 ⏳
-- [ ] 创建 migrations/ 目录
-- [ ] 001_initial_schema.sql - 核心表
-- [ ] 002_conversations.sql - 会话和消息表
-- [ ] 003_groups.sql - 群组功能表
-- [ ] 004_encryption.sql - 加密相关表
-- [ ] 005_push.sql - 推送相关表
+#### 27. 数据库迁移脚本 ✅
+- [x] 创建 migrations/ 目录
+- [x] 001_initial_schema.sql - 核心表（users, conversations, messages, assistants, files, token_usage）
+- [x] 002_add_user_devices.sql - 用户设备表
+- [x] 003_add_im_tables.sql - 对话参与者、消息已读/已送达、updated_at触发器
+- [x] 004_add_usage_tables.sql - Token使用记录、API调用记录、统计记录
+- [x] 005_add_config_tables.sql - 配置表、配置历史、配置订阅
+- [x] 006_add_file_tables.sql - 文件表（支持图片/视频/音频/文档）
 
 #### 28. 健康检查标准化 ⏳
 - [ ] 统一所有服务的健康检查格式

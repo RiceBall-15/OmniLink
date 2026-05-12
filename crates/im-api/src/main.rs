@@ -17,6 +17,7 @@ use utoipa_swagger_ui::SwaggerUi;
 use im_api::handlers::auth;
 use im_api::handlers::message;
 use im_api::handlers::conversation;
+use im_api::handlers::health::health_check_with_deps;
 use im_api::handlers::encryption;
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::rate_limit::{RateLimitConfig, RateLimitState, rate_limit_middleware};
@@ -65,8 +66,8 @@ async fn main() -> anyhow::Result<()> {
 
     // 创建路由
     let app = Router::new()
-        // 健康检查
-        .route("/health", get(health_check))
+        // 健康检查（标准化版本，包含依赖检查）
+        .route("/health", get(health_check_with_deps))
 
         // Swagger UI
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", openapi))
