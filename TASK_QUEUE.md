@@ -109,16 +109,16 @@
 - [ ] 推送配置管理
 - [ ] 推送统计和监控
 
-#### 14. 会话管理增强 🔄
+#### 14. 会话管理增强 ✅
 - [x] 修复 ConversationEntity 缺少 created_by 字段的 bug
 - [x] 会话置顶功能（toggle pin handler + API endpoint）
 - [x] 免打扰设置（toggle mute handler + API endpoint）
 - [x] 会话归档（toggle archive handler + API endpoint + is_archived model/DB column）
 - [x] 会话搜索（search handler + API endpoint + ILIKE query）
-- [ ] 会话标签/分组
-- [ ] 会话排序策略
+- [x] 会话标签/分组（tag CRUD APIs + conversation-tag links）
+- [x] 会话排序策略（sort by updated_at, created_at, name, unread_count）
 
-#### 15. 消息加密 ✅
+#### 15. 消息加密 🔄
 - [ ] 端到端加密设计
 - [ ] 密钥交换协议
 - [ ] 加密消息存储
@@ -219,16 +219,28 @@
 ## 📈 进度追踪
 
 **总任务数**: 15
-**已完成**: 12
+**已完成**: 13
 **进行中**: 0
-**待开发**: 3
+**待开发**: 2
 **受阻**: 0
 
-**完成率**: 80%
+**完成率**: 87%
 
 ---
 
-*最后更新: 2026-05-13 01:30*
+*最后更新: 2026-05-13 04:15*
+
+### 2026-05-13 04:15 - 会话标签/分组和排序策略（Task 14）
+**状态**: ✅ 完成
+**耗时**: 0.5小时
+**提交**: 3d270f0
+**备注**:
+- 新增会话标签CRUD API：创建、删除、获取用户标签
+- 新增会话-标签关联API：添加/移除/获取会话标签
+- 新增会话排序支持：按更新时间、创建时间、名称、未读数排序
+- 新增 conversation_tags 和 conversation_tag_links 数据库表
+- 新增 push_devices 和 push_config 数据库表（为推送集成准备）
+- 所有API包含认证中间件和权限检查
 
 ### 2026-05-12 00:45 - WebSocket认证逻辑完善
 **状态**: ✅ 完成
