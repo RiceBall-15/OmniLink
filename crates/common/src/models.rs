@@ -102,3 +102,33 @@ impl<T> ApiResponse<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+
+    #[test]
+    fn test_api_response_success() {
+        let resp = ApiResponse::success("hello");
+        assert_eq!(resp.code, 200);
+        assert_eq!(resp.message, "success");
+        assert_eq!(resp.data, Some("hello"));
+    }
+
+    #[test]
+    fn test_api_response_error() {
+        let resp: ApiResponse<()> = ApiResponse::error(404, "not found");
+        assert_eq!(resp.code, 404);
+        assert_eq!(resp.message, "not found");
+        assert!(resp.data.is_none());
+    }
+
+    #[test]
+    fn test_api_response_serialization() {
+        let resp = ApiResponse::success(serde_json::json!({"key": "value"}));
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("200"));
+        assert!(json.contains("success"));
+    }
+}

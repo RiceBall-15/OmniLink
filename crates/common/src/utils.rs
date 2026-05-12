@@ -42,4 +42,30 @@ mod tests {
         assert_eq!(truncate("hello", 10), "hello");
         assert_eq!(truncate("hello world", 8), "hello...");
     }
+
+    #[test]
+    fn test_validate_email_edge_cases() {
+        assert!(validate_email("a@b.c"));
+        assert!(validate_email("user@domain.com"));
+        assert!(!validate_email(""));
+        assert!(!validate_email("noat"));
+        assert!(!validate_email("nodot@"));
+        // Note: simple validation only checks for '@' and '.', so "@no.local" passes
+        assert!(validate_email("@no.local"));
+    }
+
+    #[test]
+    fn test_truncate_exact_length() {
+        assert_eq!(truncate("hello", 5), "hello");
+    }
+
+    #[test]
+    fn test_truncate_short_string() {
+        assert_eq!(truncate("hi", 100), "hi");
+    }
+
+    #[test]
+    fn test_truncate_empty_string() {
+        assert_eq!(truncate("", 5), "");
+    }
 }

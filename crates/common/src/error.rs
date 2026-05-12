@@ -158,3 +158,66 @@ impl AppError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_display_messages() {
+        let err = AppError::Auth("invalid".to_string());
+        assert!(err.to_string().contains("Authentication error"));
+
+        let err = AppError::NotFound("resource".to_string());
+        assert!(err.to_string().contains("Not found"));
+
+        let err = AppError::Validation("field".to_string());
+        assert!(err.to_string().contains("Validation error"));
+
+        let err = AppError::TokenExpired;
+        assert!(err.to_string().contains("Token expired"));
+    }
+
+    #[test]
+    fn test_status_codes_auth_errors() {
+        assert_eq!(AppError::Auth("x".into()).status_code(), http::StatusCode::UNAUTHORIZED);
+        assert_eq!(AppError::TokenExpired.status_code(), http::StatusCode::UNAUTHORIZED);
+        assert_eq!(AppError::InvalidToken("x".into()).status_code(), http::StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn test_status_codes_not_found_errors() {
+        assert_eq!(AppError::NotFound("x".into()).status_code(), http::StatusCode::NOT_FOUND);
+        assert_eq!(AppError::DeviceNotFound("x".into()).status_code(), http::StatusCode::NOT_FOUND);
+        assert_eq!(AppError::MessageNotFound("x".into()).status_code(), http::StatusCode::NOT_FOUND);
+        assert_eq!(AppError::ConversationNotFound("x".into()).status_code(), http::StatusCode::NOT_FOUND);
+        assert_eq!(AppError::FileNotFound("x".into()).status_code(), http::StatusCode::NOT_FOUND);
+        assert_eq!(AppError::ConfigNotFound("x".into()).status_code(), http::StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_status_codes_client_errors() {
+        assert_eq!(AppError::Validation("x".into()).status_code(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(AppError::BadRequest("x".into()).status_code(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(AppError::RateLimited("x".into()).status_code(), http::StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(AppError::Authorization("x".into()).status_code(), http::StatusCode::FORBIDDEN);
+        assert_eq!(AppError::UserAlreadyExists("x".into()).status_code(), http::StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn test_status_codes_server_errors() {
+        assert_eq!(AppError::Internal("x".into()).status_code(), http::StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(AppError::ServiceUnavailable("x".into()).status_code(), http::StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(AppError::Timeout("x".into()).status_code(), http::StatusCode::GATEWAY_TIMEOUT);
+    }
+
+    #[test]
+    fn test_from_anyhow_error() {
+        let anyhow_err = anyhow::anyhow!("test error");
+        let app_err: AppError = anyhow_err.into();
+        match app_err {
+            AppError::Internal(msg) => assert_eq!(msg, "test error"),
+            _ => panic!("Expected Internal error"),
+        }
+    }
+}
