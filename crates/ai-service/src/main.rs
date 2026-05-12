@@ -5,24 +5,23 @@ use tracing::info;
 use std::collections::HashMap;
 
 use common::{auth::TokenManager, db::DatabaseManager};
-use crate::handlers::{
+use ai_service::handlers::{
     chat, chat_stream, create_assistant, list_assistants, get_assistant,
     update_assistant, delete_assistant, get_token_usage, list_models,
 };
-use crate::middleware::auth_middleware;
-use crate::repository::{AssistantRepository, TokenUsageRepository};
-use crate::services::AIService;
+use ai_service::middleware::auth_middleware;
+use ai_service::repository::{AssistantRepository, TokenUsageRepository};
+use ai_service::services::AIService;
 
-pub async fn run() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     info!("Starting AI service...");
-
     // 初始化数据库连接
     let db_manager = DatabaseManager::new(
-        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set"),
-        std::env::var("REDIS_URL").expect("REDIS_URL must be set"),
+        &std::env::var("DATABASE_URL").expect("DATABASE_URL must be set"),
+        &std::env::var("REDIS_URL").expect("REDIS_URL must be set"),
     ).await?;
-
-    let pg_pool = db_manager.get_pg_pool();
+    let pg_pool = db_manager.pg_pool().clone();
 
     // 创建仓库
     let assistant_repository = Arc::new(AssistantRepository::new(pg_pool.clone()));
@@ -53,7 +52,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     // 创建Token管理器
     let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "your-secret-key".to_string());
-    let token_manager = Arc::new(TokenManager::new(jwt_secret));
+    let token_manager = Arc::new(TokenManager::new(jwt_secret.as_bytes()));
 
     // 构建路由
     let app = Router::new()

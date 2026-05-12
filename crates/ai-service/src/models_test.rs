@@ -1,6 +1,3 @@
-use crate::models::{ChatRequest, CreateAssistantRequest};
-use validator::Validate;
-use uuid::Uuid;
 
 #[cfg(test)]
 mod tests {

@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 use uuid::Uuid;
-use chrono::Utc;
 /// AI对话请求
 #[derive(Debug, Deserialize, Validate)]
 pub struct ChatRequest {

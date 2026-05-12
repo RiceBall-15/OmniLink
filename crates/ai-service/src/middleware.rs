@@ -1,11 +1,11 @@
 use axum::{
-    extract::{Request, State},
-    http::StatusCode,
+    extract::{FromRequestParts, Request, State},
+    http::{request::Parts, StatusCode},
     middleware::Next,
     response::Response,
 };
-use common::{AppError, Claims};
-use uuid::Uuid;
+use common::{auth::TokenManager, Claims};
+use std::sync::Arc;
 
 /// 认证上下文
 #[derive(Debug, Clone)]
@@ -13,7 +13,7 @@ pub struct Auth(pub Claims);
 
 /// 认证中间件
 pub async fn auth_middleware(
-    State(token_manager): State<common::auth::TokenManager>,
+    State(token_manager): State<Arc<TokenManager>>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, (StatusCode, String)> {
@@ -38,4 +38,20 @@ pub async fn auth_middleware(
     request.extensions_mut().insert(Auth(claims));
 
     Ok(next.run(request).await)
+}
+
+#[async_trait::async_trait]
+impl<S: Send + Sync> FromRequestParts<S> for Auth
+where
+    S: 'static,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        parts
+            .extensions
+            .get::<Auth>()
+            .cloned()
+            .ok_or_else(|| (StatusCode::UNAUTHORIZED, "Authentication required".to_string()))
+    }
 }

@@ -282,13 +282,13 @@ impl TokenUsageRepository {
 
 /// Token使用记录
 #[derive(Debug, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
-struct TokenUsage {
-    model_id: String,
-    request_count: i64,
-    prompt_tokens: i64,
-    completion_tokens: i64,
-    total_tokens: i64,
-    estimated_cost: f64,
+pub struct TokenUsage {
+    pub model_id: String,
+    pub request_count: i64,
+    pub prompt_tokens: i64,
+    pub completion_tokens: i64,
+    pub total_tokens: i64,
+    pub estimated_cost: f64,
 }
 
 /// Token使用汇总

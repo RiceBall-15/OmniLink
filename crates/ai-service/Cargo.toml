@@ -11,6 +11,7 @@ serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
 chrono.workspace = true
+async-trait = "0.1"
 tracing.workspace = true
 sqlx.workspace = true
 validator.workspace = true
@@ -25,7 +26,6 @@ async-openai = "0.14"
 reqwest = { version = "0.11", features = ["json", "rustls-tls", "stream"] }
 anyhow.workspace = true
 tiktoken-rs = "0.4"
-async-trait = "0.1"
 futures = "0.3"
 futures-util = "0.3"
 surrealdb = { version = "1.0", optional = true }

@@ -5,8 +5,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
-use std::task::{Context, Poll};
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{Stream, StreamExt};
 
 /// Anthropic提供商
 pub struct AnthropicProvider {
@@ -143,7 +142,7 @@ impl AIProvider for AnthropicProvider {
         Ok(Box::pin(output_stream))
     }
 
-    fn count_tokens(&self, text: &str, model: &str) -> i32 {
+    fn count_tokens(&self, text: &str, _model: &str) -> i32 {
         // Claude使用GPT-4类似的tokenizer
         // 简化版本，实际需要使用Claude的tokenizer
         let chars = text.chars();
@@ -195,7 +194,7 @@ struct AnthropicResponse {
 #[derive(Debug, Deserialize)]
 struct ContentBlock {
     #[serde(rename = "type")]
-    block_type: String,
+    _block_type: String,
     text: String,
 }
 

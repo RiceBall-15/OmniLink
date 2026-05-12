@@ -5,8 +5,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
-use std::task::{Context, Poll};
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{Stream, StreamExt};
 
 /// Google提供商
 pub struct GoogleProvider {
@@ -167,7 +166,7 @@ impl AIProvider for GoogleProvider {
         Ok(Box::pin(output_stream))
     }
 
-    fn count_tokens(&self, text: &str, model: &str) -> i32 {
+    fn count_tokens(&self, text: &str, _model: &str) -> i32 {
         // 简化版本，实际需要使用Google的tokenizer
         let chars = text.chars();
         (chars.count() as f64 * 0.3) as i32

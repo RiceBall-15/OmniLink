@@ -4,146 +4,186 @@ use axum::{
     response::{Json, Sse, sse::Event},
     Json as JsonResponse,
 };
-use axum_extra::extract::TypedHeader;
-use headers::authorization::Bearer;
 use std::sync::Arc;
 use std::convert::Infallible;
 use std::time::Duration;
 use uuid::Uuid;
 use serde::Deserialize;
 
-use common::{ApiResponse, Claims};
-use common::auth::TokenManager;
+use common::ApiResponse;
 use crate::models::*;
 use crate::services::AIService;
 use crate::middleware::Auth;
 
-/// 查询参数
+/// Query parameters
 #[derive(Debug, Deserialize)]
 pub struct DateRangeQuery {
     pub start_date: Option<String>,
     pub end_date: Option<String>,
 }
 
-/// 发送AI对话请求
+/// Chat with AI assistant
 pub async fn chat(
     State(service): State<Arc<AIService>>,
     Auth(claims): Auth,
     Json(request): Json<ChatRequest>,
 ) -> Result<JsonResponse<ApiResponse<ChatResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
-    match service.chat(request, claims.user_id).await {
+    match service.chat(request, claims.sub).await {
         Ok(response) => Ok(JsonResponse(ApiResponse::success(response))),
         Err(e) => {
             tracing::error!("Chat error: {:?}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                JsonResponse(ApiResponse::error(e.to_string())),
+                JsonResponse(ApiResponse::error(500, e.to_string())),
             ))
         }
     }
 }
 
-/// 发送流式AI对话请求
+/// Stream chat with AI assistant
 pub async fn chat_stream(
     State(service): State<Arc<AIService>>,
     Auth(claims): Auth,
     Json(request): Json<ChatRequest>,
 ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
-    // 获取助手信息
     let assistant_id = request.assistant_id;
     let conversation_id = request.conversation_id;
+    let message_id = Uuid::new_v4();
 
-    // 模拟流式响应
+    // Call the AI service to get a real provider stream
+    let provider_result = service.chat_stream(request, claims.sub).await;
+
+    // Map provider StreamChunk items to SSE events
     let stream = async_stream::stream! {
-        let mut content = String::new();
-        let chunks = vec![
-            "Hello", "!", " I", "'m", " your", " AI", " assistant",
-            ".", " How", " can", " I", " help", " you", " today", "?"
-        ];
+        match provider_result {
+            Ok(mut provider_stream) => {
+                use futures::StreamExt;
+                let mut accumulated_content = String::new();
 
-        for chunk in chunks {
-            content.push_str(chunk);
-            let event = Event::default()
-                .data(serde_json::json!({
+                while let Some(chunk_result) = provider_stream.next().await {
+                    match chunk_result {
+                        Ok(chunk) => {
+                            accumulated_content.push_str(&chunk.content);
+                            let data = serde_json::json!({
+                                "conversation_id": conversation_id,
+                                "assistant_id": assistant_id,
+                                "message_id": message_id,
+                                "delta": chunk.content,
+                                "content": accumulated_content,
+                                "model": chunk.model,
+                                "done": chunk.done,
+                            });
+                            let event = Event::default().data(data.to_string());
+                            yield Ok(event);
+
+                            if chunk.done {
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Stream chunk error: {:?}", e);
+                            let data = serde_json::json!({
+                                "conversation_id": conversation_id,
+                                "assistant_id": assistant_id,
+                                "message_id": message_id,
+                                "error": format!("{}", e),
+                                "done": true,
+                            });
+                            let event = Event::default().data(data.to_string());
+                            yield Ok(event);
+                            break;
+                        }
+                    }
+                }
+
+                // Send final done event if we had content but no explicit done
+                let data = serde_json::json!({
                     "conversation_id": conversation_id,
                     "assistant_id": assistant_id,
-                    "delta": chunk,
-                    "content": content,
-                    "done": false,
-                }));
-            yield Ok(event);
-            tokio::time::sleep(Duration::from_millis(100)).await;
+                    "message_id": message_id,
+                    "delta": "",
+                    "content": accumulated_content,
+                    "done": true,
+                });
+                let event = Event::default().data(data.to_string());
+                yield Ok(event);
+            }
+            Err(e) => {
+                tracing::error!("Chat stream error: {:?}", e);
+                let data = serde_json::json!({
+                    "conversation_id": conversation_id,
+                    "assistant_id": assistant_id,
+                    "message_id": message_id,
+                    "error": e.to_string(),
+                    "done": true,
+                });
+                let event = Event::default().data(data.to_string());
+                yield Ok(event);
+            }
         }
-
-        let event = Event::default()
-            .data(serde_json::json!({
-                "conversation_id": conversation_id,
-                "assistant_id": assistant_id,
-                "delta": "",
-                "content": content,
-                "done": true,
-            }));
-        yield Ok(event);
     };
 
-    Sse::new(stream).keep_alive(Duration::from_secs(15))
+    Sse::new(stream).keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(15)))
 }
 
-/// 创建AI助手
+/// Create AI assistant
 pub async fn create_assistant(
     State(service): State<Arc<AIService>>,
     Auth(claims): Auth,
     Json(request): Json<CreateAssistantRequest>,
 ) -> Result<JsonResponse<ApiResponse<CreateAssistantResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
-    match service.create_assistant(request, claims.user_id).await {
+    match service.create_assistant(request, claims.sub).await {
         Ok(response) => Ok(JsonResponse(ApiResponse::success(response))),
         Err(e) => {
             tracing::error!("Create assistant error: {:?}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                JsonResponse(ApiResponse::error(e.to_string())),
+                JsonResponse(ApiResponse::error(500, e.to_string())),
             ))
         }
     }
 }
 
-/// 获取AI助手列表
+/// List AI assistants
 pub async fn list_assistants(
     State(service): State<Arc<AIService>>,
     Auth(claims): Auth,
 ) -> Result<JsonResponse<ApiResponse<AssistantsListResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
-    match service.list_assistants(claims.user_id).await {
+    match service.list_assistants(claims.sub).await {
         Ok(response) => Ok(JsonResponse(ApiResponse::success(response))),
         Err(e) => {
             tracing::error!("List assistants error: {:?}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                JsonResponse(ApiResponse::error(e.to_string())),
+                JsonResponse(ApiResponse::error(500, e.to_string())),
             ))
         }
     }
 }
 
-/// 获取AI助手详情
+/// Get AI assistant detail
 pub async fn get_assistant(
     State(service): State<Arc<AIService>>,
     Auth(_claims): Auth,
     Path(assistant_id): Path<Uuid>,
 ) -> Result<JsonResponse<ApiResponse<AssistantInfo>>, (StatusCode, Json<ApiResponse<()>>)> {
-    // 简化版本，直接返回
-    Ok(JsonResponse(ApiResponse::success(AssistantInfo {
-        id: assistant_id,
-        name: "Assistant Name".to_string(),
-        description: Some("Description".to_string()),
-        model_id: "gpt-3.5-turbo".to_string(),
-        system_prompt: None,
-        temperature: Some(0.7),
-        max_tokens: Some(2048),
-        created_at: chrono::Utc::now().timestamp(),
-    })))
+    match service.get_assistant(assistant_id).await {
+        Ok(Some(info)) => Ok(JsonResponse(ApiResponse::success(info))),
+        Ok(None) => Err((
+            StatusCode::NOT_FOUND,
+            JsonResponse(ApiResponse::error(404, "Assistant not found")),
+        )),
+        Err(e) => {
+            tracing::error!("Get assistant error: {:?}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                JsonResponse(ApiResponse::error(500, e.to_string())),
+            ))
+        }
+    }
 }
 
-/// 更新AI助手
+/// Update AI assistant
 pub async fn update_assistant(
     State(service): State<Arc<AIService>>,
     Auth(_claims): Auth,
@@ -156,13 +196,13 @@ pub async fn update_assistant(
             tracing::error!("Update assistant error: {:?}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                JsonResponse(ApiResponse::error(e.to_string())),
+                JsonResponse(ApiResponse::error(500, e.to_string())),
             ))
         }
     }
 }
 
-/// 删除AI助手
+/// Delete AI assistant
 pub async fn delete_assistant(
     State(service): State<Arc<AIService>>,
     Auth(_claims): Auth,
@@ -174,31 +214,31 @@ pub async fn delete_assistant(
             tracing::error!("Delete assistant error: {:?}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                JsonResponse(ApiResponse::error(e.to_string())),
+                JsonResponse(ApiResponse::error(500, e.to_string())),
             ))
         }
     }
 }
 
-/// 获取Token使用统计
+/// Get token usage statistics
 pub async fn get_token_usage(
     State(service): State<Arc<AIService>>,
     Auth(claims): Auth,
     Query(query): Query<DateRangeQuery>,
 ) -> Result<JsonResponse<ApiResponse<TokenUsageResponse>>, (StatusCode, Json<ApiResponse<()>>)> {
-    match service.get_token_usage(claims.user_id, query.start_date, query.end_date).await {
+    match service.get_token_usage(claims.sub, query.start_date, query.end_date).await {
         Ok(response) => Ok(JsonResponse(ApiResponse::success(response))),
         Err(e) => {
             tracing::error!("Get token usage error: {:?}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                JsonResponse(ApiResponse::error(e.to_string())),
+                JsonResponse(ApiResponse::error(500, e.to_string())),
             ))
         }
     }
 }
 
-/// 获取支持的模型列表
+/// List supported models
 pub async fn list_models(
     State(service): State<Arc<AIService>>,
     Auth(_claims): Auth,
@@ -209,7 +249,7 @@ pub async fn list_models(
             tracing::error!("List models error: {:?}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                JsonResponse(ApiResponse::error(e.to_string())),
+                JsonResponse(ApiResponse::error(500, e.to_string())),
             ))
         }
     }

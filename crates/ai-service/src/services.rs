@@ -1,16 +1,16 @@
 use super::providers::{AIProvider, AIMessage, MessageRole, ChatOptions, OpenAIProvider, AnthropicProvider, GoogleProvider};
 use super::models::{
-    ChatRequest, ChatResponse, ChatStreamResponse,
+    ChatRequest, ChatResponse,
     CreateAssistantRequest, CreateAssistantResponse, AssistantsListResponse,
     UpdateAssistantRequest, AssistantInfo,
-    ConversationHistoryResponse, MessageHistory,
     TokenUsageResponse, ModelUsage, ModelsResponse, ModelConfig
 };
-use super::repository::{AssistantRepository, TokenUsageRepository, TokenUsageSummary};
-use common::{AppError, Result, Claims};
+use super::repository::{AssistantRepository, TokenUsageRepository};
+use common::{AppError, Result};
 use uuid::Uuid;
 use chrono::Utc;
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -18,7 +18,7 @@ use tokio::sync::RwLock;
 pub struct AIService {
     assistant_repository: Arc<AssistantRepository>,
     token_usage_repository: Arc<TokenUsageRepository>,
-    providers: Arc<RwLock<HashMap<String, Box<dyn AIProvider>>>>,
+    providers: Arc<RwLock<HashMap<String, Arc<dyn AIProvider>>>>,
     model_configs: Arc<RwLock<Vec<ModelConfig>>>,
 }
 
@@ -47,7 +47,7 @@ impl AIService {
         if let Some(openai_key) = api_keys.get("openai") {
             providers.insert(
                 "openai".to_string(),
-                Box::new(OpenAIProvider::new(openai_key.clone(), None)),
+                Arc::new(OpenAIProvider::new(openai_key.clone(), None)),
             );
         }
 
@@ -55,7 +55,7 @@ impl AIService {
         if let Some(anthropic_key) = api_keys.get("anthropic") {
             providers.insert(
                 "anthropic".to_string(),
-                Box::new(AnthropicProvider::new(anthropic_key.clone(), None)),
+                Arc::new(AnthropicProvider::new(anthropic_key.clone(), None)),
             );
         }
 
@@ -63,7 +63,7 @@ impl AIService {
         if let Some(google_key) = api_keys.get("google") {
             providers.insert(
                 "google".to_string(),
-                Box::new(GoogleProvider::new(google_key.clone(), None)),
+                Arc::new(GoogleProvider::new(google_key.clone(), None)),
             );
         }
 
@@ -113,12 +113,12 @@ impl AIService {
     }
 
     /// 获取提供商
-    async fn get_provider(&self, provider_name: &str) -> Result<Arc<Box<dyn AIProvider>>> {
+    async fn get_provider(&self, provider_name: &str) -> Result<Arc<dyn AIProvider>> {
         let providers = self.providers.read().await;
         providers
             .get(provider_name)
-            .cloned()
             .ok_or_else(|| AppError::NotFound(format!("Provider {} not found", provider_name)))
+            .cloned()
     }
 
     /// 发送AI对话请求
@@ -168,12 +168,18 @@ impl AIService {
         };
 
         // 调用AI API
-        let completion = provider.chat_completion(&messages, &options).await?;
+        let completion = provider.chat_completion(&messages, &options).await.map_err(|e| AppError::Internal(format!("{}", e)))?;
 
         // 保存消息到数据库（简化版）
         let message_id = Uuid::new_v4();
 
         // 记录Token使用
+        let cost = provider.calculate_cost(
+            completion.prompt_tokens,
+            completion.completion_tokens,
+            &completion.model,
+        );
+
         self.token_usage_repository
             .upsert(
                 user_id,
@@ -182,11 +188,7 @@ impl AIService {
                 1,
                 completion.prompt_tokens,
                 completion.completion_tokens,
-                provider.calculate_cost(
-                    completion.prompt_tokens,
-                    completion.completion_tokens,
-                    &completion.model,
-                ),
+                cost,
             )
             .await?;
 
@@ -199,17 +201,17 @@ impl AIService {
             prompt_tokens: completion.prompt_tokens,
             completion_tokens: completion.completion_tokens,
             total_tokens: completion.total_tokens,
-            estimated_cost: provider.calculate_cost(
-                completion.prompt_tokens,
-                completion.completion_tokens,
-                &completion.model,
-            ),
+            estimated_cost: cost,
             created_at: Utc::now().timestamp(),
         })
     }
 
     /// 发送流式AI对话请求
-    pub async fn chat_stream(&self, request: ChatRequest, user_id: Uuid) -> Result<ChatStreamResponse> {
+    pub async fn chat_stream(
+        &self,
+        request: ChatRequest,
+        _user_id: Uuid,
+    ) -> Result<Pin<Box<dyn futures::Stream<Item = std::result::Result<crate::providers::StreamChunk, Box<dyn std::error::Error + Send + Sync>>> + Send>>> {
         // 获取助手信息
         let assistant = self
             .assistant_repository
@@ -217,7 +219,7 @@ impl AIService {
             .await?
             .ok_or_else(|| AppError::NotFound("Assistant not found".to_string()))?;
 
-        // 获取对话历史
+        // 构建消息列表
         let mut messages = vec![];
 
         // 添加系统提示
@@ -254,18 +256,13 @@ impl AIService {
             frequency_penalty: Some(0.0),
         };
 
-        let message_id = Uuid::new_v4();
+        // 调用AI提供商的流式API
+        let stream = provider
+            .chat_completion_stream(&messages, &options)
+            .await
+            .map_err(|e| AppError::Internal(format!("{}", e)))?;
 
-        // 返回流式响应
-        Ok(ChatStreamResponse {
-            conversation_id: request.conversation_id,
-            assistant_id: request.assistant_id,
-            message_id,
-            content: String::new(),
-            delta: None,
-            done: false,
-            model: assistant.model_id,
-        })
+        Ok(stream)
     }
 
     /// 创建AI助手
@@ -275,7 +272,7 @@ impl AIService {
         user_id: Uuid,
     ) -> Result<CreateAssistantResponse> {
         let assistant_id = Uuid::new_v4();
-        let now = Utc::now();
+        let _now = Utc::now();
 
         let assistant = self
             .assistant_repository
@@ -327,6 +324,25 @@ impl AIService {
         Ok(AssistantsListResponse {
             assistants: assistant_infos,
         })
+    }
+
+    /// Get assistant by ID
+    pub async fn get_assistant(&self, assistant_id: Uuid) -> Result<Option<AssistantInfo>> {
+        let assistant = self
+            .assistant_repository
+            .find_by_id(assistant_id)
+            .await?;
+
+        Ok(assistant.map(|a| AssistantInfo {
+            id: a.id,
+            name: a.name,
+            description: a.description,
+            model_id: a.model_id,
+            system_prompt: a.system_prompt,
+            temperature: a.temperature,
+            max_tokens: a.max_tokens,
+            created_at: a.created_at.timestamp(),
+        }))
     }
 
     /// 更新AI助手
