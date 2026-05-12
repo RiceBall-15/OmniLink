@@ -87,12 +87,15 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/tags/:tag_id", post(add_tag_to_conversation_with_auth).delete(remove_tag_from_conversation_with_auth))
         .route("/api/im/conversations/:id/tags", get(get_conversation_tags_with_auth))
 
-        // 加密功能
+        // 加密相关路由
         .route("/api/im/encryption/keys", post(generate_encryption_keys_with_auth))
         .route("/api/im/encryption/session-key/:conversation_id", get(get_session_key_with_auth))
         .route("/api/im/encryption/encrypt", post(encrypt_message_with_auth))
         .route("/api/im/encryption/decrypt", post(decrypt_message_with_auth))
         .route("/api/im/encryption/info", get(get_encryption_info_with_auth))
+        .route("/api/im/encryption/key-exchange", post(key_exchange_with_auth))
+        .route("/api/im/encryption/store", post(store_encrypted_message_with_auth))
+        .route("/api/im/encryption/messages/:conversation_id", get(get_encrypted_messages_with_auth))
 
         // 添加数据库连接池到状态
         .with_state(pool);
@@ -388,6 +391,36 @@ async fn get_encryption_info_with_auth(
     encryption::get_encryption_info(State(pool), Extension(user_id)).await
 }
 
+/// 密钥交换（包装认证中间件）
+async fn key_exchange_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    encryption::key_exchange(State(pool), Extension(user_id), Json(req)).await
+}
+
+/// 存储加密消息（包装认证中间件）
+async fn store_encrypted_message_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    encryption::store_encrypted_message(State(pool), Extension(user_id), Json(req)).await
+}
+
+/// 获取加密消息历史（包装认证中间件）
+async fn get_encrypted_messages_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    encryption::get_encrypted_messages(State(pool), Extension(user_id), Path(conversation_id)).await
+}
+
 /// 创建标签（包装认证中间件）
 async fn create_tag_with_auth(
     State(pool): State<PgPool>,
@@ -579,6 +612,25 @@ async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     .execute(pool)
     .await?;
 
+
+    // 创建加密消息存储表
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS encrypted_messages (
+            id UUID PRIMARY KEY,
+            conversation_id UUID NOT NULL,
+            sender_id UUID NOT NULL,
+            ciphertext TEXT NOT NULL,
+            nonce VARCHAR(64) NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_encrypted_messages_conversation_id ON encrypted_messages(conversation_id);
+        CREATE INDEX IF NOT EXISTS idx_encrypted_messages_created_at ON encrypted_messages(created_at);
+        "#
+    )
+    .execute(pool)
+    .await?;
     // 创建推送设备表
     sqlx::query(
         r#"

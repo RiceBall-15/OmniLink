@@ -214,3 +214,183 @@ pub async fn get_encryption_info(
         }))),
     )
 }
+
+/// 密钥交换请求
+pub async fn key_exchange(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<Uuid>,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let conversation_id = match req.get("conversationId").and_then(|v| v.as_str()) {
+        Some(id) => id,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error("缺少会话ID")),
+            );
+        }
+    };
+    
+    let public_key = match req.get("publicKey").and_then(|v| v.as_str()) {
+        Some(key) => key,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error("缺少公钥")),
+            );
+        }
+    };
+    
+    // 生成新的会话密钥用于此会话
+    let session_key = crypto::generate_session_key();
+    let session_key_b64 = base64::Engine::encode(
+        &base64::engine::general_purpose::STANDARD,
+        &session_key,
+    );
+    
+    // 使用对方公钥加密会话密钥（简化实现）
+    // 实际应用中应使用 X25519 DH 密钥交换
+    let encrypted_session_key = crypto::encrypt_session_key(
+        &session_key,
+        &session_key, // 简化：使用会话密钥自身作为主密钥
+    ).unwrap_or_default();
+    
+    (
+        StatusCode::OK,
+        Json(ApiResponse::success(serde_json::json!({
+            "conversationId": conversation_id,
+            "encryptedSessionKey": encrypted_session_key,
+            "algorithm": "AES-256-GCM",
+            "expiresAt": chrono::Utc::now().checked_add_signed(chrono::Duration::hours(24)).unwrap().to_rfc3339()
+        }))),
+    )
+}
+
+/// 保存加密消息到数据库
+pub async fn store_encrypted_message(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<Uuid>,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let conversation_id = match req.get("conversationId").and_then(|v| v.as_str()) {
+        Some(id) => match Uuid::parse_str(id) {
+            Ok(uuid) => uuid,
+            Err(_) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::<()>::error("无效的会话ID")),
+                );
+            }
+        },
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error("缺少会话ID")),
+            );
+        }
+    };
+    
+    let ciphertext = match req.get("ciphertext").and_then(|v| v.as_str()) {
+        Some(text) => text,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error("缺少密文")),
+            );
+        }
+    };
+    
+    let nonce = match req.get("nonce").and_then(|v| v.as_str()) {
+        Some(n) => n,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error("缺少nonce")),
+            );
+        }
+    };
+    
+    let message_id = Uuid::new_v4();
+    let now = chrono::Utc::now();
+    
+    // 存储加密消息到数据库
+    let result = sqlx::query(
+        "INSERT INTO encrypted_messages (id, conversation_id, sender_id, ciphertext, nonce, created_at) VALUES ($1, $2, $3, $4, $5, $6)"
+    )
+    .bind(message_id)
+    .bind(conversation_id)
+    .bind(user_id)
+    .bind(ciphertext)
+    .bind(nonce)
+    .bind(now.naive_utc())
+    .execute(&*pool)
+    .await;
+    
+    match result {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "messageId": message_id,
+                "conversationId": conversation_id,
+                "senderId": user_id,
+                "storedAt": now.to_rfc3339()
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(&format!("存储加密消息失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取会话的加密消息历史
+pub async fn get_encrypted_messages(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<Uuid>,
+    Path(conversation_id): Path<String>,
+) -> impl IntoResponse {
+    let conv_uuid = match Uuid::parse_str(&conversation_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()>::error("无效的会话ID")),
+            );
+        }
+    };
+    
+    // 从数据库获取加密消息
+    let messages = sqlx::query_as::<_, (Uuid, Uuid, String, String, chrono::NaiveDateTime)>(
+        "SELECT id, sender_id, ciphertext, nonce, created_at FROM encrypted_messages WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 100"
+    )
+    .bind(conv_uuid)
+    .fetch_all(&*pool)
+    .await;
+    
+    match messages {
+        Ok(msgs) => {
+            let result: Vec<serde_json::Value> = msgs.iter().map(|(id, sender_id, ciphertext, nonce, created_at)| {
+                serde_json::json!({
+                    "messageId": id,
+                    "senderId": sender_id,
+                    "ciphertext": ciphertext,
+                    "nonce": nonce,
+                    "createdAt": created_at.and_utc().to_rfc3339()
+                })
+            }).collect();
+            
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "conversationId": conversation_id,
+                    "messages": result,
+                    "count": result.len()
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::error(&format!("获取加密消息失败: {}", e))),
+        ),
+    }
+}
