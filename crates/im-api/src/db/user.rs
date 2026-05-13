@@ -282,3 +282,137 @@ pub async fn update_user_profile(
         })
         .map_err(|e| format!("更新用户资料失败: {}", e))
 }
+
+// ==================== 用户屏蔽 ====================
+
+/// 屏蔽用户
+pub async fn block_user(
+    pool: &PgPool,
+    blocker_id: &str,
+    blocked_id: &str,
+) -> Result<(), String> {
+    // 不能屏蔽自己
+    if blocker_id == blocked_id {
+        return Err("不能屏蔽自己".to_string());
+    }
+
+    // 检查是否已屏蔽
+    let exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2)"
+    )
+    .bind(blocker_id)
+    .bind(blocked_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("查询屏蔽状态失败: {}", e))?;
+
+    if exists {
+        return Err("已经屏蔽了该用户".to_string());
+    }
+
+    let block_id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now();
+
+    sqlx::query(
+        r#"INSERT INTO user_blocks (id, blocker_id, blocked_id, created_at)
+        VALUES ($1, $2, $3, $4)"#
+    )
+    .bind(&block_id)
+    .bind(blocker_id)
+    .bind(blocked_id)
+    .bind(now)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("屏蔽用户失败: {}", e))?;
+
+    Ok(())
+}
+
+/// 取消屏蔽用户
+pub async fn unblock_user(
+    pool: &PgPool,
+    blocker_id: &str,
+    blocked_id: &str,
+) -> Result<(), String> {
+    let result = sqlx::query(
+        "DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2"
+    )
+    .bind(blocker_id)
+    .bind(blocked_id)
+    .execute(pool)
+    .await
+    .map_err(|e| format!("取消屏蔽失败: {}", e))?;
+
+    if result.rows_affected() == 0 {
+        return Err("未找到屏蔽记录".to_string());
+    }
+
+    Ok(())
+}
+
+/// 获取用户的屏蔽列表
+pub async fn get_blocked_users(
+    pool: &PgPool,
+    blocker_id: &str,
+) -> Result<Vec<crate::models::auth::BlockRecord>, String> {
+    let rows = sqlx::query(
+        r#"SELECT ub.id, ub.blocker_id, ub.blocked_id, ub.created_at,
+                  u.username as blocked_username, u.avatar as blocked_avatar
+        FROM user_blocks ub
+        LEFT JOIN users u ON ub.blocked_id = u.id::text
+        WHERE ub.blocker_id = $1
+        ORDER BY ub.created_at DESC"#
+    )
+    .bind(blocker_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("获取屏蔽列表失败: {}", e))?;
+
+    let blocks = rows.iter().map(|row| {
+        let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+        crate::models::auth::BlockRecord {
+            id: row.get("id"),
+            blocker_id: row.get("blocker_id"),
+            blocked_id: row.get("blocked_id"),
+            blocked_username: row.get("blocked_username"),
+            blocked_avatar: row.get("blocked_avatar"),
+            created_at: created_at.to_rfc3339(),
+        }
+    }).collect();
+
+    Ok(blocks)
+}
+
+/// 检查用户是否被屏蔽
+pub async fn is_user_blocked(
+    pool: &PgPool,
+    user_id: &str,
+    other_user_id: &str,
+) -> Result<bool, String> {
+    let blocked = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2)"
+    )
+    .bind(other_user_id)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("查询屏蔽状态失败: {}", e))?;
+
+    Ok(blocked)
+}
+
+/// 获取用户已屏蔽的所有用户ID列表
+pub async fn get_blocked_user_ids(
+    pool: &PgPool,
+    blocker_id: &str,
+) -> Result<Vec<String>, String> {
+    let rows = sqlx::query_scalar::<_, String>(
+        "SELECT blocked_id FROM user_blocks WHERE blocker_id = $1"
+    )
+    .bind(blocker_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("获取屏蔽ID列表失败: {}", e))?;
+
+    Ok(rows)
+}

@@ -124,3 +124,27 @@ pub struct DevicesResponse {
     pub devices: Vec<DeviceInfo>,
     pub current_device: String,
 }
+
+/// 屏蔽用户请求
+#[derive(Debug, Deserialize)]
+pub struct BlockUserRequest {
+    pub user_id: Uuid,
+}
+
+/// 被屏蔽用户信息
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct BlockedUser {
+    pub id: Uuid,
+    pub blocker_id: Uuid,
+    pub blocked_id: Uuid,
+    pub created_at: String,
+    pub username: String,
+    pub avatar_url: Option<String>,
+}
+
+/// 屏蔽列表响应
+#[derive(Debug, Serialize)]
+pub struct BlockedUsersResponse {
+    pub blocked_users: Vec<BlockedUser>,
+    pub total: i64,
+}

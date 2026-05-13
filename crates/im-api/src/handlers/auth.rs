@@ -17,8 +17,12 @@ use sqlx::PgPool;
 
 use crate::models::auth::{
     ApiResponse, RegisterRequest, LoginRequest, LoginResponse, UpdateUserRequest,
+    BlockUserRequest, BlockRecord, BlockListResponse, BlockStatusResponse,
 };
-use crate::db::user::{create_user, find_user_by_email, find_user_by_id, update_user, verify_password, update_user_profile};
+use crate::db::user::{
+    create_user, find_user_by_email, find_user_by_id, update_user, verify_password, update_user_profile,
+    block_user, unblock_user, get_blocked_users, is_user_blocked,
+};
 use crate::utils::jwt::generate_token;
 
 /// 用户注册
@@ -288,4 +292,125 @@ pub async fn get_user_profile(
             Json(ApiResponse::error("GET_USER_FAILED", e)),
         ),
     }
+}
+
+/// 屏蔽用户
+pub async fn block_user_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Json(req): Json<BlockUserRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    if req.blocked_user_id.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("INVALID_REQUEST", "被屏蔽用户ID不能为空")),
+        );
+    }
+
+    match block_user(&pool, &user_id, &req.blocked_user_id).await {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "blocked": true,
+                "blockedUserId": req.blocked_user_id,
+                "message": "已屏蔽该用户"
+            }))),
+        ),
+        Err(e) if e.contains("已经屏蔽") => (
+            StatusCode::CONFLICT,
+            Json(ApiResponse::error("ALREADY_BLOCKED", e)),
+        ),
+        Err(e) if e.contains("不能屏蔽自己") => (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("CANNOT_BLOCK_SELF", e)),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("BLOCK_FAILED", e)),
+        ),
+    }
+}
+
+/// 取消屏蔽用户
+pub async fn unblock_user_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Path(blocked_user_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    match unblock_user(&pool, &user_id, &blocked_user_id).await {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "unblocked": true,
+                "blockedUserId": blocked_user_id,
+                "message": "已取消屏蔽"
+            }))),
+        ),
+        Err(e) if e.contains("未找到") => (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("BLOCK_NOT_FOUND", e)),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("UNBLOCK_FAILED", e)),
+        ),
+    }
+}
+
+/// 获取屏蔽列表
+pub async fn get_blocked_list_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    match get_blocked_users(&pool, &user_id).await {
+        Ok(blocks) => {
+            let total = blocks.len() as i64;
+            let response = BlockListResponse { blocks, total };
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::to_value(response).unwrap())),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("GET_BLOCKED_FAILED", e)),
+        ),
+    }
+}
+
+/// 检查屏蔽状态
+pub async fn check_block_status_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Path(other_user_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let is_blocked = match is_user_blocked(&pool, &user_id, &other_user_id).await {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_BLOCK_FAILED", e)),
+            );
+        }
+    };
+
+    let has_blocked = match is_user_blocked(&pool, &other_user_id, &user_id).await {
+        Ok(v) => v,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_BLOCK_FAILED", e)),
+            );
+        }
+    };
+
+    let response = BlockStatusResponse {
+        is_blocked,
+        has_blocked,
+    };
+
+    (
+        StatusCode::OK,
+        Json(ApiResponse::success(serde_json::to_value(response).unwrap())),
+    )
 }

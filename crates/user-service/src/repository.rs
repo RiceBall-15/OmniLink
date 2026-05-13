@@ -3,7 +3,7 @@ use common::{AppError, Result};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 use chrono::Utc;
-use crate::models::DeviceInfo;
+use crate::models::{DeviceInfo, BlockedUser};
 
 /// 用户仓库
 ///
@@ -320,5 +320,132 @@ impl DeviceRepository {
             .map_err(AppError::Database)?;
 
         Ok(())
+    }
+}
+
+/// 屏蔽用户仓库
+///
+/// 负责用户屏蔽关系的数据库操作
+pub struct BlockRepository {
+    pool: Pool<Postgres>,
+}
+
+impl BlockRepository {
+    /// 创建新的屏蔽仓库实例
+    pub fn new(pool: Pool<Postgres>) -> Self {
+        Self { pool }
+    }
+
+    /// 屏蔽用户
+    pub async fn block_user(&self, blocker_id: Uuid, blocked_id: Uuid) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO blocked_users (blocker_id, blocked_id)
+            VALUES ($1, $2)
+            ON CONFLICT (blocker_id, blocked_id) DO NOTHING
+            "#
+        )
+        .bind(blocker_id)
+        .bind(blocked_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::Database)?;
+
+        Ok(())
+    }
+
+    /// 取消屏蔽用户
+    pub async fn unblock_user(&self, blocker_id: Uuid, blocked_id: Uuid) -> Result<bool> {
+        let result = sqlx::query(
+            "DELETE FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2"
+        )
+        .bind(blocker_id)
+        .bind(blocked_id)
+        .execute(&self.pool)
+        .await
+        .map_err(AppError::Database)?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// 检查是否已屏蔽
+    pub async fn is_blocked(&self, blocker_id: Uuid, blocked_id: Uuid) -> Result<bool> {
+        let exists: (bool,) = sqlx::query_as(
+            "SELECT EXISTS(SELECT 1 FROM blocked_users WHERE blocker_id = $1 AND blocked_id = $2)"
+        )
+        .bind(blocker_id)
+        .bind(blocked_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(exists.0)
+    }
+
+    /// 检查两个用户之间是否有屏蔽关系（任一方屏蔽另一方）
+    pub async fn either_blocked(&self, user_id: Uuid, other_id: Uuid) -> Result<bool> {
+        let exists: (bool,) = sqlx::query_as(
+            r#"SELECT EXISTS(
+                SELECT 1 FROM blocked_users
+                WHERE (blocker_id = $1 AND blocked_id = $2)
+                   OR (blocker_id = $2 AND blocked_id = $1)
+            )"#
+        )
+        .bind(user_id)
+        .bind(other_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(exists.0)
+    }
+
+    /// 获取用户屏蔽列表
+    pub async fn get_blocked_users(
+        &self,
+        blocker_id: Uuid,
+        offset: i64,
+        limit: i64,
+    ) -> Result<(Vec<BlockedUser>, i64)> {
+        let total: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM blocked_users WHERE blocker_id = $1"
+        )
+        .bind(blocker_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let blocked = sqlx::query_as::<_, BlockedUser>(
+            r#"
+            SELECT
+                b.id,
+                b.blocker_id,
+                b.blocked_id,
+                b.created_at::TEXT as created_at,
+                u.username,
+                u.avatar_url
+            FROM blocked_users b
+            JOIN users u ON u.id = b.blocked_id
+            WHERE b.blocker_id = $1
+            ORDER BY b.created_at DESC
+            OFFSET $2 LIMIT $3
+            "#
+        )
+        .bind(blocker_id)
+        .bind(offset)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok((blocked, total.0))
+    }
+
+    /// 获取用户所有被屏蔽的ID列表（用于消息过滤等）
+    pub async fn get_blocked_ids(&self, blocker_id: Uuid) -> Result<Vec<Uuid>> {
+        let ids: Vec<(Uuid,)> = sqlx::query_as(
+            "SELECT blocked_id FROM blocked_users WHERE blocker_id = $1"
+        )
+        .bind(blocker_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(ids.into_iter().map(|(id,)| id).collect())
     }
 }

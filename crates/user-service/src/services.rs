@@ -6,7 +6,7 @@ use crate::models::{
     UpdateProfileRequest, ChangePasswordRequest, LogoutRequest,
     User, DevicesResponse
 };
-use crate::repository::{UserRepository, DeviceRepository};
+use crate::repository::{UserRepository, DeviceRepository, BlockRepository};
 use crate::jwt::JwtManager;
 use crate::password::PasswordManager;
 use sqlx::Pool;
@@ -17,6 +17,7 @@ use std::sync::Arc;
 pub struct UserService {
     user_repo: UserRepository,
     device_repo: DeviceRepository,
+    block_repo: BlockRepository,
     jwt_manager: Arc<JwtManager>,
     redis: ConnectionManager,
 }
@@ -30,7 +31,8 @@ impl UserService {
     ) -> Self {
         Self {
             user_repo: UserRepository::new(pool.clone()),
-            device_repo: DeviceRepository::new(pool),
+            device_repo: DeviceRepository::new(pool.clone()),
+            block_repo: BlockRepository::new(pool),
             jwt_manager,
             redis,
         }
@@ -261,5 +263,59 @@ impl UserService {
         // 删除用户（级联删除相关数据）
         self.user_repo.delete(user_id).await?;
         Ok(())
+    }
+
+    /// 屏蔽用户
+    pub async fn block_user(&self, blocker_id: Uuid, blocked_id: Uuid) -> Result<()> {
+        // 不能屏蔽自己
+        if blocker_id == blocked_id {
+            return Err(AppError::BadRequest("Cannot block yourself".to_string()));
+        }
+
+        // 检查被屏蔽用户是否存在
+        let _blocked_user = self.user_repo.find_by_id(blocked_id).await?
+            .ok_or_else(|| AppError::NotFound("User not found".to_string()))?;
+
+        // 执行屏蔽
+        self.block_repo.block_user(blocker_id, blocked_id).await?;
+
+        Ok(())
+    }
+
+    /// 取消屏蔽用户
+    pub async fn unblock_user(&self, blocker_id: Uuid, blocked_id: Uuid) -> Result<bool> {
+        let removed = self.block_repo.unblock_user(blocker_id, blocked_id).await?;
+        Ok(removed)
+    }
+
+    /// 检查是否已屏蔽某用户
+    pub async fn is_blocked(&self, blocker_id: Uuid, blocked_id: Uuid) -> Result<bool> {
+        self.block_repo.is_blocked(blocker_id, blocked_id).await
+    }
+
+    /// 获取屏蔽列表
+    pub async fn get_blocked_users(
+        &self,
+        blocker_id: Uuid,
+        page: i64,
+        page_size: i64,
+    ) -> Result<crate::models::BlockedUsersResponse> {
+        let offset = (page - 1).max(0) * page_size;
+        let (blocked_users, total) = self.block_repo.get_blocked_users(blocker_id, offset, page_size).await?;
+
+        Ok(crate::models::BlockedUsersResponse {
+            blocked_users,
+            total,
+        })
+    }
+
+    /// 获取用户被屏蔽的ID列表（供其他服务使用）
+    pub async fn get_blocked_ids(&self, user_id: Uuid) -> Result<Vec<Uuid>> {
+        self.block_repo.get_blocked_ids(user_id).await
+    }
+
+    /// 检查两个用户之间是否有屏蔽关系
+    pub async fn either_blocked(&self, user_id: Uuid, other_id: Uuid) -> Result<bool> {
+        self.block_repo.either_blocked(user_id, other_id).await
     }
 }

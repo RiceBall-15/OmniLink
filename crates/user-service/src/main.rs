@@ -64,6 +64,10 @@ fn create_router(user_service: Arc<UserService>) -> Router {
         .route("/user/devices", get(get_devices))
         .route("/user/devices/{device_id}", delete(delete_device))
         .route("/user/account", delete(delete_account))
+        .route("/user/block/{user_id}", post(block_user))
+        .route("/user/block/{user_id}", delete(unblock_user))
+        .route("/user/block/{user_id}", get(check_blocked))
+        .route("/user/blocked", get(get_blocked_users))
         .layer(middleware::from_fn_with_state(
             user_service.get_token_manager(),
             auth_middleware,

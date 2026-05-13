@@ -195,6 +195,81 @@ pub async fn delete_account(
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))
 }
 
+/// 屏蔽用户
+pub async fn block_user(
+    State(user_service): State<Arc<UserService>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(user_id): Path<uuid::Uuid>,
+) -> Result<Json<ApiResponse<()>>, (StatusCode, String)> {
+    user_service
+        .block_user(auth.user_id, user_id)
+        .await
+        .map(|_| Json(ApiResponse::success(())))
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("not found") || msg.contains("User not found") {
+                (StatusCode::NOT_FOUND, msg)
+            } else if msg.contains("Cannot block yourself") {
+                (StatusCode::BAD_REQUEST, msg)
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, msg)
+            }
+        })
+}
+
+/// 取消屏蔽用户
+pub async fn unblock_user(
+    State(user_service): State<Arc<UserService>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(user_id): Path<uuid::Uuid>,
+) -> Result<Json<ApiResponse<()>>, (StatusCode, String)> {
+    let removed = user_service
+        .unblock_user(auth.user_id, user_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if removed {
+        Ok(Json(ApiResponse::success(())))
+    } else {
+        Err((StatusCode::NOT_FOUND, "Block relationship not found".to_string()))
+    }
+}
+
+/// 获取屏蔽列表
+pub async fn get_blocked_users(
+    State(user_service): State<Arc<UserService>>,
+    Extension(auth): Extension<AuthContext>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<ApiResponse<crate::models::BlockedUsersResponse>>, (StatusCode, String)> {
+    let page = params.get("page")
+        .and_then(|p| p.parse::<i64>().ok())
+        .unwrap_or(1)
+        .max(1);
+    let page_size = params.get("page_size")
+        .and_then(|p| p.parse::<i64>().ok())
+        .unwrap_or(20)
+        .min(100);
+
+    user_service
+        .get_blocked_users(auth.user_id, page, page_size)
+        .await
+        .map(|resp| Json(ApiResponse::success(resp)))
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+/// 检查是否已屏蔽某用户
+pub async fn check_blocked(
+    State(user_service): State<Arc<UserService>>,
+    Extension(auth): Extension<AuthContext>,
+    Path(user_id): Path<uuid::Uuid>,
+) -> Result<Json<ApiResponse<bool>>, (StatusCode, String)> {
+    user_service
+        .is_blocked(auth.user_id, user_id)
+        .await
+        .map(|blocked| Json(ApiResponse::success(blocked)))
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
 #[cfg(test)]
 #[path = "handlers_test.rs"]
 mod tests;

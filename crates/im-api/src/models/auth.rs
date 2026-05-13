@@ -387,3 +387,56 @@ mod tests {
         assert!(req.validate().is_ok()); // all optional, no validation needed
     }
 }
+
+// ==================== 用户屏蔽模型 ====================
+
+/// 屏蔽用户请求
+#[derive(Debug, Clone, Deserialize, Validate, utoipa::ToSchema)]
+pub struct BlockUserRequest {
+    /// 被屏蔽的用户ID
+    #[serde(rename = "blockedUserId")]
+    pub blocked_user_id: String,
+}
+
+/// 用户屏蔽记录
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct BlockRecord {
+    /// 屏蔽记录ID
+    #[serde(rename = "id")]
+    pub id: String,
+    /// 屏蔽者用户ID
+    #[serde(rename = "blockerId")]
+    pub blocker_id: String,
+    /// 被屏蔽者用户ID
+    #[serde(rename = "blockedId")]
+    pub blocked_id: String,
+    /// 被屏蔽者用户名（冗余字段，方便查询）
+    #[serde(rename = "blockedUsername", skip_serializing_if = "Option::is_none")]
+    pub blocked_username: Option<String>,
+    /// 被屏蔽者头像（冗余字段）
+    #[serde(rename = "blockedAvatar", skip_serializing_if = "Option::is_none")]
+    pub blocked_avatar: Option<String>,
+    /// 屏蔽时间
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+}
+
+/// 屏蔽列表响应
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct BlockListResponse {
+    #[serde(rename = "blocks")]
+    pub blocks: Vec<BlockRecord>,
+    #[serde(rename = "total")]
+    pub total: i64,
+}
+
+/// 检查是否被屏蔽的响应
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct BlockStatusResponse {
+    /// 是否被该用户屏蔽
+    #[serde(rename = "isBlocked")]
+    pub is_blocked: bool,
+    /// 是否屏蔽了该用户
+    #[serde(rename = "hasBlocked")]
+    pub has_blocked: bool,
+}

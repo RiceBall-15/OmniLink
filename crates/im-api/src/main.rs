@@ -149,6 +149,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/messages/batch/delete", post(batch_delete_messages_with_auth))
         .route("/api/im/messages/batch/mark-read", post(batch_mark_as_read_with_auth))
 
+        // 用户屏蔽
+        .route("/api/users/:id/block", post(block_user_with_auth).delete(unblock_user_with_auth))
+        .route("/api/users/blocked", get(get_blocked_list_with_auth))
+        .route("/api/users/:id/block-status", get(check_block_status_with_auth))
+
         // 群组管理
         .route("/api/im/conversations/:id/members", get(get_group_members_with_auth).post(add_group_members_with_auth))
         .route("/api/im/conversations/:id/members/:member_id", delete(remove_group_member_with_auth))
@@ -491,6 +496,45 @@ async fn batch_mark_as_read_with_auth(
 ) -> impl IntoResponse {
     let user_id = auth.user_id;
     message::batch_mark_as_read(Extension(pool), Extension(user_id), Json(req)).await
+}
+
+/// 屏蔽用户（包装认证中间件）
+async fn block_user_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<im_api::models::auth::BlockUserRequest>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    auth::block_user_handler(State(pool), Extension(user_id), Json(req)).await
+}
+
+/// 取消屏蔽用户（包装认证中间件）
+async fn unblock_user_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(blocked_user_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    auth::unblock_user_handler(State(pool), Extension(user_id), Path(blocked_user_id)).await
+}
+
+/// 获取屏蔽列表（包装认证中间件）
+async fn get_blocked_list_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    auth::get_blocked_list_handler(State(pool), Extension(user_id)).await
+}
+
+/// 检查屏蔽状态（包装认证中间件）
+async fn check_block_status_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(other_user_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    auth::check_block_status_handler(State(pool), Extension(user_id), Path(other_user_id)).await
 }
 
 /// 获取群组成员列表（包装认证中间件）
