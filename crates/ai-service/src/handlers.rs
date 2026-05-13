@@ -301,3 +301,121 @@ pub async fn clear_conversation(
         }
     }
 }
+
+/// 列出所有 API 密钥状态（脱敏）
+///
+/// GET /api/ai/keys
+///
+/// 返回所有已配置的 API 提供商密钥状态，密钥值会被脱敏处理。
+pub async fn list_api_keys(
+    State(service): State<Arc<AIService>>,
+    Auth(_claims): Auth,
+) -> Result<JsonResponse<ApiResponse<Vec<crate::api_key_store::ApiKeyStatus>>>, (StatusCode, Json<ApiResponse<()>>)> {
+    let statuses = service.list_api_keys().await;
+    Ok(JsonResponse(ApiResponse::success(statuses)))
+}
+
+/// 轮换 API 密钥
+///
+/// POST /api/ai/keys/rotate
+///
+/// 更新指定提供商的 API 密钥。旧密钥会被保留用于回滚。
+/// 更新后需要重新初始化 providers 才能生效。
+pub async fn rotate_api_key(
+    State(service): State<Arc<AIService>>,
+    Auth(_claims): Auth,
+    Json(request): Json<crate::api_key_store::RotateKeyRequest>,
+) -> Result<JsonResponse<ApiResponse<serde_json::Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    match service.rotate_api_key(&request.provider, request.new_key).await {
+        Ok(old_key_existed) => {
+            // 重新初始化 providers 以使用新密钥
+            if let Err(e) = service.reinit_providers().await {
+                tracing::warn!("Failed to reinitialize providers after key rotation: {:?}", e);
+            }
+            Ok(JsonResponse(ApiResponse::success(serde_json::json!({
+                "provider": request.provider,
+                "rotated": true,
+                "had_previous_key": old_key_existed,
+                "message": format!("API key for {} rotated successfully", request.provider)
+            }))))
+        }
+        Err(e) => {
+            tracing::error!("Rotate API key error: {:?}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                JsonResponse(ApiResponse::error(500, e.to_string())),
+            ))
+        }
+    }
+}
+
+/// 回滚 API 密钥到上一个版本
+///
+/// POST /api/ai/keys/rollback
+///
+/// 当新密钥失效时，回滚到上一个版本的密钥。
+pub async fn rollback_api_key(
+    State(service): State<Arc<AIService>>,
+    Auth(_claims): Auth,
+    Json(request): Json<crate::api_key_store::KeyActionRequest>,
+) -> Result<JsonResponse<ApiResponse<serde_json::Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    match service.rollback_api_key(&request.provider).await {
+        Ok(success) => {
+            if success {
+                // 重新初始化 providers 以使用回滚后的密钥
+                if let Err(e) = service.reinit_providers().await {
+                    tracing::warn!("Failed to reinitialize providers after key rollback: {:?}", e);
+                }
+                Ok(JsonResponse(ApiResponse::success(serde_json::json!({
+                    "provider": request.provider,
+                    "rolled_back": true,
+                    "message": format!("API key for {} rolled back successfully", request.provider)
+                }))))
+            } else {
+                Err((
+                    StatusCode::NOT_FOUND,
+                    JsonResponse(ApiResponse::error(404, format!("No previous key found for provider: {}", request.provider))),
+                ))
+            }
+        }
+        Err(e) => {
+            tracing::error!("Rollback API key error: {:?}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                JsonResponse(ApiResponse::error(500, e.to_string())),
+            ))
+        }
+    }
+}
+
+/// 禁用/启用 API 密钥
+///
+/// POST /api/ai/keys/toggle
+///
+/// 切换指定提供商密钥的启用/禁用状态。
+pub async fn toggle_api_key(
+    State(service): State<Arc<AIService>>,
+    Auth(_claims): Auth,
+    Json(request): Json<crate::api_key_store::KeyActionRequest>,
+) -> Result<JsonResponse<ApiResponse<serde_json::Value>>, (StatusCode, Json<ApiResponse<()>>)> {
+    match service.toggle_api_key(&request.provider).await {
+        Ok(new_state) => {
+            // 重新初始化 providers
+            if let Err(e) = service.reinit_providers().await {
+                tracing::warn!("Failed to reinitialize providers after key toggle: {:?}", e);
+            }
+            Ok(JsonResponse(ApiResponse::success(serde_json::json!({
+                "provider": request.provider,
+                "active": new_state,
+                "message": format!("API key for {} is now {}", request.provider, if new_state { "enabled" } else { "disabled" })
+            }))))
+        }
+        Err(e) => {
+            tracing::error!("Toggle API key error: {:?}", e);
+            Err((
+                StatusCode::NOT_FOUND,
+                JsonResponse(ApiResponse::error(404, e.to_string())),
+            ))
+        }
+    }
+}

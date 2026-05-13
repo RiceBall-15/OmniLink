@@ -9,6 +9,7 @@ use ai_service::handlers::{
     chat, chat_stream, create_assistant, list_assistants, get_assistant,
     update_assistant, delete_assistant, get_token_usage, list_models,
     get_conversation_history, clear_conversation,
+    list_api_keys, rotate_api_key, rollback_api_key, toggle_api_key,
 };
 use ai_service::middleware::auth_middleware;
 use ai_service::repository::{AssistantRepository, TokenUsageRepository, ConversationMessageRepository};
@@ -36,39 +37,8 @@ async fn main() -> anyhow::Result<()> {
         conversation_message_repository,
     ));
 
-    // 初始化AI提供商（从环境变量读取API密钥）
-    let mut api_keys = HashMap::new();
-
-    if let Ok(openai_key) = std::env::var("OPENAI_API_KEY") {
-        api_keys.insert("openai".to_string(), openai_key);
-    }
-
-    if let Ok(anthropic_key) = std::env::var("ANTHROPIC_API_KEY") {
-        api_keys.insert("anthropic".to_string(), anthropic_key);
-    }
-
-    if let Ok(google_key) = std::env::var("GOOGLE_API_KEY") {
-        api_keys.insert("google".to_string(), google_key);
-    }
-
-    // 通义千问
-    if let Ok(qwen_key) = std::env::var("QWEN_API_KEY") {
-        api_keys.insert("qwen".to_string(), qwen_key);
-    }
-
-    // 智谱AI
-    if let Ok(zhipu_key) = std::env::var("ZHIPU_API_KEY") {
-        api_keys.insert("zhipu".to_string(), zhipu_key);
-    }
-
-    // 文心一言
-    if let Ok(ernie_key) = std::env::var("ERNIE_API_KEY") {
-        api_keys.insert("ernie".to_string(), ernie_key);
-        if let Ok(ernie_secret) = std::env::var("ERNIE_SECRET_KEY") {
-            api_keys.insert("ernie_secret".to_string(), ernie_secret);
-        }
-    }
-
+    // 初始化AI提供商（通过 ApiKeyStore 从环境变量加载API密钥）
+    let api_keys = ai_service.api_key_store().load_from_env().await;
     ai_service.init_providers(api_keys).await?;
 
     // 创建Token管理器
@@ -97,6 +67,11 @@ async fn main() -> anyhow::Result<()> {
         // 对话历史管理
         .route("/conversations/:conversation_id/messages", get(get_conversation_history))
         .route("/conversations/:conversation_id", delete(clear_conversation))
+        // API 密钥管理路由
+        .route("/keys", get(list_api_keys))
+        .route("/keys/rotate", post(rotate_api_key))
+        .route("/keys/rollback", post(rollback_api_key))
+        .route("/keys/toggle", post(toggle_api_key))
 
         // 添加认证中间件
         .layer(middleware::from_fn_with_state(

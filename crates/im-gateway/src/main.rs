@@ -123,6 +123,11 @@ async fn main() -> Result<()> {
         }
     });
 
+    // 启动 WebSocket 连接池心跳清理后台任务
+    // 每 60 秒检查一次，清理超过 300 秒（5分钟）未活动的连接
+    let _heartbeat_handle = connection_manager.start_heartbeat_task(60, 300);
+    tracing::info!("WebSocket heartbeat cleanup task started (interval: 60s, timeout: 300s)");
+
     // 启动服务器
     let addr = "0.0.0.0:3002";
     tracing::info!("IM Gateway starting on {}", addr);

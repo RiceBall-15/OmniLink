@@ -370,6 +370,77 @@ impl WSConnectionManager {
             .map(|(id, _)| *id)
             .collect()
     }
+
+    /// 清理不活跃的连接
+    ///
+    /// 移除超过指定时间未活动的连接，返回被移除的连接列表。
+    /// 用于定期心跳检测，防止僵尸连接占用资源。
+    ///
+    /// # 参数
+    /// - `timeout_seconds`: 超时时间（秒），默认建议 300 秒（5分钟）
+    ///
+    /// # 返回
+    /// 被移除的连接ID列表，可用于通知前端连接已断开
+    pub async fn cleanup_stale_connections(&self, timeout_seconds: i64) -> Vec<ConnectionId> {
+        let stale_ids = self.get_inactive_connections(timeout_seconds).await;
+
+        for conn_id in &stale_ids {
+            self.remove_connection(*conn_id).await;
+        }
+
+        if !stale_ids.is_empty() {
+            tracing::info!(
+                "Cleaned up {} stale WebSocket connections (timeout: {}s)",
+                stale_ids.len(),
+                timeout_seconds
+            );
+        }
+
+        stale_ids
+    }
+
+    /// 启动连接池心跳清理后台任务
+    ///
+    /// 每隔 `check_interval` 秒检查一次，移除超过 `timeout_seconds` 未活动的连接。
+    /// 返回 JoinHandle 以便在需要时取消任务。
+    ///
+    /// # 参数
+    /// - `check_interval`: 检查间隔（秒），建议 30-60 秒
+    /// - `timeout_seconds`: 连接超时时间（秒），建议 300 秒（5分钟）
+    pub fn start_heartbeat_task(
+        self: &Arc<Self>,
+        check_interval: u64,
+        timeout_seconds: i64,
+    ) -> tokio::task::JoinHandle<()> {
+        let manager = Arc::clone(self);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(
+                tokio::time::Duration::from_secs(check_interval),
+            );
+            loop {
+                interval.tick().await;
+                let stale = manager.cleanup_stale_connections(timeout_seconds).await;
+                if !stale.is_empty() {
+                    tracing::info!(
+                        "Heartbeat: cleaned {} stale connections, {} active connections remain",
+                        stale.len(),
+                        manager.connection_count().await
+                    );
+                }
+            }
+        })
+    }
+
+    /// 获取连接池状态摘要
+    ///
+    /// 返回 (total_connections, online_users, active_conversations)
+    pub async fn pool_status(&self) -> (usize, usize, usize) {
+        let connections = self.connections.read().await;
+        let user_connections = self.user_connections.read().await;
+        let conv_connections = self.conversation_connections.read().await;
+
+        (connections.len(), user_connections.len(), conv_connections.len())
+    }
 }
 
 impl Default for WSConnectionManager {

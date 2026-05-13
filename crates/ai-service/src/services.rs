@@ -14,6 +14,7 @@ use super::models::{
     TokenUsageResponse, ModelUsage, MessageHistory, ConversationHistoryResponse, CreateAssistantResponse,
 };
 use super::repository::{AssistantRepository, TokenUsageRepository, ConversationMessageRepository};
+use super::api_key_store::{ApiKeyStore, ApiKeyStatus};
 
 /// AI服务
 pub struct AIService {
@@ -22,6 +23,7 @@ pub struct AIService {
     conversation_message_repository: Arc<ConversationMessageRepository>,
     providers: Arc<RwLock<HashMap<String, Arc<dyn AIProvider>>>>,
     model_configs: Arc<RwLock<Vec<ModelConfig>>>,
+    api_key_store: Arc<ApiKeyStore>,
 }
 
 impl AIService {
@@ -33,6 +35,7 @@ impl AIService {
     ) -> Self {
         let providers = Arc::new(RwLock::new(HashMap::new()));
         let model_configs = Arc::new(RwLock::new(Self::default_models()));
+        let api_key_store = Arc::new(ApiKeyStore::new());
 
         Self {
             assistant_repository,
@@ -40,7 +43,13 @@ impl AIService {
             conversation_message_repository,
             providers,
             model_configs,
+            api_key_store,
         }
+    }
+
+    /// 获取 API 密钥存储引用（用于初始化时加载密钥）
+    pub fn api_key_store(&self) -> &Arc<ApiKeyStore> {
+        &self.api_key_store
     }
 
     /// 初始化提供商
@@ -696,6 +705,65 @@ impl AIService {
         self.conversation_message_repository
             .clear_conversation(conversation_id)
             .await?;
+        Ok(())
+    }
+
+    // ===== API 密钥管理 =====
+
+    /// 列出所有 API 密钥状态（脱敏）
+    pub async fn list_api_keys(&self) -> Vec<ApiKeyStatus> {
+        self.api_key_store.list_keys().await
+    }
+
+    /// 轮换 API 密钥
+    ///
+    /// # 返回
+    /// true 如果之前存在密钥，false 如果是首次设置
+    pub async fn rotate_api_key(&self, provider: &str, new_key: String) -> Result<bool> {
+        let old = self.api_key_store.rotate_key(provider, new_key).await;
+        Ok(old.is_some())
+    }
+
+    /// 回滚 API 密钥到上一个版本
+    ///
+    /// # 返回
+    /// true 如果回滚成功，false 如果没有历史密钥
+    pub async fn rollback_api_key(&self, provider: &str) -> Result<bool> {
+        let success = self.api_key_store.rollback_key(provider).await;
+        Ok(success)
+    }
+
+    /// 切换 API 密钥的启用/禁用状态
+    ///
+    /// # 返回
+    /// 新的状态（true=启用, false=禁用）
+    pub async fn toggle_api_key(&self, provider: &str) -> Result<bool> {
+        // 先检查当前状态
+        let keys = self.api_key_store.list_keys().await;
+        let current = keys.iter().find(|k| k.provider == provider);
+
+        match current {
+            Some(entry) => {
+                if entry.active {
+                    self.api_key_store.disable_key(provider).await;
+                    Ok(false)
+                } else {
+                    self.api_key_store.enable_key(provider).await;
+                    Ok(true)
+                }
+            }
+            None => Err(common::AppError::NotFound(format!("Provider not found: {}", provider))),
+        }
+    }
+
+    /// 重新初始化 providers（密钥轮换后调用）
+    ///
+    /// 使用 ApiKeyStore 中的当前密钥重新初始化所有 providers。
+    pub async fn reinit_providers(&self) -> Result<()> {
+        let keys = self.api_key_store.get_all_keys().await;
+        if !keys.is_empty() {
+            self.init_providers(keys).await?;
+        }
         Ok(())
     }
 }
