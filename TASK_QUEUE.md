@@ -297,12 +297,12 @@
 ## 📈 进度追踪
 
 **总任务数**: 44 (含阶段十一)
-**已完成**: 38
+**已完成**: 39
 **进行中**: 0
-**待开发**: 6
+**待开发**: 5
 **受阻**: 0
 
-**完成率**: 86%
+**完成率**: 89%
 
 ---
 
@@ -646,8 +646,11 @@
 - [x] 发送状态跟踪（sending, sent, delivered, failed）
 - [x] 手动重试 API（POST /api/im/messages/:id/retry）
 
-#### 61. 会话最后活跃时间优化 ⏳
-- [ ] 会话最后消息摘要（last_message_preview）
-- [ ] 会话未读计数精确更新
-- [ ] 会话排序优化（基于 last_message_at）
+#### 61. 会话最后活跃时间优化 ✅ (2026-05-14)
+- [x] 新增 migration 015: 添加 last_message_at, last_message_preview 列到 conversations 表
+- [x] 新增 conversation_user_state 表实现精确的每用户未读计数
+- [x] 更新消息创建时自动更新会话 last_message_at 和 last_message_preview
+- [x] 更新 mark_conversation_as_read 同时更新 conversation_user_state
+- [x] 新增 get_user_unread_count, get_user_unread_counts_batch 函数
+- [x] 更新 conversation handler 使用每用户未读计数
 
