@@ -265,3 +265,127 @@ pub struct GetConversationsQuery {
     #[serde(default)]
     pub include_archived: bool,
 }
+
+// ===== 会话通知偏好设置 =====
+
+/// 会话通知偏好实体（存储在数据库中）
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ConversationNotificationPreference {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub conversation_id: Uuid,
+    pub muted: bool,
+    pub sound: String,
+    pub badge: bool,
+    pub mention_only: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// 创建/更新会话通知偏好参数
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateNotificationPreferenceRequest {
+    /// 是否静音
+    pub muted: Option<bool>,
+    /// 通知声音（default, none, 或自定义声音名称）
+    pub sound: Option<String>,
+    /// 是否显示角标
+    pub badge: Option<bool>,
+    /// 是否仅@提及通知
+    pub mention_only: Option<bool>,
+}
+
+/// 会话通知偏好响应
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationPreferenceResponse {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub conversation_id: Uuid,
+    pub muted: bool,
+    pub sound: String,
+    pub badge: bool,
+    pub mention_only: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<ConversationNotificationPreference> for NotificationPreferenceResponse {
+    fn from(pref: ConversationNotificationPreference) -> Self {
+        Self {
+            id: pref.id,
+            user_id: pref.user_id,
+            conversation_id: pref.conversation_id,
+            muted: pref.muted,
+            sound: pref.sound,
+            badge: pref.badge,
+            mention_only: pref.mention_only,
+            created_at: pref.created_at,
+            updated_at: pref.updated_at,
+        }
+    }
+}
+
+/// 全局通知设置
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct GlobalNotificationSettings {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub enabled: bool,
+    pub sound: String,
+    pub badge: bool,
+    pub preview: bool,
+    /// 免打扰开始时间（HH:MM 格式）
+    pub dnd_start: Option<String>,
+    /// 免打扰结束时间（HH:MM 格式）
+    pub dnd_end: Option<String>,
+    /// 免打扰时区
+    pub dnd_timezone: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// 更新全局通知设置请求
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateGlobalNotificationRequest {
+    pub enabled: Option<bool>,
+    pub sound: Option<String>,
+    pub badge: Option<bool>,
+    pub preview: Option<bool>,
+    pub dnd_start: Option<String>,
+    pub dnd_end: Option<String>,
+    pub dnd_timezone: Option<String>,
+}
+
+/// 全局通知设置响应
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GlobalNotificationResponse {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub enabled: bool,
+    pub sound: String,
+    pub badge: bool,
+    pub preview: bool,
+    pub dnd_start: Option<String>,
+    pub dnd_end: Option<String>,
+    pub dnd_timezone: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl From<GlobalNotificationSettings> for GlobalNotificationResponse {
+    fn from(settings: GlobalNotificationSettings) -> Self {
+        Self {
+            id: settings.id,
+            user_id: settings.user_id,
+            enabled: settings.enabled,
+            sound: settings.sound,
+            badge: settings.badge,
+            preview: settings.preview,
+            dnd_start: settings.dnd_start,
+            dnd_end: settings.dnd_end,
+            dnd_timezone: settings.dnd_timezone,
+            created_at: settings.created_at,
+            updated_at: settings.updated_at,
+        }
+    }
+}

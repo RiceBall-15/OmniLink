@@ -913,3 +913,91 @@ pub async fn mark_scheduled_message_failed(
 
     Ok(result.rows_affected() > 0)
 }
+
+/// 获取消息的线程回复列表（分页）
+pub async fn get_thread_replies(
+    pool: &PgPool,
+    parent_message_id: &Uuid,
+    page: i64,
+    limit: i64,
+) -> Result<Vec<MessageEntity>> {
+    let offset = (page - 1) * limit;
+
+    let messages = sqlx::query_as::<_, MessageEntity>(
+        r#"
+        SELECT * FROM messages
+        WHERE reply_to = $1
+        ORDER BY created_at ASC
+        LIMIT $2 OFFSET $3
+        "#,
+    )
+    .bind(parent_message_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取线程回复失败: {}", e))?;
+
+    Ok(messages)
+}
+
+/// 统计消息的线程回复数量
+pub async fn count_thread_replies(
+    pool: &PgPool,
+    parent_message_id: &Uuid,
+) -> Result<i64> {
+    let count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM messages WHERE reply_to = $1",
+    )
+    .bind(parent_message_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("统计线程回复失败: {}", e))?;
+
+    Ok(count)
+}
+
+/// 获取会话中所有有回复的消息（话题摘要列表）
+pub async fn get_active_threads_in_conversation(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+    limit_count: i64,
+) -> Result<Vec<ThreadSummaryRow>> {
+    let rows = sqlx::query_as::<_, ThreadSummaryRow>(
+        r#"
+        SELECT 
+            m.id as parent_id,
+            m.content as parent_content,
+            m.sender_id as parent_sender_id,
+            m.type as parent_type,
+            m.created_at as parent_created_at,
+            COUNT(r.id)::bigint as reply_count,
+            MAX(r.created_at) as last_reply_at
+        FROM messages m
+        INNER JOIN messages r ON r.reply_to = m.id
+        WHERE m.conversation_id = $1
+        GROUP BY m.id, m.content, m.sender_id, m.type, m.created_at
+        ORDER BY MAX(r.created_at) DESC
+        LIMIT $2
+        "#,
+    )
+    .bind(conversation_id)
+    .bind(limit_count)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取会话话题列表失败: {}", e))?;
+
+    Ok(rows)
+}
+
+/// 线程摘要行（用于 SQLx 查询映射）
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct ThreadSummaryRow {
+    pub parent_id: Uuid,
+    pub parent_content: String,
+    pub parent_sender_id: Uuid,
+    pub parent_type: String,
+    pub parent_created_at: DateTime<Utc>,
+    pub reply_count: i64,
+    pub last_reply_at: DateTime<Utc>,
+}

@@ -2435,3 +2435,179 @@ pub async fn get_scheduled_messages_handler(
 }
 use crate::models::message::{CreateScheduledMessageRequest, UpdateScheduledMessageRequest, ScheduledMessageQuery};
 use crate::db::message::{create_scheduled_message, get_scheduled_message, update_scheduled_message, cancel_scheduled_message, get_scheduled_messages};
+
+/// 获取消息的线程回复（话题回复列表）
+///
+/// GET /api/im/messages/:id/thread
+pub async fn get_message_thread_handler(
+    State(pool): State<PgPool>,
+    AuthUser { user_id, .. }: AuthUser,
+    Path(message_id): Path<String>,
+    Query(query): Query<crate::models::message::ThreadQuery>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let msg_uuid = match Uuid::parse_str(&message_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_MESSAGE_ID", "无效的消息ID")),
+            );
+        }
+    };
+
+    let _user_uuid = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    // 验证父消息存在
+    let parent = match get_message_by_id(&pool, &msg_uuid).await {
+        Ok(Some(msg)) => msg,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::error("MESSAGE_NOT_FOUND", "消息不存在")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("DB_ERROR", format!("查询消息失败: {}", e))),
+            );
+        }
+    };
+
+    // 获取线程回复
+    let page = query.page;
+    let limit = query.limit;
+
+    match get_thread_replies(&pool, &msg_uuid, page, limit).await {
+        Ok(replies) => {
+            let total = count_thread_replies(&pool, &msg_uuid).await.unwrap_or(0);
+            let reply_messages: Vec<_> = replies.iter().map(|r| r.to_message()).collect();
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "parent": parent.to_message(),
+                    "replies": reply_messages,
+                    "totalReplies": total,
+                    "page": page,
+                    "limit": limit,
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("THREAD_FETCH_FAILED", format!("获取线程回复失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取会话中的话题摘要列表
+///
+/// GET /api/im/conversations/:id/threads
+pub async fn get_conversation_threads_handler(
+    State(pool): State<PgPool>,
+    AuthUser { user_id, .. }: AuthUser,
+    Path(conversation_id): Path<String>,
+    Query(query): Query<crate::models::message::ThreadQuery>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let conv_uuid = match Uuid::parse_str(&conversation_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话ID")),
+            );
+        }
+    };
+
+    let _user_uuid = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match get_active_threads_in_conversation(&pool, &conv_uuid, query.limit).await {
+        Ok(threads) => {
+            let thread_summaries: Vec<_> = threads.iter().map(|t| {
+                serde_json::json!({
+                    "parentId": t.parent_id.to_string(),
+                    "parentContent": t.parent_content,
+                    "parentSenderId": t.parent_sender_id.to_string(),
+                    "parentType": t.parent_type,
+                    "parentCreatedAt": t.parent_created_at.to_rfc3339(),
+                    "replyCount": t.reply_count,
+                    "lastReplyAt": t.last_reply_at.to_rfc3339(),
+                })
+            }).collect();
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "threads": thread_summaries,
+                    "total": thread_summaries.len(),
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("THREADS_FETCH_FAILED", format!("获取话题列表失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取消息的回复数量
+///
+/// GET /api/im/messages/:id/thread/count
+pub async fn get_thread_count_handler(
+    State(pool): State<PgPool>,
+    AuthUser { user_id, .. }: AuthUser,
+    Path(message_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let msg_uuid = match Uuid::parse_str(&message_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_MESSAGE_ID", "无效的消息ID")),
+            );
+        }
+    };
+
+    let _user_uuid = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match count_thread_replies(&pool, &msg_uuid).await {
+        Ok(count) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "messageId": message_id,
+                "replyCount": count,
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("COUNT_FAILED", format!("统计回复数失败: {}", e))),
+        ),
+    }
+}
+
+use crate::db::message::{get_thread_replies, count_thread_replies, get_active_threads_in_conversation};

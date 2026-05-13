@@ -26,6 +26,8 @@ use crate::models::auth::ApiResponse;
 use crate::models::conversation::{
     Conversation, CreateConversationRequest, CreateConversationParams, ConversationType,
     SearchConversationsQuery, GetConversationsQuery, CreateTagRequest,
+    UpdateNotificationPreferenceRequest, UpdateGlobalNotificationRequest,
+    NotificationPreferenceResponse, GlobalNotificationResponse,
 };
 use crate::db::conversation as db;
 use crate::db::message::{get_last_message, get_last_messages_batch};
@@ -1361,4 +1363,338 @@ async fn get_member_role(
     .bind(user_id)
     .fetch_optional(pool)
     .await
+}
+
+// ===== 会话通知偏好设置 Handlers =====
+
+/// 获取会话通知偏好
+/// GET /api/im/conversations/:id/notification-settings
+pub async fn get_notification_settings(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<Uuid>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let uid = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    match db::is_conversation_participant(&pool, &conversation_id, &uid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_PARTICIPANT", "您不是该会话的参与者")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_FAILED", format!("检查会话参与状态失败: {}", e))),
+            );
+        }
+    }
+
+    // 获取通知偏好，如果没有则返回默认值
+    match db::get_notification_preference(&pool, &uid, &conversation_id).await {
+        Ok(Some(pref)) => {
+            let response = NotificationPreferenceResponse::from(pref);
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::to_value(response).unwrap())),
+            )
+        }
+        Ok(None) => {
+            // 返回默认设置
+            let default_response = serde_json::json!({
+                "user_id": uid,
+                "conversation_id": conversation_id,
+                "muted": false,
+                "sound": "default",
+                "badge": true,
+                "mention_only": false,
+                "is_default": true
+            });
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(default_response)),
+            )
+        }
+        Err(e) => {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("GET_PREF_FAILED", format!("获取通知偏好失败: {}", e))),
+            )
+        }
+    }
+}
+
+/// 更新会话通知偏好
+/// PUT /api/im/conversations/:id/notification-settings
+pub async fn update_notification_settings(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<Uuid>,
+    Json(request): Json<UpdateNotificationPreferenceRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let uid = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    // 检查用户是否是会话参与者
+    match db::is_conversation_participant(&pool, &conversation_id, &uid).await {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::error("NOT_PARTICIPANT", "您不是该会话的参与者")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("CHECK_FAILED", format!("检查会话参与状态失败: {}", e))),
+            );
+        }
+    }
+
+    // 验证 sound 参数
+    if let Some(ref sound) = request.sound {
+        if !["default", "none", "gentle", "urgent", "chime"].contains(&sound.as_str()) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_SOUND", "无效的通知声音，可选: default, none, gentle, urgent, chime")),
+            );
+        }
+    }
+
+    match db::upsert_notification_preference(&pool, &uid, &conversation_id, &request).await {
+        Ok(pref) => {
+            let response = NotificationPreferenceResponse::from(pref);
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "message": "通知偏好已更新",
+                    "preference": response,
+                }))),
+            )
+        }
+        Err(e) => {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("UPDATE_PREF_FAILED", format!("更新通知偏好失败: {}", e))),
+            )
+        }
+    }
+}
+
+/// 重置会话通知偏好（删除自定义设置，恢复默认）
+/// DELETE /api/im/conversations/:id/notification-settings
+pub async fn reset_notification_settings(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    axum::extract::Path(conversation_id): axum::extract::Path<Uuid>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let uid = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match db::delete_notification_preference(&pool, &uid, &conversation_id).await {
+        Ok(_) => {
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "message": "通知偏好已重置为默认",
+                }))),
+            )
+        }
+        Err(e) => {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("RESET_FAILED", format!("重置通知偏好失败: {}", e))),
+            )
+        }
+    }
+}
+
+// ===== 全局通知设置 Handlers =====
+
+/// 获取全局通知设置
+/// GET /api/im/notifications/settings
+pub async fn get_global_notification_settings(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let uid = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match db::get_global_notification_settings(&pool, &uid).await {
+        Ok(Some(settings)) => {
+            let response = GlobalNotificationResponse::from(settings);
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::to_value(response).unwrap())),
+            )
+        }
+        Ok(None) => {
+            // 返回默认全局设置
+            let default_response = serde_json::json!({
+                "user_id": uid,
+                "enabled": true,
+                "sound": "default",
+                "badge": true,
+                "preview": true,
+                "dnd_start": null,
+                "dnd_end": null,
+                "dnd_timezone": null,
+                "is_default": true
+            });
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(default_response)),
+            )
+        }
+        Err(e) => {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("GET_GLOBAL_FAILED", format!("获取全局通知设置失败: {}", e))),
+            )
+        }
+    }
+}
+
+/// 更新全局通知设置
+/// PUT /api/im/notifications/settings
+pub async fn update_global_notification_settings(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Json(request): Json<UpdateGlobalNotificationRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let uid = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    // 验证 sound 参数
+    if let Some(ref sound) = request.sound {
+        if !["default", "none", "gentle", "urgent", "chime"].contains(&sound.as_str()) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_SOUND", "无效的通知声音，可选: default, none, gentle, urgent, chime")),
+            );
+        }
+    }
+
+    // 验证免打扰时间格式
+    if let Some(ref start) = request.dnd_start {
+        if !is_valid_time_format(start) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_DND_TIME", "免打扰时间格式无效，应为 HH:MM")),
+            );
+        }
+    }
+    if let Some(ref end) = request.dnd_end {
+        if !is_valid_time_format(end) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_DND_TIME", "免打扰时间格式无效，应为 HH:MM")),
+            );
+        }
+    }
+
+    match db::upsert_global_notification_settings(&pool, &uid, &request).await {
+        Ok(settings) => {
+            let response = GlobalNotificationResponse::from(settings);
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "message": "全局通知设置已更新",
+                    "settings": response,
+                }))),
+            )
+        }
+        Err(e) => {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("UPDATE_GLOBAL_FAILED", format!("更新全局通知设置失败: {}", e))),
+            )
+        }
+    }
+}
+
+/// 检查是否在免打扰时段
+/// GET /api/im/notifications/dnd-status
+pub async fn get_dnd_status(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let uid = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match db::is_in_dnd_period(&pool, &uid).await {
+        Ok(is_dnd) => {
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "is_dnd": is_dnd,
+                }))),
+            )
+        }
+        Err(e) => {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("DND_CHECK_FAILED", format!("检查免打扰状态失败: {}", e))),
+            )
+        }
+    }
+}
+
+/// 验证 HH:MM 时间格式
+fn is_valid_time_format(time: &str) -> bool {
+    let parts: Vec<&str> = time.split(':').collect();
+    if parts.len() != 2 {
+        return false;
+    }
+    match (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+        (Ok(h), Ok(m)) => h <= 23 && m <= 59,
+        _ => false,
+    }
 }

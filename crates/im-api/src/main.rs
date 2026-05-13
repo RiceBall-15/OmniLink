@@ -201,7 +201,25 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/audit/stats", get(audit::get_audit_stats))
         .route("/api/audit/user", get(audit::get_user_audit_logs))
         .route("/api/audit/cleanup", post(audit::cleanup_audit_logs))
+        // 会话通知偏好 API
+        .route("/api/im/conversations/:id/notification-settings", get(conversation::get_notification_settings))
+        .route("/api/im/conversations/:id/notification-settings", put(conversation::update_notification_settings))
+        .route("/api/im/conversations/:id/notification-settings", delete(conversation::reset_notification_settings))
+        // 全局通知设置 API
+        .route("/api/im/notifications/settings", get(conversation::get_global_notification_settings))
+        .route("/api/im/notifications/settings", put(conversation::update_global_notification_settings))
+        .route("/api/im/notifications/dnd-status", get(conversation::get_dnd_status));
 
+        // 消息线程/话题回复 API
+        let app = app
+            .route("/api/im/messages/:id/thread", get(message::get_message_thread_handler))
+            .route("/api/im/messages/:id/thread/count", get(message::get_thread_count_handler))
+            .route("/api/im/conversations/:id/threads", get(message::get_conversation_threads_handler));
+
+    // 克隆连接池用于后台定时消息处理任务
+    let bg_pool = pool.clone();
+
+    let app = app
         // 添加数据库连接池到状态
         .with_state(pool)
         // 添加全局错误捕获中间件层（最外层，捕获所有未处理错误）
@@ -238,6 +256,10 @@ async fn main() -> anyhow::Result<()> {
             .allow_credentials(true)
             .max_age(std::time::Duration::from_secs(3600))
         );
+
+    // 启动定时消息后台处理任务
+    im_api::handlers::scheduled_task::start_scheduled_message_processor(bg_pool);
+    info!("定时消息后台处理任务已启动");
 
     let listener = TcpListener::bind("0.0.0.0:8002").await?;
     info!("IM API listening on http://0.0.0.0:8002");
@@ -1241,5 +1263,54 @@ async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     .await?;
 
     info!("Pinned messages table initialized successfully");
+
+    // 创建会话通知偏好表
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS conversation_notification_preferences (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            muted BOOLEAN NOT NULL DEFAULT false,
+            sound VARCHAR(50) NOT NULL DEFAULT 'default',
+            badge BOOLEAN NOT NULL DEFAULT true,
+            mention_only BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(user_id, conversation_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_conv_notif_pref_user ON conversation_notification_preferences(user_id);
+        CREATE INDEX IF NOT EXISTS idx_conv_notif_pref_conv ON conversation_notification_preferences(conversation_id);
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    // 创建全局通知设置表
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS global_notification_settings (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+            enabled BOOLEAN NOT NULL DEFAULT true,
+            sound VARCHAR(50) NOT NULL DEFAULT 'default',
+            badge BOOLEAN NOT NULL DEFAULT true,
+            preview BOOLEAN NOT NULL DEFAULT true,
+            dnd_start VARCHAR(5),
+            dnd_end VARCHAR(5),
+            dnd_timezone VARCHAR(50) DEFAULT 'UTC',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_global_notif_user ON global_notification_settings(user_id);
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    info!("Notification preferences tables initialized successfully");
+
     Ok(())
 }

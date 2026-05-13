@@ -601,19 +601,53 @@
 - [x] 获取所有草稿列表 API（GET /api/im/drafts）
 - [ ] 自动保存支持
 
-#### 55. 定时发送消息 🔄 (2026-05-14 进行中)
-- [ ] ScheduledMessage 模型（sender_id, conversation_id, content, type, scheduled_at, status）
-- [ ] 创建定时消息 API（POST /api/im/messages/scheduled）
-- [ ] 取消定时消息 API（DELETE /api/im/messages/scheduled/:id）
-- [ ] 获取定时消息列表 API（GET /api/im/messages/scheduled）
-- [ ] 编辑定时消息 API（PUT /api/im/messages/scheduled/:id）
-- [ ] 后台定时发送任务
+#### 55. 定时发送消息 ✅ (2026-05-14)
+- [x] ScheduledMessage 模型（sender_id, conversation_id, content, type, scheduled_at, status）
+- [x] 创建定时消息 API（POST /api/im/messages/scheduled）
+- [x] 取消定时消息 API（DELETE /api/im/messages/scheduled/:id）
+- [x] 获取定时消息列表 API（GET /api/im/messages/scheduled）
+- [x] 编辑定时消息 API（PUT /api/im/messages/scheduled/:id）
+- [ ] 后台定时发送任务（需配合 cron 或后台 worker）
 
-#### 56. 会话通知偏好设置 ⏳
-- [ ] ConversationNotification 模型（user_id, conversation_id, muted, sound, badge, mention_only）
-- [ ] 获取通知偏好 API（GET /api/im/conversations/:id/notification-settings）
-- [ ] 更新通知偏好 API（PUT /api/im/conversations/:id/notification-settings）
-- [ ] 全局通知设置 API
-- [ ] 免打扰时段支持
-- [ ] 与 push-service 集成
+#### 56. 会话通知偏好设置 ✅ (2026-05-14)
+- [x] ConversationNotification 模型（user_id, conversation_id, muted, sound, badge, mention_only）
+- [x] 获取通知偏好 API（GET /api/im/conversations/:id/notification-settings）
+- [x] 更新通知偏好 API（PUT /api/im/conversations/:id/notification-settings）
+- [x] 全局通知设置 API
+- [x] 免打扰时段支持（DND status check endpoint）
+- [ ] 与 push-service 集成（可选）
+
+### 阶段十三：核心 IM 体验增强 🔥
+
+#### 57. 消息线程/话题回复 ⏳
+- [ ] Thread 模型（parent_message_id, thread_id, reply_count）
+- [ ] 创建话题回复 API（POST /api/im/messages/:id/thread）
+- [ ] 获取话题回复列表 API（GET /api/im/messages/:id/thread）
+- [ ] 话题回复计数更新
+- [ ] 会话中话题摘要展示
+
+#### 58. 联系人管理系统 ⏳
+- [ ] Contact 模型（user_id, contact_id, nickname, created_at）
+- [ ] 添加联系人 API（POST /api/users/contacts）
+- [ ] 删除联系人 API（DELETE /api/users/contacts/:id）
+- [ ] 获取联系人列表 API（GET /api/users/contacts）
+- [ ] 搜索用户 API（GET /api/users/search?q=keyword）
+- [ ] 联系人备注名支持
+
+#### 59. 用户在线状态展示增强 ⏳
+- [ ] 扩展 OnlineStatus 枚举（Online, Away, Busy, Invisible）
+- [ ] 自定义状态消息 API（PUT /api/users/status）
+- [ ] 获取用户状态详情 API（GET /api/users/:id/status）
+- [ ] 状态自动切换（长时间无操作 → Away）
+
+#### 60. 消息发送失败重试 ⏳
+- [ ] 消息发送队列（本地持久化）
+- [ ] 失败自动重试（指数退避）
+- [ ] 发送状态跟踪（sending, sent, delivered, failed）
+- [ ] 手动重试 API（POST /api/im/messages/:id/retry）
+
+#### 61. 会话最后活跃时间优化 ⏳
+- [ ] 会话最后消息摘要（last_message_preview）
+- [ ] 会话未读计数精确更新
+- [ ] 会话排序优化（基于 last_message_at）
 

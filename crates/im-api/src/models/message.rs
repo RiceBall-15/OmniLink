@@ -692,3 +692,52 @@ mod tests {
         assert_eq!(request.content, "Updated message");
     }
 }
+
+/// 线程摘要信息
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ThreadSummary {
+    /// 父消息 ID
+    #[serde(rename = "parentId")]
+    pub parent_id: String,
+    /// 父消息内容
+    #[serde(rename = "parentContent")]
+    pub parent_content: String,
+    /// 父消息发送者 ID
+    #[serde(rename = "parentSenderId")]
+    pub parent_sender_id: String,
+    /// 父消息类型
+    #[serde(rename = "parentType")]
+    pub parent_type: String,
+    /// 父消息创建时间
+    #[serde(rename = "parentCreatedAt")]
+    pub parent_created_at: String,
+    /// 回复数量
+    #[serde(rename = "replyCount")]
+    pub reply_count: i64,
+    /// 最后回复时间
+    #[serde(rename = "lastReplyAt")]
+    pub last_reply_at: String,
+}
+
+/// 线程详情（包含父消息和回复列表）
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ThreadDetail {
+    /// 父消息
+    pub parent: Message,
+    /// 回复列表
+    pub replies: Vec<Message>,
+    /// 总回复数
+    #[serde(rename = "totalReplies")]
+    pub total_replies: i64,
+}
+
+/// 线程查询参数
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ThreadQuery {
+    #[serde(default = "default_page")]
+    pub page: i64,
+    #[serde(default = "default_thread_page_size")]
+    pub limit: i64,
+}
+
+fn default_thread_page_size() -> i64 { 50 }
