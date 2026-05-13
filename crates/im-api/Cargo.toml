@@ -37,6 +37,9 @@ common = { path = "../common" }
 # Base64 encoding/decoding for encryption handlers
 base64 = "0.21"
 
+# SHA256 for ETag computation
+sha2 = "0.10"
+
 # Startup dependencies
 tracing-subscriber.workspace = true
 dotenvy.workspace = true

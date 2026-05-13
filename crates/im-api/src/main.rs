@@ -24,6 +24,7 @@ use im_api::handlers::audit;
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::security_headers::security_headers_middleware;
+use im_api::middleware::etag::etag_middleware;
 use im_api::middleware::rate_limit::{RateLimitConfig, RateLimitState, rate_limit_middleware};
 use im_api::middleware::request_id::request_id_middleware;
 use im_api::middleware::request_timing::request_timing_middleware;
@@ -204,6 +205,8 @@ async fn main() -> anyhow::Result<()> {
         ))
         // 添加安全头中间件层
         .layer(axum::middleware::from_fn(security_headers_middleware))
+        // 添加 ETag 缓存验证中间件层
+        .layer(axum::middleware::from_fn(etag_middleware))
         // 添加CORS中间件层
         .layer(tower_http::cors::CorsLayer::new()
             .allow_origin(tower_http::cors::Any)
