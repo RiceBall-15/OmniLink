@@ -526,7 +526,12 @@
 
 
 #### 44. 性能优化 ✅
-
+- [x] N+1查询优化：会话列表批量查询（get_last_messages_batch, get_conversation_tags_batch）
+- [x] WebSocket心跳清理：定期清理过期连接（start_heartbeat_task）
+- [x] 数据库批量查询替代逐条查询（DISTINCT ON + ANY($1)）
 
 #### 45. 安全加固 ✅
+- [x] API密钥运行时轮换（api_key_store模块：rotate, rollback, enable/disable）
+- [x] 敏感数据加密存储（secrets模块：AES-256-GCM at rest encryption）
+- [x] API密钥管理端点（/keys, /keys/rotate, /keys/rollback, /keys/toggle）
 
