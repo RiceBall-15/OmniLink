@@ -1,0 +1,19 @@
+[package]
+name = "integration-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+tokio = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Our crates
+common = { path = "../../crates/common" }
+user-service = { path = "../../crates/user-service" }
+im-api = { path = "../../crates/im-api" }

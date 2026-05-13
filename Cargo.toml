@@ -2,14 +2,15 @@
 resolver = "2"
 members = [
     "crates/common",
-    "crates/im-gateway",
-    "crates/im-api",
-    "crates/ai-service",
     "crates/user-service",
+    "crates/im-gateway",
+    "crates/ai-service",
     "crates/file-service",
-    "crates/usage-service",
     "crates/push-service",
+    "crates/im-api",
     "crates/config-service",
+    "crates/usage-service",
+    "tests/integration",
 ]
 
 [workspace.package]
