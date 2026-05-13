@@ -243,6 +243,42 @@ pub struct CreateMessageParams {
     pub metadata: Option<JsonValue>,
 }
 
+/// 批量发送消息请求
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct BatchSendMessageRequest {
+    pub conversation_id: String,
+    pub messages: Vec<SendMessageRequest>,
+}
+
+/// 批量删除消息请求
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct BatchDeleteMessagesRequest {
+    pub message_ids: Vec<String>,
+}
+
+/// 批量标记已读请求
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct BatchMarkReadRequest {
+    pub conversation_ids: Vec<String>,
+}
+
+/// 批量操作结果
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BatchOperationResult {
+    pub total: usize,
+    pub success: usize,
+    pub failed: usize,
+    pub errors: Vec<BatchOperationError>,
+}
+
+/// 批量操作错误
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BatchOperationError {
+    pub index: usize,
+    pub id: Option<String>,
+    pub error: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -397,3 +397,80 @@ pub async fn get_last_messages_batch(
 
     Ok(map)
 }
+
+/// 批量发送消息（事务性）
+pub async fn batch_create_messages(
+    pool: &PgPool,
+    messages: Vec<CreateMessageParams>,
+) -> Result<Vec<MessageEntity>> {
+    let mut tx = pool.begin().await.map_err(|e| anyhow::anyhow!("开始事务失败: {}", e))?;
+    let mut results = Vec::new();
+    let mut idx = 0;
+    for params in messages {
+        let type_str = params.type_.to_string();
+        let now = Utc::now();
+        let msg = sqlx::query_as::<_, MessageEntity>(
+            r#"INSERT INTO messages (conversation_id, sender_id, content, type, reply_to, metadata, status, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+               RETURNING *"#
+        )
+        .bind(params.conversation_id)
+        .bind(params.sender_id)
+        .bind(&params.content)
+        .bind(&type_str)
+        .bind(params.reply_to)
+        .bind(params.metadata.unwrap_or(serde_json::json!({})))
+        .bind("sent")
+        .bind(now)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| anyhow::anyhow!("批量消息第{}条插入失败: {}", idx, e))?;
+        results.push(msg);
+        idx += 1;
+    }
+    tx.commit().await.map_err(|e| anyhow::anyhow!("事务提交失败: {}", e))?;
+    Ok(results)
+}
+
+/// 批量删除消息（软删除，仅发送者可删）
+pub async fn batch_delete_messages(
+    pool: &PgPool,
+    message_ids: &[Uuid],
+    user_id: Uuid,
+) -> Result<usize> {
+    let result = sqlx::query(
+        "UPDATE messages SET deleted_at = NOW() WHERE id = ANY($1) AND sender_id = $2 AND deleted_at IS NULL"
+    )
+    .bind(message_ids)
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("批量删除消息失败: {}", e))?;
+    Ok(result.rows_affected() as usize)
+}
+
+/// 批量标记会话消息已读
+pub async fn batch_mark_conversations_as_read(
+    pool: &PgPool,
+    conversation_ids: &[Uuid],
+    user_id: Uuid,
+) -> Result<usize> {
+    let result = sqlx::query(
+        r#"INSERT INTO message_receipts (message_id, user_id, read_at)
+           SELECT m.id, $1, NOW()
+           FROM messages m
+           WHERE m.conversation_id = ANY($2)
+             AND m.sender_id != $1
+             AND m.deleted_at IS NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM message_receipts mr
+               WHERE mr.message_id = m.id AND mr.user_id = $1
+             )"#
+    )
+    .bind(user_id)
+    .bind(conversation_ids)
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("批量标记已读失败: {}", e))?;
+    Ok(result.rows_affected() as usize)
+}

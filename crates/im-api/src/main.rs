@@ -144,6 +144,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/messages/search", get(global_search_messages_with_auth))
         .route("/api/im/conversations/:id/messages/stats", get(get_message_stats_with_auth))
 
+        // 批量操作
+        .route("/api/im/messages/batch/send", post(batch_send_messages_with_auth))
+        .route("/api/im/messages/batch/delete", post(batch_delete_messages_with_auth))
+        .route("/api/im/messages/batch/mark-read", post(batch_mark_as_read_with_auth))
+
         // 群组管理
         .route("/api/im/conversations/:id/members", get(get_group_members_with_auth).post(add_group_members_with_auth))
         .route("/api/im/conversations/:id/members/:member_id", delete(remove_group_member_with_auth))
@@ -456,6 +461,36 @@ async fn get_message_stats_with_auth(
 ) -> impl IntoResponse {
     let user_id = auth.user_id;
     message::get_message_stats_handler(State(pool), Extension(user_id), Path(conversation_id)).await
+}
+
+/// 批量发送消息（包装认证中间件）
+async fn batch_send_messages_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<im_api::models::message::BatchSendMessageRequest>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::batch_send_messages(Extension(pool), Extension(user_id), Json(req)).await
+}
+
+/// 批量删除消息（包装认证中间件）
+async fn batch_delete_messages_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<im_api::models::message::BatchDeleteMessagesRequest>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::batch_delete_messages(Extension(pool), Extension(user_id), Json(req)).await
+}
+
+/// 批量标记已读（包装认证中间件）
+async fn batch_mark_as_read_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<im_api::models::message::BatchMarkReadRequest>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::batch_mark_as_read(Extension(pool), Extension(user_id), Json(req)).await
 }
 
 /// 获取群组成员列表（包装认证中间件）

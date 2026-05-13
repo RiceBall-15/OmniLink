@@ -1554,3 +1554,230 @@ pub async fn get_pinned_messages(
         ),
     }
 }
+
+/// 批量发送消息
+#[utoipa::path(
+    post,
+    path = "/api/v1/messages/batch/send",
+    tag = "消息",
+    request_body = BatchSendMessageRequest,
+    responses(
+        (status = 201, description = "批量发送成功", body = ApiResponse<BatchOperationResult>),
+        (status = 400, description = "请求参数错误"),
+        (status = 401, description = "未授权"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn batch_send_messages(
+    Extension(pool): Extension<PgPool>,
+    Extension(user_id): Extension<String>,
+    Json(req): Json<crate::models::message::BatchSendMessageRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let conversation_id = match Uuid::parse_str(&req.conversation_id) {
+        Ok(id) => id,
+        Err(_) => return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话ID")),
+        ),
+    };
+
+    let sender_id = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => return (
+            StatusCode::UNAUTHORIZED,
+            Json(ApiResponse::error("INVALID_USER", "无效的用户身份")),
+        ),
+    };
+
+    if req.messages.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("EMPTY_BATCH", "批量消息不能为空")),
+        );
+    }
+
+    if req.messages.len() > 100 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("BATCH_TOO_LARGE", "单次批量发送最多100条消息")),
+        );
+    }
+
+    let total = req.messages.len();
+    let mut errors = Vec::new();
+    let mut params_list = Vec::new();
+
+    for (idx, msg_req) in req.messages.into_iter().enumerate() {
+        // 内容非空校验
+        if msg_req.content.trim().is_empty() {
+            errors.push(serde_json::json!({"index": idx, "error": "消息内容不能为空"}));
+            continue;
+        }
+
+        let msg_type = msg_req.type_;
+
+        let reply_to = msg_req.reply_to.as_ref().and_then(|r| Uuid::parse_str(r).ok());
+
+        params_list.push(crate::models::message::CreateMessageParams {
+            conversation_id,
+            sender_id,
+            content: msg_req.content,
+            type_: msg_type,
+            reply_to,
+            metadata: None,
+        });
+    }
+
+    let success_count = params_list.len();
+
+    match crate::db::message::batch_create_messages(&pool, params_list).await {
+        Ok(_messages) => {
+            tracing::info!("批量发送 {} 条消息到会话 {}", success_count, conversation_id);
+            (
+                StatusCode::CREATED,
+                Json(ApiResponse::success(serde_json::json!({
+                    "total": total,
+                    "success": success_count,
+                    "failed": errors.len(),
+                    "errors": errors,
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("BATCH_SEND_FAILED", format!("批量发送消息失败: {}", e))),
+        ),
+    }
+}
+
+/// 批量删除消息
+#[utoipa::path(
+    post,
+    path = "/api/v1/messages/batch/delete",
+    tag = "消息",
+    request_body = BatchDeleteMessagesRequest,
+    responses(
+        (status = 200, description = "批量删除成功", body = ApiResponse<BatchOperationResult>),
+        (status = 400, description = "请求参数错误"),
+        (status = 401, description = "未授权"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn batch_delete_messages(
+    Extension(pool): Extension<PgPool>,
+    Extension(user_id): Extension<String>,
+    Json(req): Json<crate::models::message::BatchDeleteMessagesRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => return (
+            StatusCode::UNAUTHORIZED,
+            Json(ApiResponse::error("INVALID_USER", "无效的用户身份")),
+        ),
+    };
+
+    if req.message_ids.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("EMPTY_BATCH", "批量删除列表不能为空")),
+        );
+    }
+
+    if req.message_ids.len() > 200 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("BATCH_TOO_LARGE", "单次批量删除最多200条消息")),
+        );
+    }
+
+    let mut message_uuids = Vec::new();
+    let mut errors = Vec::new();
+    for (idx, id_str) in req.message_ids.iter().enumerate() {
+        match Uuid::parse_str(id_str) {
+            Ok(uuid) => message_uuids.push(uuid),
+            Err(_) => errors.push(serde_json::json!({"index": idx, "id": id_str, "error": "无效的消息ID"})),
+        }
+    }
+
+    let total = message_uuids.len();
+    match crate::db::message::batch_delete_messages(&pool, &message_uuids, user_uuid).await {
+        Ok(deleted_count) => {
+            tracing::info!("批量删除 {} 条消息", deleted_count);
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "total": total,
+                    "success": deleted_count,
+                    "failed": errors.len() + (total - deleted_count as usize),
+                    "errors": errors,
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("BATCH_DELETE_FAILED", format!("批量删除消息失败: {}", e))),
+        ),
+    }
+}
+
+/// 批量标记会话已读
+#[utoipa::path(
+    post,
+    path = "/api/v1/messages/batch/mark-read",
+    tag = "消息",
+    request_body = BatchMarkReadRequest,
+    responses(
+        (status = 200, description = "批量标记已读成功", body = ApiResponse<BatchOperationResult>),
+        (status = 400, description = "请求参数错误"),
+        (status = 401, description = "未授权"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn batch_mark_as_read(
+    Extension(pool): Extension<PgPool>,
+    Extension(user_id): Extension<String>,
+    Json(req): Json<crate::models::message::BatchMarkReadRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match Uuid::parse_str(&user_id) {
+        Ok(id) => id,
+        Err(_) => return (
+            StatusCode::UNAUTHORIZED,
+            Json(ApiResponse::error("INVALID_USER", "无效的用户身份")),
+        ),
+    };
+
+    if req.conversation_ids.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("EMPTY_BATCH", "会话列表不能为空")),
+        );
+    }
+
+    let mut conv_uuids = Vec::new();
+    let mut errors = Vec::new();
+    for (idx, id_str) in req.conversation_ids.iter().enumerate() {
+        match Uuid::parse_str(id_str) {
+            Ok(uuid) => conv_uuids.push(uuid),
+            Err(_) => errors.push(serde_json::json!({"index": idx, "id": id_str, "error": "无效的会话ID"})),
+        }
+    }
+
+    let total = conv_uuids.len();
+    match crate::db::message::batch_mark_conversations_as_read(&pool, &conv_uuids, user_uuid).await {
+        Ok(marked_count) => {
+            tracing::info!("批量标记 {} 个会话已读，共 {} 条消息", total, marked_count);
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "conversationsTotal": total,
+                    "messagesMarked": marked_count,
+                    "errors": errors,
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("BATCH_READ_FAILED", format!("批量标记已读失败: {}", e))),
+        ),
+    }
+}

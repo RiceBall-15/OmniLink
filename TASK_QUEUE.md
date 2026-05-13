@@ -296,17 +296,17 @@
 
 ## 📈 进度追踪
 
-**总任务数**: 37 (含新增阶段十)
-**已完成**: 32
+**总任务数**: 44 (含阶段十一)
+**已完成**: 37
 **进行中**: 0
-**待开发**: 5
+**待开发**: 7
 **受阻**: 0
 
-**完成率**: 86%
+**完成率**: 84%
 
 ---
 
-*最后更新: 2026-05-13 08:30*
+*最后更新: 2026-05-14 01:10*
 
 ### 阶段九：进阶功能与优化 🔥
 
@@ -534,4 +534,49 @@
 - [x] API密钥运行时轮换（api_key_store模块：rotate, rollback, enable/disable）
 - [x] 敏感数据加密存储（secrets模块：AES-256-GCM at rest encryption）
 - [x] API密钥管理端点（/keys, /keys/rotate, /keys/rollback, /keys/toggle）
+
+### 阶段十一：高级功能与质量提升 🔥
+
+#### 46. 批量操作 API ⏳
+- [ ] 批量消息发送（POST /api/im/messages/batch）
+- [ ] 批量消息删除（DELETE /api/im/messages/batch）
+- [ ] 批量标记已读（POST /api/im/conversations/batch/read）
+- [ ] 批量操作事务性保证
+
+#### 47. 用户屏蔽系统 ⏳
+- [ ] BlockUser 模型（blocker_id, blocked_id, created_at）
+- [ ] 屏蔽用户 API（POST /api/users/:id/block）
+- [ ] 取消屏蔽 API（DELETE /api/users/:id/block）
+- [ ] 获取屏蔽列表 API（GET /api/users/blocked）
+- [ ] 屏蔽后消息过滤
+
+#### 48. 离线消息队列 ⏳
+- [ ] 离线消息存储（Redis队列）
+- [ ] 用户上线时推送离线消息
+- [ ] 消息送达确认机制
+- [ ] 离线消息过期清理
+
+#### 49. 数据库连接池监控 ⏳
+- [ ] 连接池状态指标（active, idle, waiting）
+- [ ] 慢查询日志记录
+- [ ] 连接池健康检查端点
+- [ ] Prometheus 指标导出
+
+#### 50. API 响应缓存 ⏳
+- [ ] Redis 缓存层（用户资料、会话列表）
+- [ ] 缓存失效策略（TTL + 主动失效）
+- [ ] 缓存命中率统计
+- [ ] ETag 支持
+
+#### 51. 审计日志系统 ⏳
+- [ ] AuditLog 模型（user_id, action, resource, details, ip, timestamp）
+- [ ] 审计日志记录中间件
+- [ ] 审计日志查询 API
+- [ ] 敏感操作审计（登录、删除、权限变更）
+
+#### 52. WebSocket 连接质量增强 ⏳
+- [ ] 消息送达确认（ACK机制）
+- [ ] 消息重发策略（指数退避）
+- [ ] 连接质量指标（延迟、丢包率）
+- [ ] 自适应心跳间隔
 
