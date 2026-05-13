@@ -187,6 +187,7 @@ impl MinioStorage {
     }
 
     /// 构建存储桶URL
+    #[allow(dead_code)]
     fn bucket_url(&self) -> String {
         let protocol = if self.config.use_ssl { "https" } else { "http" };
         format!(

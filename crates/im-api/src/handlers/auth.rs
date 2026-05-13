@@ -17,7 +17,7 @@ use sqlx::PgPool;
 
 use crate::models::auth::{
     ApiResponse, RegisterRequest, LoginRequest, LoginResponse, UpdateUserRequest,
-    BlockUserRequest, BlockRecord, BlockListResponse, BlockStatusResponse,
+    BlockUserRequest, BlockListResponse, BlockStatusResponse,
 };
 use crate::db::user::{
     create_user, find_user_by_email, find_user_by_id, update_user, verify_password, update_user_profile,

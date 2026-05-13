@@ -28,7 +28,6 @@ const DEFAULT_MAX_SIZE: u64 = 10 * 1024 * 1024;
 
 pub struct FileService {
     repository: FileRepository,
-    upload_dir: PathBuf,
     storage_type: String,
     storage_backend: Box<dyn StorageBackend>,
 }
@@ -54,7 +53,6 @@ impl FileService {
 
         Self {
             repository: FileRepository::new(pool),
-            upload_dir: path,
             storage_type,
             storage_backend,
         }
