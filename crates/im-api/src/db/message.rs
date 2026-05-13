@@ -6,7 +6,7 @@ use anyhow::Result;
 use crate::models::message::{
     MessageEntity, CreateMessageParams, MessageStatus,
     MessageBookmark, BookmarkInfo,
-    DraftMessage,
+    DraftMessage, ScheduledMessage,
 };
 
 /// 创建消息
@@ -682,4 +682,234 @@ pub async fn get_all_drafts(
     .map_err(|e| anyhow::anyhow!("获取草稿列表失败: {}", e))?;
 
     Ok(drafts)
+}
+
+/// 创建定时消息
+pub async fn create_scheduled_message(
+    pool: &PgPool,
+    sender_id: &Uuid,
+    conversation_id: &Uuid,
+    content: &str,
+    message_type: &str,
+    reply_to: Option<&Uuid>,
+    metadata: Option<&JsonValue>,
+    scheduled_at: DateTime<Utc>,
+) -> Result<ScheduledMessage> {
+    let id = Uuid::new_v4();
+    let now = Utc::now();
+
+    let message = sqlx::query_as::<_, ScheduledMessage>(
+        r#"
+        INSERT INTO scheduled_messages (id, sender_id, conversation_id, content, message_type, reply_to, metadata, scheduled_at, status, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10)
+        RETURNING *
+        "#,
+    )
+    .bind(id)
+    .bind(sender_id)
+    .bind(conversation_id)
+    .bind(content)
+    .bind(message_type)
+    .bind(reply_to)
+    .bind(metadata)
+    .bind(scheduled_at)
+    .bind(now)
+    .bind(now)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("创建定时消息失败: {}", e))?;
+
+    Ok(message)
+}
+
+/// 获取定时消息
+pub async fn get_scheduled_message(
+    pool: &PgPool,
+    message_id: &Uuid,
+    sender_id: &Uuid,
+) -> Result<Option<ScheduledMessage>> {
+    let message = sqlx::query_as::<_, ScheduledMessage>(
+        "SELECT * FROM scheduled_messages WHERE id = $1 AND sender_id = $2"
+    )
+    .bind(message_id)
+    .bind(sender_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取定时消息失败: {}", e))?;
+
+    Ok(message)
+}
+
+/// 更新定时消息
+pub async fn update_scheduled_message(
+    pool: &PgPool,
+    message_id: &Uuid,
+    sender_id: &Uuid,
+    content: Option<&str>,
+    message_type: Option<&str>,
+    reply_to: Option<&Uuid>,
+    metadata: Option<&JsonValue>,
+    scheduled_at: Option<DateTime<Utc>>,
+) -> Result<ScheduledMessage> {
+    let now = Utc::now();
+
+    let message = sqlx::query_as::<_, ScheduledMessage>(
+        r#"
+        UPDATE scheduled_messages
+        SET content = COALESCE($3, content),
+            message_type = COALESCE($4, message_type),
+            reply_to = COALESCE($5, reply_to),
+            metadata = COALESCE($6, metadata),
+            scheduled_at = COALESCE($7, scheduled_at),
+            updated_at = $8
+        WHERE id = $1 AND sender_id = $2 AND status = 'pending'
+        RETURNING *
+        "#,
+    )
+    .bind(message_id)
+    .bind(sender_id)
+    .bind(content)
+    .bind(message_type)
+    .bind(reply_to)
+    .bind(metadata)
+    .bind(scheduled_at)
+    .bind(now)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("更新定时消息失败: {}", e))?;
+
+    Ok(message)
+}
+
+/// 取消定时消息
+pub async fn cancel_scheduled_message(
+    pool: &PgPool,
+    message_id: &Uuid,
+    sender_id: &Uuid,
+) -> Result<bool> {
+    let now = Utc::now();
+
+    let result = sqlx::query(
+        r#"
+        UPDATE scheduled_messages
+        SET status = 'cancelled', updated_at = $3
+        WHERE id = $1 AND sender_id = $2 AND status = 'pending'
+        "#,
+    )
+    .bind(message_id)
+    .bind(sender_id)
+    .bind(now)
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("取消定时消息失败: {}", e))?;
+
+    Ok(result.rows_affected() > 0)
+}
+
+/// 获取用户的定时消息列表
+pub async fn get_scheduled_messages(
+    pool: &PgPool,
+    sender_id: &Uuid,
+    status: Option<&str>,
+    page: i64,
+    limit: i64,
+) -> Result<Vec<ScheduledMessage>> {
+    let offset = (page - 1) * limit;
+
+    let messages = if let Some(status_filter) = status {
+        sqlx::query_as::<_, ScheduledMessage>(
+            "SELECT * FROM scheduled_messages WHERE sender_id = $1 AND status = $2 ORDER BY scheduled_at DESC LIMIT $3 OFFSET $4"
+        )
+        .bind(sender_id)
+        .bind(status_filter)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("获取定时消息列表失败: {}", e))?
+    } else {
+        sqlx::query_as::<_, ScheduledMessage>(
+            "SELECT * FROM scheduled_messages WHERE sender_id = $1 ORDER BY scheduled_at DESC LIMIT $2 OFFSET $3"
+        )
+        .bind(sender_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("获取定时消息列表失败: {}", e))?
+    };
+
+    Ok(messages)
+}
+
+/// 获取待发送的定时消息（用于后台任务）
+pub async fn get_pending_scheduled_messages(
+    pool: &PgPool,
+    limit: i64,
+) -> Result<Vec<ScheduledMessage>> {
+    let now = Utc::now();
+
+    let messages = sqlx::query_as::<_, ScheduledMessage>(
+        r#"
+        SELECT * FROM scheduled_messages
+        WHERE status = 'pending' AND scheduled_at <= $1
+        ORDER BY scheduled_at ASC
+        LIMIT $2
+        "#,
+    )
+    .bind(now)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取待发送消息失败: {}", e))?;
+
+    Ok(messages)
+}
+
+/// 标记定时消息为已发送
+pub async fn mark_scheduled_message_sent(
+    pool: &PgPool,
+    message_id: &Uuid,
+) -> Result<bool> {
+    let now = Utc::now();
+
+    let result = sqlx::query(
+        r#"
+        UPDATE scheduled_messages
+        SET status = 'sent', sent_at = $2, updated_at = $2
+        WHERE id = $1
+        "#,
+    )
+    .bind(message_id)
+    .bind(now)
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("标记消息发送失败: {}", e))?;
+
+    Ok(result.rows_affected() > 0)
+}
+
+/// 标记定时消息为发送失败
+pub async fn mark_scheduled_message_failed(
+    pool: &PgPool,
+    message_id: &Uuid,
+    error_message: &str,
+) -> Result<bool> {
+    let now = Utc::now();
+
+    let result = sqlx::query(
+        r#"
+        UPDATE scheduled_messages
+        SET status = 'failed', error_message = $2, updated_at = $3
+        WHERE id = $1
+        "#,
+    )
+    .bind(message_id)
+    .bind(error_message)
+    .bind(now)
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("标记消息失败状态出错: {}", e))?;
+
+    Ok(result.rows_affected() > 0)
 }

@@ -143,6 +143,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/draft", put(save_draft_with_auth).get(get_draft_with_auth).delete(delete_draft_with_auth))
         .route("/api/im/drafts", get(get_all_drafts_with_auth))
 
+        // 定时消息
+        .route("/api/im/messages/scheduled", post(create_scheduled_message_with_auth).get(get_scheduled_messages_with_auth))
+        .route("/api/im/messages/scheduled/:id", get(get_scheduled_message_with_auth).put(update_scheduled_message_with_auth).delete(cancel_scheduled_message_with_auth))
+
         // 会话置顶消息
         .route("/api/im/conversations/:id/pinned-messages", get(get_pinned_messages_with_auth).post(pin_message_with_auth))
         .route("/api/im/conversations/:id/pinned-messages/:msg_id", delete(unpin_message_with_auth))
@@ -905,6 +909,52 @@ async fn get_all_drafts_with_auth(
     message::get_all_drafts_handler(State(pool), auth, Query(query)).await
 }
 
+/// 创建定时消息
+async fn create_scheduled_message_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<im_api::models::message::CreateScheduledMessageRequest>,
+) -> impl IntoResponse {
+    message::create_scheduled_message_handler(State(pool), auth, Json(req)).await
+}
+
+/// 获取定时消息详情
+async fn get_scheduled_message_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+) -> impl IntoResponse {
+    message::get_scheduled_message_handler(State(pool), auth, Path(message_id)).await
+}
+
+/// 更新定时消息
+async fn update_scheduled_message_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+    Json(req): Json<im_api::models::message::UpdateScheduledMessageRequest>,
+) -> impl IntoResponse {
+    message::update_scheduled_message_handler(State(pool), auth, Path(message_id), Json(req)).await
+}
+
+/// 取消定时消息
+async fn cancel_scheduled_message_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+) -> impl IntoResponse {
+    message::cancel_scheduled_message_handler(State(pool), auth, Path(message_id)).await
+}
+
+/// 获取定时消息列表
+async fn get_scheduled_messages_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Query(query): Query<im_api::models::message::ScheduledMessageQuery>,
+) -> impl IntoResponse {
+    message::get_scheduled_messages_handler(State(pool), auth, Query(query)).await
+}
+
 /// 初始化数据库表
 async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     info!("Initializing database tables...");
@@ -1077,6 +1127,34 @@ async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
             ON draft_messages(user_id, conversation_id);
         CREATE INDEX IF NOT EXISTS idx_draft_messages_user_id ON draft_messages(user_id);
         CREATE INDEX IF NOT EXISTS idx_draft_messages_updated_at ON draft_messages(updated_at DESC);
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    // 创建定时消息表
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS scheduled_messages (
+            id UUID PRIMARY KEY,
+            sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            conversation_id UUID NOT NULL,
+            content TEXT NOT NULL,
+            message_type VARCHAR(20) NOT NULL DEFAULT 'text',
+            reply_to UUID,
+            metadata JSONB,
+            scheduled_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            sent_at TIMESTAMP WITH TIME ZONE,
+            error_message TEXT,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_scheduled_messages_sender_id ON scheduled_messages(sender_id);
+        CREATE INDEX IF NOT EXISTS idx_scheduled_messages_status ON scheduled_messages(status);
+        CREATE INDEX IF NOT EXISTS idx_scheduled_messages_scheduled_at ON scheduled_messages(scheduled_at);
+        CREATE INDEX IF NOT EXISTS idx_scheduled_messages_pending ON scheduled_messages(scheduled_at) WHERE status = 'pending';
         "#
     )
     .execute(pool)

@@ -2199,3 +2199,239 @@ pub async fn get_all_drafts_handler(
         ),
     }
 }
+
+/// 创建定时消息
+pub async fn create_scheduled_message_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<CreateScheduledMessageRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    let conversation_uuid = match req.conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_CONVERSATION_ID", "无效的会话ID")),
+            );
+        }
+    };
+
+    let reply_to_uuid = req.reply_to.and_then(|id| id.parse::<Uuid>().ok());
+
+    // 验证定时时间必须在未来
+    if req.scheduled_at <= Utc::now() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("INVALID_SCHEDULE_TIME", "定时发送时间必须在未来")),
+        );
+    }
+
+    match create_scheduled_message(
+        &pool,
+        &user_uuid,
+        &conversation_uuid,
+        &req.content,
+        &req.type_.to_string(),
+        reply_to_uuid.as_ref(),
+        req.metadata.as_ref(),
+        req.scheduled_at,
+    )
+    .await
+    {
+        Ok(message) => (
+            StatusCode::CREATED,
+            Json(ApiResponse::success(serde_json::json!(message.to_info()))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("CREATE_FAILED", format!("创建定时消息失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取定时消息详情
+pub async fn get_scheduled_message_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    let msg_uuid = match message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_MESSAGE_ID", "无效的消息ID")),
+            );
+        }
+    };
+
+    match get_scheduled_message(&pool, &msg_uuid, &user_uuid).await {
+        Ok(Some(message)) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!(message.to_info()))),
+        ),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("NOT_FOUND", "定时消息不存在")),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("GET_FAILED", format!("获取定时消息失败: {}", e))),
+        ),
+    }
+}
+
+/// 更新定时消息
+pub async fn update_scheduled_message_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+    Json(req): Json<UpdateScheduledMessageRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    let msg_uuid = match message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_MESSAGE_ID", "无效的消息ID")),
+            );
+        }
+    };
+
+    let reply_to_uuid = req.reply_to.and_then(|id| id.parse::<Uuid>().ok());
+    let type_str = req.type_.map(|t| t.to_string());
+
+    match update_scheduled_message(
+        &pool,
+        &msg_uuid,
+        &user_uuid,
+        req.content.as_deref(),
+        type_str.as_deref(),
+        reply_to_uuid.as_ref(),
+        req.metadata.as_ref(),
+        req.scheduled_at,
+    )
+    .await
+    {
+        Ok(message) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!(message.to_info()))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("UPDATE_FAILED", format!("更新定时消息失败: {}", e))),
+        ),
+    }
+}
+
+/// 取消定时消息
+pub async fn cancel_scheduled_message_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    let msg_uuid = match message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_MESSAGE_ID", "无效的消息ID")),
+            );
+        }
+    };
+
+    match cancel_scheduled_message(&pool, &msg_uuid, &user_uuid).await {
+        Ok(true) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({"message": "定时消息已取消"}))),
+        ),
+        Ok(false) => (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::error("NOT_FOUND", "定时消息不存在或已发送")),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("CANCEL_FAILED", format!("取消定时消息失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取定时消息列表
+pub async fn get_scheduled_messages_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Query(query): Query<ScheduledMessageQuery>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    let page = query.page.unwrap_or(1);
+    let limit = query.limit.unwrap_or(20);
+
+    match get_scheduled_messages(&pool, &user_uuid, query.status.as_deref(), page, limit).await {
+        Ok(messages) => {
+            let message_infos: Vec<_> = messages.iter().map(|m| m.to_info()).collect();
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "scheduled_messages": message_infos,
+                    "page": page,
+                    "limit": limit,
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("LIST_FAILED", format!("获取定时消息列表失败: {}", e))),
+        ),
+    }
+}
+use crate::models::message::{CreateScheduledMessageRequest, UpdateScheduledMessageRequest, ScheduledMessageQuery};
+use crate::db::message::{create_scheduled_message, get_scheduled_message, update_scheduled_message, cancel_scheduled_message, get_scheduled_messages};

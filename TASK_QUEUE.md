@@ -593,15 +593,15 @@
 - [x] 收藏备注功能
 - [x] 数据库迁移脚本
 
-#### 54. 草稿消息 ⏳
-- [ ] DraftMessage 模型（user_id, conversation_id, content, updated_at）
-- [ ] 保存草稿 API（PUT /api/im/conversations/:id/draft）
-- [ ] 获取草稿 API（GET /api/im/conversations/:id/draft）
-- [ ] 删除草稿 API（DELETE /api/im/conversations/:id/draft）
-- [ ] 获取所有草稿列表 API（GET /api/im/drafts）
+#### 54. 草稿消息 ✅ (2026-05-14)
+- [x] DraftMessage 模型（user_id, conversation_id, content, updated_at）
+- [x] 保存草稿 API（PUT /api/im/conversations/:id/draft）
+- [x] 获取草稿 API（GET /api/im/conversations/:id/draft）
+- [x] 删除草稿 API（DELETE /api/im/conversations/:id/draft）
+- [x] 获取所有草稿列表 API（GET /api/im/drafts）
 - [ ] 自动保存支持
 
-#### 55. 定时发送消息 ⏳
+#### 55. 定时发送消息 🔄 (2026-05-14 进行中)
 - [ ] ScheduledMessage 模型（sender_id, conversation_id, content, type, scheduled_at, status）
 - [ ] 创建定时消息 API（POST /api/im/messages/scheduled）
 - [ ] 取消定时消息 API（DELETE /api/im/messages/scheduled/:id）

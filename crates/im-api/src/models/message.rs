@@ -190,6 +190,8 @@ pub struct SaveDraftRequest {
 
 fn default_draft_type() -> String { "text".to_string() }
 
+fn default_message_type() -> MessageType { MessageType::Text }
+
 /// 草稿信息（API 响应）
 #[derive(Debug, Serialize)]
 pub struct DraftInfo {
@@ -400,6 +402,119 @@ pub struct BatchOperationError {
     pub index: usize,
     pub id: Option<String>,
     pub error: String,
+}
+
+/// 定时消息状态
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type, utoipa::ToSchema)]
+#[sqlx(type_name = "varchar", rename_all = "lowercase")]
+pub enum ScheduledStatus {
+    #[serde(rename = "pending")]
+    Pending,
+    #[serde(rename = "sent")]
+    Sent,
+    #[serde(rename = "cancelled")]
+    Cancelled,
+    #[serde(rename = "failed")]
+    Failed,
+}
+
+impl std::fmt::Display for ScheduledStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScheduledStatus::Pending => write!(f, "pending"),
+            ScheduledStatus::Sent => write!(f, "sent"),
+            ScheduledStatus::Cancelled => write!(f, "cancelled"),
+            ScheduledStatus::Failed => write!(f, "failed"),
+        }
+    }
+}
+
+/// 定时消息实体
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow, utoipa::ToSchema)]
+pub struct ScheduledMessage {
+    pub id: Uuid,
+    pub sender_id: Uuid,
+    pub conversation_id: Uuid,
+    pub content: String,
+    pub message_type: String,
+    pub reply_to: Option<Uuid>,
+    pub metadata: Option<JsonValue>,
+    pub scheduled_at: DateTime<Utc>,
+    pub status: String,
+    pub sent_at: Option<DateTime<Utc>>,
+    pub error_message: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// 创建定时消息请求
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct CreateScheduledMessageRequest {
+    pub conversation_id: String,
+    pub content: String,
+    #[serde(rename = "type", default = "default_message_type")]
+    pub type_: MessageType,
+    pub reply_to: Option<String>,
+    pub metadata: Option<JsonValue>,
+    pub scheduled_at: DateTime<Utc>,
+}
+
+/// 更新定时消息请求
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct UpdateScheduledMessageRequest {
+    pub content: Option<String>,
+    #[serde(rename = "type")]
+    pub type_: Option<MessageType>,
+    pub reply_to: Option<String>,
+    pub metadata: Option<JsonValue>,
+    pub scheduled_at: Option<DateTime<Utc>>,
+}
+
+/// 定时消息查询参数
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct ScheduledMessageQuery {
+    pub status: Option<String>,
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+}
+
+/// 定时消息信息（API响应）
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ScheduledMessageInfo {
+    pub id: String,
+    pub sender_id: String,
+    pub conversation_id: String,
+    pub content: String,
+    pub message_type: String,
+    pub reply_to: Option<String>,
+    pub metadata: Option<JsonValue>,
+    pub scheduled_at: DateTime<Utc>,
+    pub status: String,
+    pub sent_at: Option<DateTime<Utc>>,
+    pub error_message: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl ScheduledMessage {
+    /// 转换为API响应格式
+    pub fn to_info(&self) -> ScheduledMessageInfo {
+        ScheduledMessageInfo {
+            id: self.id.to_string(),
+            sender_id: self.sender_id.to_string(),
+            conversation_id: self.conversation_id.to_string(),
+            content: self.content.clone(),
+            message_type: self.message_type.clone(),
+            reply_to: self.reply_to.map(|id| id.to_string()),
+            metadata: self.metadata.clone(),
+            scheduled_at: self.scheduled_at,
+            status: self.status.clone(),
+            sent_at: self.sent_at,
+            error_message: self.error_message.clone(),
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        }
+    }
 }
 
 #[cfg(test)]
