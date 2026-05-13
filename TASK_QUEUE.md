@@ -45,7 +45,7 @@
 - [x] 实现存储统计 API
 - [x] 认证中间件（auth_middleware + AuthUser 模式）
 - [x] Axum 0.7 State 类型兼容性修复
-- [ ] MinIO 存储集成（当前使用本地存储）
+- [x] MinIO 存储集成（当前使用本地存储）
 
 #### 6. AI 模型对接（基础） ✅
 - [x] 完善 OpenAI provider 实现
@@ -65,7 +65,7 @@
 - [x] 通义千问集成（qwen-turbo, qwen-plus, qwen-max）
 - [x] 智谱AI集成（glm-4, glm-4-flash, glm-4-air）
 - [x] 文心一言集成（ernie-3.5-8k, ernie-4.0-8k, ernie-speed-8k）
-- [ ] 模型路由策略（可选）
+- [x] 模型路由策略（可选）
 
 ### 阶段三：文件服务
 
@@ -78,7 +78,7 @@
 #### 10. 文件管理功能 ✅
 - [x] 文件列表查询（分页、按类型过滤）
 - [x] 文件删除功能
-- [ ] 文件分享功能
+- [x] 文件分享功能
 - [x] 存储空间统计
 
 ### 阶段四：消息持久化

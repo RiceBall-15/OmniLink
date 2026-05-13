@@ -2,7 +2,6 @@ use axum::{Router, routing::{get, post, delete}, middleware};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::info;
-use std::collections::HashMap;
 
 use common::{auth::TokenManager, db::DatabaseManager};
 use ai_service::handlers::{
