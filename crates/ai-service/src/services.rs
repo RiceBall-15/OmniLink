@@ -752,7 +752,7 @@ impl AIService {
                     Ok(true)
                 }
             }
-            None => Err(common::AppError::NotFound(format!("Provider not found: {}", provider))),
+            None => Err(common::AppError::NotFound(format!("Provider not found: {}", provider)).into()),
         }
     }
 

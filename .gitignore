@@ -53,3 +53,25 @@ tmp/
 
 # Test artifacts
 *.test
+
+# Rust
+*.d
+*.o
+*.so
+*.dylib
+*.dll
+
+# Frontend
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Misc
+*.pyc
+__pycache__/
+.cache/
+tmp/
+
+# Editor
+*.code-workspace
+.history/
