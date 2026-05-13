@@ -380,3 +380,37 @@
   - 添加 WebSocket 心跳清理任务（定期清理过期连接）
   - 更新 TASK_QUEUE.md 任务清单
 
+
+## 🔄 2026-05-14 夜间开发更新
+
+### 会话最后活跃时间优化 ✅
+- 新增 migration 015: 添加 last_message_at, last_message_preview 列到 conversations 表
+- 新增 conversation_user_state 表实现精确的每用户未读计数
+- 更新消息创建时自动更新会话 last_message_at 和 last_message_preview
+- 更新 mark_conversation_as_read 同时更新 conversation_user_state
+- 新增 get_user_unread_count, get_user_unread_counts_batch 函数
+- 更新 conversation handler 使用每用户未读计数
+
+### 自动状态切换 ✅
+- 新增 check_idle_users: 空闲5分钟自动从Online切换为Away
+- 新增 start_auto_status_task: 每60秒检查一次空闲和过期用户
+- 集成到 im-gateway main.rs 启动流程
+- 空闲60秒自动变为Offline（原有cleanup_expired逻辑）
+
+### 草稿消息自动保存 ✅
+- 后端 API 已完成（save_draft, get_draft, delete_draft, get_all_drafts）
+- 自动保存由前端 debounce 调用已有 save_draft API 实现
+
+### 定时发送消息后台任务 ✅
+- 后台 worker 已实现（scheduled_task.rs）
+- 每30秒检查一次到期的定时消息
+- 自动发送并标记状态（sent/failed）
+
+### 会话通知偏好设置 ✅
+- 通知偏好已完整实现
+- 全局通知设置、免打扰时段支持
+- push-service 集成为可选扩展
+
+---
+
+**总体进度**: 44个任务中已完成43个，完成率 98%
