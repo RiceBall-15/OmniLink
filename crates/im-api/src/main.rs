@@ -19,21 +19,32 @@ use im_api::handlers::message;
 use im_api::handlers::conversation;
 use im_api::handlers::health::health_check_with_deps;
 use im_api::handlers::encryption;
+use im_api::handlers::metrics::{get_metrics, init_start_time};
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::rate_limit::{RateLimitConfig, RateLimitState, rate_limit_middleware};
 use im_api::middleware::request_id::request_id_middleware;
+use im_api::middleware::request_timing::request_timing_middleware;
 use im_api::models::auth::ApiResponse;
 use im_api::openapi::ApiDoc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // 初始化日志
-    tracing_subscriber::fmt::init();
+    // 初始化结构化日志（JSON格式）
+    tracing_subscriber::fmt()
+        .json()
+        .with_target(true)
+        .with_thread_ids(true)
+        .with_file(true)
+        .with_line_number(true)
+        .init();
 
     // 加载环境变量
     dotenvy::dotenv().ok();
 
     info!("Starting IM API service...");
+
+    // 初始化启动时间（用于指标统计）
+    init_start_time();
 
     // 初始化数据库连接池
     let database_url = std::env::var("DATABASE_URL")
@@ -90,6 +101,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         // 健康检查（标准化版本，包含依赖检查）
         .route("/health", get(health_check_with_deps))
+        .route("/metrics", get(get_metrics))
 
         // Swagger UI
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", openapi))
@@ -153,6 +165,8 @@ async fn main() -> anyhow::Result<()> {
 
         // 添加数据库连接池到状态
         .with_state(pool)
+        // 添加请求耗时中间件层
+        .layer(axum::middleware::from_fn(request_timing_middleware))
         // 添加请求追踪中间件层
         .layer(axum::middleware::from_fn(request_id_middleware))
         // 添加速率限制中间件层
