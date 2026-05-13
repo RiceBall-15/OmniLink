@@ -21,6 +21,7 @@ use im_api::handlers::health::health_check_with_deps;
 use im_api::handlers::encryption;
 use im_api::handlers::metrics::{get_metrics, init_start_time};
 use im_api::middleware::auth::AuthUser;
+use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::rate_limit::{RateLimitConfig, RateLimitState, rate_limit_middleware};
 use im_api::middleware::request_id::request_id_middleware;
 use im_api::middleware::request_timing::request_timing_middleware;
@@ -165,6 +166,8 @@ async fn main() -> anyhow::Result<()> {
 
         // 添加数据库连接池到状态
         .with_state(pool)
+        // 添加全局错误捕获中间件层（最外层，捕获所有未处理错误）
+        .layer(axum::middleware::from_fn(error_capture_middleware))
         // 添加请求耗时中间件层
         .layer(axum::middleware::from_fn(request_timing_middleware))
         // 添加请求追踪中间件层
