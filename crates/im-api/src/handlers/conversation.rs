@@ -28,7 +28,8 @@ use crate::models::conversation::{
     SearchConversationsQuery, GetConversationsQuery, CreateTagRequest,
 };
 use crate::db::conversation as db;
-use crate::db::message::get_last_message;
+use crate::db::message::{get_last_message, get_last_messages_batch};
+use crate::db::conversation::get_conversation_tags_batch;
 
 /// 获取用户的会话列表
 pub async fn get_conversations(
@@ -66,23 +67,35 @@ pub async fn get_conversations(
         Ok(conversation_entities) => {
             let mut conversations: Vec<serde_json::Value> = Vec::new();
 
+            // 批量获取所有会话的最后一条消息和标签（避免 N+1 查询）
+            let conv_ids: Vec<Uuid> = conversation_entities.iter().map(|c| c.id).collect();
+
+            let last_messages = get_last_messages_batch(&pool, &conv_ids)
+                .await
+                .unwrap_or_default();
+            let conv_tags = get_conversation_tags_batch(&pool, &conv_ids)
+                .await
+                .unwrap_or_default();
+
             for conv_entity in conversation_entities {
                 let mut conversation = conv_entity.to_conversation();
 
-                // 获取最后一条消息
-                if let Ok(Some(last_msg_entity)) = get_last_message(&pool, &conv_entity.id).await {
+                // 从批量结果中获取最后一条消息
+                if let Some(last_msg_entity) = last_messages.get(&conv_entity.id) {
                     conversation.last_message = Some(last_msg_entity.to_message());
                 }
 
-                // 获取会话标签
-                let tags = match db::get_conversation_tags(&pool, &conv_entity.id).await {
-                    Ok(tags) => tags.into_iter().map(|t| serde_json::json!({
-                        "id": t.id.to_string(),
-                        "name": t.name,
-                        "color": t.color,
-                    })).collect::<Vec<_>>(),
-                    Err(_) => vec![],
-                };
+                // 从批量结果中获取会话标签
+                let tags = conv_tags
+                    .get(&conv_entity.id)
+                    .map(|tag_list| {
+                        tag_list.iter().map(|t| serde_json::json!({
+                            "id": t.id.to_string(),
+                            "name": t.name,
+                            "color": t.color,
+                        })).collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
 
                 let mut conv_json = serde_json::to_value(&conversation).unwrap();
                 conv_json["tags"] = serde_json::json!(tags);

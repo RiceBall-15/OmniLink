@@ -364,3 +364,36 @@ pub struct MessageStats {
     pub first_message_at: Option<chrono::NaiveDateTime>,
     pub last_message_at: Option<chrono::NaiveDateTime>,
 }
+
+use std::collections::HashMap;
+
+/// 批量获取多个会话的最后一条消息（避免 N+1 查询）
+pub async fn get_last_messages_batch(
+    pool: &PgPool,
+    conversation_ids: &[Uuid],
+) -> Result<HashMap<Uuid, MessageEntity>> {
+    if conversation_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    // 使用 DISTINCT ON 高效获取每个会话的最后一条消息
+    let messages = sqlx::query_as::<_, MessageEntity>(
+        r#"
+        SELECT DISTINCT ON (conversation_id) *
+        FROM messages
+        WHERE conversation_id = ANY($1)
+        ORDER BY conversation_id, created_at DESC
+        "#
+    )
+    .bind(conversation_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("批量获取最后消息失败: {}", e))?;
+
+    let mut map = HashMap::new();
+    for msg in messages {
+        map.insert(msg.conversation_id, msg);
+    }
+
+    Ok(map)
+}

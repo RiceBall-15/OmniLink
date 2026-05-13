@@ -750,3 +750,59 @@ pub async fn get_conversation_tags(
 }
 
 use crate::models::conversation::ConversationTag;
+
+use std::collections::HashMap;
+
+/// 批量获取标签链接（内部辅助结构）
+#[derive(Debug, sqlx::FromRow)]
+struct TagLinkWithTag {
+    conversation_id: Uuid,
+    tag_id: Uuid,
+    tag_name: String,
+    tag_color: Option<String>,
+    tag_user_id: Uuid,
+    tag_created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// 批量获取多个会话的标签（避免 N+1 查询）
+pub async fn get_conversation_tags_batch(
+    pool: &PgPool,
+    conversation_ids: &[Uuid],
+) -> Result<HashMap<Uuid, Vec<ConversationTag>>> {
+    if conversation_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let links = sqlx::query_as::<_, TagLinkWithTag>(
+        r#"
+        SELECT ctl.conversation_id,
+               ct.id as tag_id,
+               ct.name as tag_name,
+               ct.color as tag_color,
+               ct.user_id as tag_user_id,
+               ct.created_at as tag_created_at
+        FROM conversation_tags ct
+        INNER JOIN conversation_tag_links ctl ON ct.id = ctl.tag_id
+        WHERE ctl.conversation_id = ANY($1)
+        ORDER BY ct.name ASC
+        "#
+    )
+    .bind(conversation_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("批量获取会话标签失败: {}", e))?;
+
+    let mut map: HashMap<Uuid, Vec<ConversationTag>> = HashMap::new();
+    for link in links {
+        let tag = ConversationTag {
+            id: link.tag_id,
+            user_id: link.tag_user_id,
+            name: link.tag_name,
+            color: link.tag_color,
+            created_at: link.tag_created_at,
+        };
+        map.entry(link.conversation_id).or_default().push(tag);
+    }
+
+    Ok(map)
+}
