@@ -299,7 +299,7 @@ pub async fn health_check() -> &'static str {
 /// 获取文件预览信息
 pub async fn get_file_preview(
     State(state): State<Arc<AppState>>,
-    auth_user: AuthUser,
+    _auth_user: AuthUser,
     Path(file_id): Path<String>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
     let file_uuid = Uuid::parse_str(&file_id).map_err(|_| StatusCode::BAD_REQUEST)?;

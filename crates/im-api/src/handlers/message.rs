@@ -929,7 +929,7 @@ pub async fn remove_reaction(
 /// 获取消息的表情回应列表
 pub async fn get_reactions(
     State(pool): State<PgPool>,
-    auth: AuthUser,
+    _auth: AuthUser,
     Path(message_id): Path<String>,
 ) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
     let msg_uuid = match message_id.parse::<Uuid>() {
@@ -991,7 +991,7 @@ pub struct ForwardMessageRequest {
 pub async fn forward_message(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
-    Path((conversation_id, message_id)): Path<(String, String)>,
+    Path((_conversation_id, message_id)): Path<(String, String)>,
     Json(req): Json<ForwardMessageRequest>,
 ) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
     // 解析 ID

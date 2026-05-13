@@ -437,7 +437,7 @@ impl FileService {
     /// 生成分享 token
     fn generate_share_token(&self) -> String {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let timestamp = SystemTime::now()
+        let _timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
