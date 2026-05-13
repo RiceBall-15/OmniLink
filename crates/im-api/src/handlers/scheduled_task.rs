@@ -60,6 +60,8 @@ async fn process_pending_scheduled_messages(pool: &PgPool) -> anyhow::Result<()>
             type_: message_type,
             reply_to: scheduled.reply_to,
             metadata: scheduled.metadata.clone(),
+            burn_after_reading: false,
+            burn_after_seconds: None,
         };
 
         match create_message(pool, params).await {

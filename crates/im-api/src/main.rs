@@ -165,6 +165,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/messages/batch/delete", post(batch_delete_messages_with_auth))
         .route("/api/im/messages/batch/mark-read", post(batch_mark_as_read_with_auth))
 
+        // 阅后即焚
+        .route("/api/im/conversations/:id/messages/:msg_id/read-burn", post(mark_single_message_read_with_auth))
+        .route("/api/im/conversations/:id/expiring-messages", get(get_expiring_messages_with_auth))
+        .route("/api/im/messages/cleanup-burn", post(cleanup_burn_messages_with_auth))
+
         // 用户屏蔽
         .route("/api/users/:id/block", post(block_user_with_auth).delete(unblock_user_with_auth))
         .route("/api/users/blocked", get(get_blocked_list_with_auth))
@@ -560,6 +565,33 @@ async fn batch_mark_as_read_with_auth(
 ) -> impl IntoResponse {
     let user_id = auth.user_id;
     message::batch_mark_as_read(Extension(pool), Extension(user_id), Json(req)).await
+}
+
+/// 标记单条消息已读并处理阅后即焚（包装认证中间件）
+async fn mark_single_message_read_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path((conversation_id, message_id)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::mark_single_message_read_handler(State(pool), Extension(user_id), Path((conversation_id, message_id))).await
+}
+
+/// 获取即将焚毁的消息列表（包装认证中间件）
+async fn get_expiring_messages_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id;
+    message::get_expiring_messages_handler(State(pool), Extension(user_id), Path(conversation_id)).await
+}
+
+/// 清理过期阅后即焚消息（包装认证中间件）
+async fn cleanup_burn_messages_with_auth(
+    State(pool): State<PgPool>,
+) -> impl IntoResponse {
+    message::cleanup_burn_messages_handler(State(pool)).await
 }
 
 /// 屏蔽用户（包装认证中间件）

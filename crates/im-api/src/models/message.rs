@@ -258,6 +258,15 @@ pub struct Message {
     pub reply_to: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<JsonValue>,
+    /// 是否为阅后即焚消息
+    #[serde(rename = "burnAfterReading", default)]
+    pub burn_after_reading: bool,
+    /// 阅读后焚毁时间（秒），None 表示不焚毁
+    #[serde(rename = "burnAfterSeconds", skip_serializing_if = "Option::is_none")]
+    pub burn_after_seconds: Option<i32>,
+    /// 消息被焚毁时间，None 表示未焚毁
+    #[serde(rename = "burnedAt", skip_serializing_if = "Option::is_none")]
+    pub burned_at: Option<String>,
 }
 
 /// 数据库中的消息实体
@@ -275,6 +284,9 @@ pub struct MessageEntity {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub read_at: Option<DateTime<Utc>>,
+    pub burn_after_reading: bool,
+    pub burn_after_seconds: Option<i32>,
+    pub burned_at: Option<DateTime<Utc>>,
 }
 
 impl MessageEntity {
@@ -292,6 +304,9 @@ impl MessageEntity {
             read_at: self.read_at.map(|t| t.to_rfc3339()),
             reply_to: self.reply_to.map(|u| u.to_string()),
             metadata: self.metadata.clone(),
+            burn_after_reading: self.burn_after_reading,
+            burn_after_seconds: self.burn_after_seconds,
+            burned_at: self.burned_at.map(|t| t.to_rfc3339()),
         }
     }
 }
@@ -305,6 +320,12 @@ pub struct SendMessageRequest {
     /// 回复的消息 ID（可选）
     #[serde(rename = "replyTo", skip_serializing_if = "Option::is_none")]
     pub reply_to: Option<String>,
+    /// 阅后即焚（可选）
+    #[serde(rename = "burnAfterReading", default)]
+    pub burn_after_reading: bool,
+    /// 阅读后焚毁时间（秒），默认30秒
+    #[serde(rename = "burnAfterSeconds", skip_serializing_if = "Option::is_none")]
+    pub burn_after_seconds: Option<i32>,
 }
 
 /// 编辑消息请求
@@ -372,6 +393,10 @@ pub struct CreateMessageParams {
     pub type_: MessageType,
     pub reply_to: Option<Uuid>,
     pub metadata: Option<JsonValue>,
+    /// 阅后即焚
+    pub burn_after_reading: bool,
+    /// 阅读后焚毁时间（秒）
+    pub burn_after_seconds: Option<i32>,
 }
 
 /// 批量发送消息请求

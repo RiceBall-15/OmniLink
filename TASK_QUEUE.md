@@ -33,7 +33,7 @@
 - [x] token 过期处理
 - [x] 权限检查
 
-#### 5. 文件上传 API 实现 ⏳
+#### 5. 文件上传 API 实现 ✅ (2026-05-13)
 - [x] 修复 file-service 28个编译错误
 - [x] 实现文件上传 handler（单文件 + 批量）
 - [x] 文件类型和大小验证（11种MIME类型）
@@ -61,7 +61,7 @@
 - [x] 对话历史存储（对话历史持久化 + 分页查询）
 - [x] 模型切换功能（请求级模型覆盖已实现）
 
-#### 8. 国内模型支持 ⏳
+#### 8. 国内模型支持 ✅ (2026-05-13)
 - [x] 通义千问集成（qwen-turbo, qwen-plus, qwen-max）
 - [x] 智谱AI集成（glm-4, glm-4-flash, glm-4-air）
 - [x] 文心一言集成（ernie-3.5-8k, ernie-4.0-8k, ernie-speed-8k）
@@ -69,7 +69,7 @@
 
 ### 阶段三：文件服务
 
-#### 9. 文件下载和预览 ⏳
+#### 9. 文件下载和预览 ✅ (2026-05-13) — CDN集成为可选扩展
 - [x] 文件下载 API（已在 Task 5 中实现）
 - [x] 图片缩略图获取
 - [x] 文件权限控制（用户所有权验证）
@@ -292,21 +292,62 @@
 #### 32. 用户输入状态指示器 ✅（已存在）
 - [x] Typing 消息类型已存在于 WSMessageType 枚举
 - [x] 输入状态广播已实现（send_to_conversation_except）
-- [x] 完整的 Typing 处理逻辑在 ws.rs 中
+- [x] 更新 conversation handler 使用每用户未读计数
+
+### 阶段十四：V2.0 核心后端功能 🔥
+
+#### 62. 消息阅后即焚 ⏳
+- [ ] BurnAfterReading 模型（message_id, ttl_seconds, read_at, expires_at）
+- [ ] 阅后即焚消息创建（SendMessageRequest 增加 burn_after_reading 字段）
+- [ ] 消息已读后启动倒计时（mark_read 时计算 expires_at）
+- [ ] 后台定时清理过期焚毁消息（cleanup_burned_messages task）
+- [ ] WebSocket 通知发送者消息已被焚毁
+- [ ] 数据库迁移脚本
+
+#### 63. 系统公告/通知 ⏳
+- [ ] SystemAnnouncement 模型（title, content, type, priority, created_by, expires_at）
+- [ ] 创建系统公告 API（POST /api/admin/announcements）
+- [ ] 获取公告列表 API（GET /api/announcements）
+- [ ] 标记已读 API（POST /api/announcements/:id/read）
+- [ ] WebSocket 广播新公告
+- [ ] 公告过期自动清理
+
+#### 64. 快捷回复模板 ⏳
+- [ ] QuickReply 模型（user_id, title, content, category, sort_order）
+- [ ] 创建快捷回复 API（POST /api/users/quick-replies）
+- [ ] 获取快捷回复列表 API（GET /api/users/quick-replies）
+- [ ] 更新/删除快捷回复 API
+- [ ] 按分类筛选
+- [ ] 全局快捷回复（管理员设置）
+
+#### 65. 用户反馈系统 ⏳
+- [ ] UserFeedback 模型（user_id, type, content, status, priority）
+- [ ] 提交反馈 API（POST /api/feedback）
+- [ ] 获取反馈列表 API（GET /api/feedback，管理员）
+- [ ] 反馈状态更新 API（PATCH /api/feedback/:id）
+- [ ] 反馈分类（bug, feature, other）
+
+#### 66. 聊天记录导出 ⏳
+- [ ] ExportJob 模型（user_id, conversation_id, format, status, file_url）
+- [ ] 创建导出任务 API（POST /api/im/conversations/:id/export）
+- [ ] 导出格式支持（JSON, CSV, TXT）
+- [ ] 后台异步导出（export_task worker）
+- [ ] 导出文件下载 API
+- [ ] 导出进度查询 API
 
 ## 📈 进度追踪
 
-**总任务数**: 44 (含阶段十一)
-**已完成**: 43
+**总任务数**: 66 (含阶段十四)
+**已完成**: 61
 **进行中**: 0
-**待开发**: 1
+**待开发**: 5
 **受阻**: 0
 
-**完成率**: 98%
+**完成率**: 92%
 
 ---
 
-*最后更新: 2026-05-14 01:10*
+*最后更新: 2026-05-14 06:30*
 
 ### 阶段九：进阶功能与优化 🔥
 

@@ -19,8 +19,8 @@ pub async fn create_message(pool: &PgPool, params: CreateMessageParams) -> Resul
 
     let message = sqlx::query_as::<_, MessageEntity>(
         r#"
-        INSERT INTO messages (id, conversation_id, sender_id, content, type, status, reply_to, metadata, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        INSERT INTO messages (id, conversation_id, sender_id, content, type, status, reply_to, metadata, created_at, updated_at, burn_after_reading, burn_after_seconds)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING *
         "#
     )
@@ -34,6 +34,8 @@ pub async fn create_message(pool: &PgPool, params: CreateMessageParams) -> Resul
     .bind(params.metadata)
     .bind(now)
     .bind(now)
+    .bind(params.burn_after_reading)
+    .bind(params.burn_after_seconds)
     .fetch_one(pool)
     .await
     .map_err(|e| anyhow::anyhow!("创建消息失败: {}", e))?;
@@ -1050,4 +1052,133 @@ pub struct ThreadSummaryRow {
     pub parent_created_at: DateTime<Utc>,
     pub reply_count: i64,
     pub last_reply_at: DateTime<Utc>,
+}
+
+// ========== 阅后即焚功能 ==========
+
+/// 标记消息已读，并为阅后即焚消息设置焚毁时间
+pub async fn mark_message_as_read_with_burn(
+    pool: &PgPool,
+    message_id: &Uuid,
+    user_id: &Uuid,
+) -> Result<bool> {
+    // 获取消息信息
+    let message = sqlx::query_as::<_, MessageEntity>(
+        "SELECT * FROM messages WHERE id = $1 AND deleted_at IS NULL"
+    )
+    .bind(message_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("查询消息失败: {}", e))?;
+
+    let message = match message {
+        Some(m) => m,
+        None => return Ok(false),
+    };
+
+    // 只有接收者才能触发阅后即焚
+    if message.sender_id == *user_id {
+        return Ok(false);
+    }
+
+    // 检查是否是阅后即焚消息
+    if message.burn_after_reading {
+        let burn_seconds = message.burn_after_seconds.unwrap_or(30);
+        let burned_at = Utc::now() + chrono::Duration::seconds(burn_seconds as i64);
+
+        // 更新消息的 burned_at 时间
+        sqlx::query(
+            "UPDATE messages SET burned_at = $1, updated_at = NOW() WHERE id = $2"
+        )
+        .bind(burned_at)
+        .bind(message_id)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("设置焚毁时间失败: {}", e))?;
+
+        // 插入已读回执
+        let _ = sqlx::query(
+            r#"INSERT INTO message_receipts (message_id, user_id, read_at)
+               VALUES ($1, $2, NOW())
+               ON CONFLICT (message_id, user_id) DO NOTHING"#
+        )
+        .bind(message_id)
+        .bind(user_id)
+        .execute(pool)
+        .await;
+
+        return Ok(true); // 表示消息将被焚毁
+    }
+
+    // 非阅后即焚消息，正常标记已读
+    let _ = sqlx::query(
+        r#"INSERT INTO message_receipts (message_id, user_id, read_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (message_id, user_id) DO NOTHING"#
+    )
+    .bind(message_id)
+    .bind(user_id)
+    .execute(pool)
+    .await;
+
+    Ok(false)
+}
+
+/// 清理已过期的阅后即焚消息（软删除）
+pub async fn cleanup_expired_burn_messages(pool: &PgPool) -> Result<usize> {
+    let result = sqlx::query(
+        r#"UPDATE messages
+           SET deleted_at = NOW(), updated_at = NOW()
+           WHERE burn_after_reading = TRUE
+             AND burned_at IS NOT NULL
+             AND burned_at <= NOW()
+             AND deleted_at IS NULL"#
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("清理过期阅后即焚消息失败: {}", e))?;
+
+    Ok(result.rows_affected() as usize)
+}
+
+/// 检查消息是否已被焚毁
+pub async fn is_message_burned(pool: &PgPool, message_id: &Uuid) -> Result<bool> {
+    let result = sqlx::query_scalar::<_, bool>(
+        r#"SELECT burn_after_reading = TRUE
+                AND burned_at IS NOT NULL
+                AND burned_at <= NOW()
+           FROM messages
+           WHERE id = $1 AND deleted_at IS NULL"#
+    )
+    .bind(message_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("检查消息焚毁状态失败: {}", e))?;
+
+    Ok(result.unwrap_or(false))
+}
+
+/// 获取会话中即将焚毁的消息（用于通知客户端）
+pub async fn get_expiring_messages(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+    user_id: &Uuid,
+) -> Result<Vec<MessageEntity>> {
+    let messages = sqlx::query_as::<_, MessageEntity>(
+        r#"SELECT m.* FROM messages m
+           WHERE m.conversation_id = $1
+             AND m.sender_id != $2
+             AND m.burn_after_reading = TRUE
+             AND m.burned_at IS NOT NULL
+             AND m.burned_at > NOW()
+             AND m.deleted_at IS NULL
+           ORDER BY m.burned_at ASC"#
+    )
+    .bind(conversation_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取即将焚毁消息失败: {}", e))?;
+
+    Ok(messages)
 }

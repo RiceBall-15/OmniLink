@@ -156,6 +156,14 @@ pub async fn send_message(
     // 创建消息参数
     let reply_to_uuid = req.reply_to.and_then(|s| s.parse::<Uuid>().ok());
 
+    // 处理阅后即焚设置
+    let burn_after_reading = req.burn_after_reading;
+    let burn_after_seconds = if burn_after_reading {
+        Some(req.burn_after_seconds.unwrap_or(30)) // 默认30秒
+    } else {
+        req.burn_after_seconds
+    };
+
     let params = CreateMessageParams {
         conversation_id: conv_uuid,
         sender_id: sender_uuid,
@@ -163,6 +171,8 @@ pub async fn send_message(
         type_: req.type_,
         reply_to: reply_to_uuid,
         metadata: None,
+        burn_after_reading,
+        burn_after_seconds,
     };
 
     // 创建消息
@@ -1118,6 +1128,8 @@ pub async fn forward_message(
             type_: original_message.type_.clone().parse().unwrap_or(crate::models::message::MessageType::Text),
             reply_to: None,
             metadata: Some(forward_metadata),
+            burn_after_reading: false,
+            burn_after_seconds: None,
         };
 
         match create_message(&pool, params).await {
@@ -1625,6 +1637,8 @@ pub async fn batch_send_messages(
             type_: msg_type,
             reply_to,
             metadata: None,
+            burn_after_reading: false,
+            burn_after_seconds: None,
         });
     }
 
@@ -2610,4 +2624,132 @@ pub async fn get_thread_count_handler(
     }
 }
 
-use crate::db::message::{get_thread_replies, count_thread_replies, get_active_threads_in_conversation};
+use crate::db::message::{get_thread_replies, count_thread_replies, get_active_threads_in_conversation, mark_message_as_read_with_burn, cleanup_expired_burn_messages, get_expiring_messages};
+
+// ========== 阅后即焚功能 API ==========
+
+/// 标记单条消息已读并处理阅后即焚
+pub async fn mark_single_message_read_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Path((conversation_id, message_id)): Path<(String, String)>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let _conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    let msg_uuid = match message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的消息 ID")),
+            );
+        }
+    };
+
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    match mark_message_as_read_with_burn(&pool, &msg_uuid, &user_uuid).await {
+        Ok(will_burn) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "messageId": message_id,
+                "burnTriggered": will_burn,
+                "message": if will_burn { "消息将在设定时间后焚毁" } else { "消息已标记为已读" }
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("MARK_READ_FAILED", format!("标记已读失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取会话中即将焚毁的消息列表
+pub async fn get_expiring_messages_handler(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<String>,
+    Path(conversation_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的会话 ID")),
+            );
+        }
+    };
+
+    let user_uuid = match user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户 ID")),
+            );
+        }
+    };
+
+    match get_expiring_messages(&pool, &conv_uuid, &user_uuid).await {
+        Ok(messages) => {
+            let result: Vec<serde_json::Value> = messages
+                .iter()
+                .map(|m| {
+                    let msg = m.to_message();
+                    serde_json::json!({
+                        "id": msg.id,
+                        "burnedAt": msg.burned_at,
+                        "burnAfterSeconds": msg.burn_after_seconds,
+                    })
+                })
+                .collect();
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "expiringMessages": result,
+                    "count": result.len(),
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("GET_EXPIRING_FAILED", format!("获取即将焚毁消息失败: {}", e))),
+        ),
+    }
+}
+
+/// 手动触发清理过期的阅后即焚消息（管理员或定时任务调用）
+pub async fn cleanup_burn_messages_handler(
+    State(pool): State<PgPool>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    match cleanup_expired_burn_messages(&pool).await {
+        Ok(count) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "cleanedCount": count,
+                "message": format!("已清理 {} 条过期的阅后即焚消息", count),
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("CLEANUP_FAILED", format!("清理阅后即焚消息失败: {}", e))),
+        ),
+    }
+}
