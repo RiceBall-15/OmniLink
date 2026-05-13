@@ -110,6 +110,57 @@ pub struct ReactionSummary {
     pub users: Vec<Uuid>,
 }
 
+/// 消息收藏/书签
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct MessageBookmark {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub message_id: Uuid,
+    pub conversation_id: Uuid,
+    pub note: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// 添加收藏请求
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct AddBookmarkRequest {
+    /// 收藏备注（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// 收藏列表查询参数
+#[derive(Debug, Deserialize)]
+pub struct BookmarkQuery {
+    #[serde(default = "default_page")]
+    pub page: i64,
+    #[serde(default = "default_page_size")]
+    pub limit: i64,
+}
+
+fn default_page() -> i64 { 1 }
+fn default_page_size() -> i64 { 50 }
+
+/// 收藏信息（包含消息详情）
+#[derive(Debug, Serialize)]
+pub struct BookmarkInfo {
+    pub id: String,
+    #[serde(rename = "messageId")]
+    pub message_id: String,
+    #[serde(rename = "conversationId")]
+    pub conversation_id: String,
+    #[serde(rename = "senderId")]
+    pub sender_id: String,
+    pub content: String,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub note: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "bookmarkedAt")]
+    pub bookmarked_at: String,
+}
+
 /// 消息实体（与前端接口完全匹配）
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Message {

@@ -1781,3 +1781,221 @@ pub async fn batch_mark_as_read(
         ),
     }
 }
+
+// === 消息收藏/书签处理 ===
+
+use crate::models::message::{AddBookmarkRequest, BookmarkQuery};
+use crate::db::message::{add_bookmark, remove_bookmark, get_bookmarks, is_bookmarked};
+
+/// 收藏消息
+pub async fn add_bookmark_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+    Json(req): Json<AddBookmarkRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let msg_uuid = match message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的消息ID")),
+            );
+        }
+    };
+
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    // 检查消息是否存在
+    let message = match sqlx::query_as::<_, MessageEntity>(
+        "SELECT * FROM messages WHERE id = $1 AND deleted_at IS NULL"
+    )
+    .bind(msg_uuid)
+    .fetch_optional(&pool)
+    .await
+    {
+        Ok(Some(msg)) => msg,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiResponse::error("MESSAGE_NOT_FOUND", "消息不存在")),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("DB_ERROR", format!("查询消息失败: {}", e))),
+            );
+        }
+    };
+
+    // 检查用户是否在会话中
+    let is_member = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2)"
+    )
+    .bind(message.conversation_id)
+    .bind(user_uuid)
+    .fetch_one(&pool)
+    .await
+    {
+        Ok(exists) => exists,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("DB_ERROR", format!("检查成员失败: {}", e))),
+            );
+        }
+    };
+
+    if !is_member {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::error("NOT_MEMBER", "您不是该会话的成员")),
+        );
+    }
+
+    match add_bookmark(&pool, &user_uuid, &msg_uuid, req.note.as_deref()).await {
+        Ok(bookmark) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "id": bookmark.id.to_string(),
+                "messageId": bookmark.message_id.to_string(),
+                "note": bookmark.note,
+                "createdAt": bookmark.created_at.to_rfc3339(),
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("BOOKMARK_FAILED", format!("收藏失败: {}", e))),
+        ),
+    }
+}
+
+/// 取消收藏消息
+pub async fn remove_bookmark_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let msg_uuid = match message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的消息ID")),
+            );
+        }
+    };
+
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match remove_bookmark(&pool, &user_uuid, &msg_uuid).await {
+        Ok(removed) => {
+            if removed {
+                (
+                    StatusCode::OK,
+                    Json(ApiResponse::success(serde_json::json!({
+                        "message": "已取消收藏"
+                    }))),
+                )
+            } else {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ApiResponse::error("NOT_FOUND", "未找到该收藏")),
+                )
+            }
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("REMOVE_BOOKMARK_FAILED", format!("取消收藏失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取用户收藏列表
+pub async fn get_bookmarks_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Query(query): Query<BookmarkQuery>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match get_bookmarks(&pool, &user_uuid, query.page, query.limit).await {
+        Ok(bookmarks) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "bookmarks": bookmarks,
+                "page": query.page,
+                "limit": query.limit,
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("GET_BOOKMARKS_FAILED", format!("获取收藏列表失败: {}", e))),
+        ),
+    }
+}
+
+/// 检查消息收藏状态
+pub async fn check_bookmark_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let msg_uuid = match message_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的消息ID")),
+            );
+        }
+    };
+
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match is_bookmarked(&pool, &user_uuid, &msg_uuid).await {
+        Ok(bookmarked) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "bookmarked": bookmarked,
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("CHECK_FAILED", format!("检查收藏状态失败: {}", e))),
+        ),
+    }
+}

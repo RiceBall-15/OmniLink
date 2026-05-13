@@ -583,3 +583,37 @@
 - [x] 连接质量指标（延迟、丢包率）- ConnectionQuality/QualityLevel
 - [x] 自适应心跳间隔 - Adaptive heartbeat based on quality
 
+### 阶段十二：平台完善功能 🔥
+
+#### 53. 消息收藏/书签 ⏳
+- [ ] MessageBookmark 模型（user_id, message_id, note, created_at）
+- [ ] 收藏消息 API（POST /api/im/messages/:id/bookmark）
+- [ ] 取消收藏 API（DELETE /api/im/messages/:id/bookmark）
+- [ ] 获取收藏列表 API（GET /api/im/bookmarks）
+- [ ] 收藏备注功能
+- [ ] 数据库迁移脚本
+
+#### 54. 草稿消息 ⏳
+- [ ] DraftMessage 模型（user_id, conversation_id, content, updated_at）
+- [ ] 保存草稿 API（PUT /api/im/conversations/:id/draft）
+- [ ] 获取草稿 API（GET /api/im/conversations/:id/draft）
+- [ ] 删除草稿 API（DELETE /api/im/conversations/:id/draft）
+- [ ] 获取所有草稿列表 API（GET /api/im/drafts）
+- [ ] 自动保存支持
+
+#### 55. 定时发送消息 ⏳
+- [ ] ScheduledMessage 模型（sender_id, conversation_id, content, type, scheduled_at, status）
+- [ ] 创建定时消息 API（POST /api/im/messages/scheduled）
+- [ ] 取消定时消息 API（DELETE /api/im/messages/scheduled/:id）
+- [ ] 获取定时消息列表 API（GET /api/im/messages/scheduled）
+- [ ] 编辑定时消息 API（PUT /api/im/messages/scheduled/:id）
+- [ ] 后台定时发送任务
+
+#### 56. 会话通知偏好设置 ⏳
+- [ ] ConversationNotification 模型（user_id, conversation_id, muted, sound, badge, mention_only）
+- [ ] 获取通知偏好 API（GET /api/im/conversations/:id/notification-settings）
+- [ ] 更新通知偏好 API（PUT /api/im/conversations/:id/notification-settings）
+- [ ] 全局通知设置 API
+- [ ] 免打扰时段支持
+- [ ] 与 push-service 集成
+

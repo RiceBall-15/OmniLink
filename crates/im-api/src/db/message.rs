@@ -1,10 +1,11 @@
 use sqlx::PgPool;
 use uuid::Uuid;
-use chrono::{Utc, Duration};
+use chrono::{Utc, DateTime, Duration};
 use anyhow::Result;
 
 use crate::models::message::{
     MessageEntity, CreateMessageParams, MessageStatus,
+    MessageBookmark, BookmarkInfo,
 };
 
 /// 创建消息
@@ -473,4 +474,114 @@ pub async fn batch_mark_conversations_as_read(
     .await
     .map_err(|e| anyhow::anyhow!("批量标记已读失败: {}", e))?;
     Ok(result.rows_affected() as usize)
+}
+
+// === 消息收藏/书签 ===
+
+/// 添加消息收藏
+pub async fn add_bookmark(
+    pool: &PgPool,
+    user_id: &Uuid,
+    message_id: &Uuid,
+    note: Option<&str>,
+) -> Result<MessageBookmark> {
+    let id = Uuid::new_v4();
+    let bookmark = sqlx::query_as::<_, MessageBookmark>(
+        r#"
+        INSERT INTO message_bookmarks (id, user_id, message_id, note, created_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (user_id, message_id) DO UPDATE SET note = COALESCE(EXCLUDED.note, message_bookmarks.note)
+        RETURNING *
+        "#
+    )
+    .bind(id)
+    .bind(user_id)
+    .bind(message_id)
+    .bind(note)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("添加收藏失败: {}", e))?;
+
+    Ok(bookmark)
+}
+
+/// 删除消息收藏
+pub async fn remove_bookmark(
+    pool: &PgPool,
+    user_id: &Uuid,
+    message_id: &Uuid,
+) -> Result<bool> {
+    let result = sqlx::query(
+        "DELETE FROM message_bookmarks WHERE user_id = $1 AND message_id = $2"
+    )
+    .bind(user_id)
+    .bind(message_id)
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("删除收藏失败: {}", e))?;
+
+    Ok(result.rows_affected() > 0)
+}
+
+/// 获取用户的收藏列表（带消息详情）
+pub async fn get_bookmarks(
+    pool: &PgPool,
+    user_id: &Uuid,
+    page: i64,
+    limit: i64,
+) -> Result<Vec<BookmarkInfo>> {
+    let offset = (page - 1) * limit;
+
+    let rows = sqlx::query_as::<_, (Uuid, Uuid, Option<String>, DateTime<Utc>, Uuid, String, Uuid, String, String)>(
+        r#"
+        SELECT 
+            mb.id, mb.message_id, mb.note, mb.created_at AS bookmarked_at,
+            m.id AS msg_id, m.content, m.conversation_id, m.sender_id, m.type
+        FROM message_bookmarks mb
+        JOIN messages m ON mb.message_id = m.id
+        WHERE mb.user_id = $1
+        ORDER BY mb.created_at DESC
+        LIMIT $2 OFFSET $3
+        "#
+    )
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取收藏列表失败: {}", e))?;
+
+    let bookmarks = rows.into_iter().map(|row| {
+        BookmarkInfo {
+            id: row.0.to_string(),
+            message_id: row.1.to_string(),
+            note: row.2,
+            bookmarked_at: row.3.to_rfc3339(),
+            conversation_id: row.6.to_string(),
+            sender_id: row.7.to_string(),
+            content: row.5,
+            type_: row.8,
+            created_at: row.3.to_rfc3339(),
+        }
+    }).collect();
+
+    Ok(bookmarks)
+}
+
+/// 检查消息是否已被收藏
+pub async fn is_bookmarked(
+    pool: &PgPool,
+    user_id: &Uuid,
+    message_id: &Uuid,
+) -> Result<bool> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM message_bookmarks WHERE user_id = $1 AND message_id = $2)"
+    )
+    .bind(user_id)
+    .bind(message_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("检查收藏状态失败: {}", e))?;
+
+    Ok(exists)
 }

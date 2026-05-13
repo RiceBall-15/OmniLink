@@ -135,6 +135,10 @@ async fn main() -> anyhow::Result<()> {
         // 消息表情回应
         .route("/api/im/messages/:id/reactions", post(add_reaction_with_auth).delete(remove_reaction_with_auth).get(get_reactions_with_auth))
 
+        // 消息收藏/书签
+        .route("/api/im/messages/:id/bookmark", post(add_bookmark_with_auth).delete(remove_bookmark_with_auth).get(check_bookmark_with_auth))
+        .route("/api/im/bookmarks", get(get_bookmarks_with_auth))
+
         // 会话置顶消息
         .route("/api/im/conversations/:id/pinned-messages", get(get_pinned_messages_with_auth).post(pin_message_with_auth))
         .route("/api/im/conversations/:id/pinned-messages/:msg_id", delete(unpin_message_with_auth))
@@ -825,6 +829,43 @@ async fn get_conversation_tags_with_auth(
     conversation::get_conversation_tags_handler(State(pool), Extension(user_id), Path(conversation_id)).await
 }
 
+/// 收藏消息（包装认证中间件）
+async fn add_bookmark_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+    Json(req): Json<im_api::models::message::AddBookmarkRequest>,
+) -> impl IntoResponse {
+    message::add_bookmark_handler(State(pool), auth, Path(message_id), Json(req)).await
+}
+
+/// 取消收藏消息（包装认证中间件）
+async fn remove_bookmark_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+) -> impl IntoResponse {
+    message::remove_bookmark_handler(State(pool), auth, Path(message_id)).await
+}
+
+/// 获取收藏列表（包装认证中间件）
+async fn get_bookmarks_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Query(query): Query<im_api::models::message::BookmarkQuery>,
+) -> impl IntoResponse {
+    message::get_bookmarks_handler(State(pool), auth, Query(query)).await
+}
+
+/// 检查消息收藏状态（包装认证中间件）
+async fn check_bookmark_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<String>,
+) -> impl IntoResponse {
+    message::check_bookmark_handler(State(pool), auth, Path(message_id)).await
+}
+
 /// 初始化数据库表
 async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     info!("Initializing database tables...");
@@ -957,6 +998,26 @@ async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     .execute(pool)
     .await?;
 
+    // 创建消息收藏表
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS message_bookmarks (
+            id UUID PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            message_id UUID NOT NULL,
+            conversation_id UUID NOT NULL,
+            note VARCHAR(500),
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            UNIQUE(user_id, message_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_message_bookmarks_user_id ON message_bookmarks(user_id);
+        CREATE INDEX IF NOT EXISTS idx_message_bookmarks_message_id ON message_bookmarks(message_id);
+        CREATE INDEX IF NOT EXISTS idx_message_bookmarks_created_at ON message_bookmarks(created_at DESC);
+        "#
+    )
+    .execute(pool)
+    .await?;
 
     // 创建加密消息存储表
     sqlx::query(
