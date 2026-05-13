@@ -5,3 +5,4 @@ pub mod models;
 pub mod middleware;
 pub mod providers;
 pub mod api_key_store;
+pub mod router;

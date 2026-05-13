@@ -16,6 +16,8 @@ use super::models::{
 use super::repository::{AssistantRepository, TokenUsageRepository, ConversationMessageRepository};
 use super::api_key_store::{ApiKeyStore, ApiKeyStatus};
 
+use super::router::ModelRouter;
+
 /// AI服务
 pub struct AIService {
     assistant_repository: Arc<AssistantRepository>,
@@ -24,6 +26,7 @@ pub struct AIService {
     providers: Arc<RwLock<HashMap<String, Arc<dyn AIProvider>>>>,
     model_configs: Arc<RwLock<Vec<ModelConfig>>>,
     api_key_store: Arc<ApiKeyStore>,
+    model_router: Arc<ModelRouter>,
 }
 
 impl AIService {
@@ -36,6 +39,7 @@ impl AIService {
         let providers = Arc::new(RwLock::new(HashMap::new()));
         let model_configs = Arc::new(RwLock::new(Self::default_models()));
         let api_key_store = Arc::new(ApiKeyStore::new());
+        let model_router = Arc::new(ModelRouter::new(model_configs.clone()));
 
         Self {
             assistant_repository,
@@ -44,12 +48,18 @@ impl AIService {
             providers,
             model_configs,
             api_key_store,
+            model_router,
         }
     }
 
     /// 获取 API 密钥存储引用（用于初始化时加载密钥）
     pub fn api_key_store(&self) -> &Arc<ApiKeyStore> {
         &self.api_key_store
+    }
+
+    /// 获取模型路由器引用
+    pub fn model_router(&self) -> &Arc<ModelRouter> {
+        &self.model_router
     }
 
     /// 初始化提供商
@@ -105,6 +115,10 @@ impl AIService {
                 );
             }
         }
+
+        // 初始化模型路由策略（回退链）
+        drop(providers); // 释放写锁
+        self.model_router.set_default_routes().await;
 
         Ok(())
     }
@@ -304,8 +318,9 @@ impl AIService {
             content: request.message.clone(),
         });
 
-        // 获取模型配置（支持请求级别的模型覆盖）
-        let effective_model_id = request.model_id.as_deref().unwrap_or(&assistant.model_id);
+        // 获取模型配置（支持请求级别的模型覆盖 + 路由解析）
+        let requested_model_id = request.model_id.as_deref().unwrap_or(&assistant.model_id);
+        let effective_model_id = self.model_router.resolve_model(requested_model_id).await;
         let model_configs = self.model_configs.read().await;
         let model_config = model_configs
             .iter()
@@ -331,6 +346,8 @@ impl AIService {
         for attempt in 0..=max_retries {
             match provider.chat_completion(&messages, &options).await {
                 Ok(result) => {
+                    // 成功调用，恢复模型可用性
+                    self.model_router.mark_available(&effective_model_id).await;
                     completion = Some(result);
                     break;
                 }
@@ -348,7 +365,14 @@ impl AIService {
                 }
             }
         }
-        let completion = completion.ok_or_else(|| anyhow!("AI API failed after max retries"))?;
+        let completion = match completion {
+            Some(c) => c,
+            None => {
+                // 所有重试失败，标记模型为不可用（触发回退路由）
+                self.model_router.mark_unavailable(&effective_model_id).await;
+                return Err(anyhow!("AI API failed after max retries for model '{}'", effective_model_id));
+            }
+        };
 
         // 保存助手回复到数据库
         let saved_message = self.conversation_message_repository
@@ -457,8 +481,9 @@ impl AIService {
             content: request.message.clone(),
         });
 
-        // 获取模型配置（支持请求级别的模型覆盖）
-        let effective_model_id = request.model_id.as_deref().unwrap_or(&assistant.model_id);
+        // 获取模型配置（支持请求级别的模型覆盖 + 路由解析）
+        let requested_model_id = request.model_id.as_deref().unwrap_or(&assistant.model_id);
+        let effective_model_id = self.model_router.resolve_model(requested_model_id).await;
         let model_configs = self.model_configs.read().await;
         let model_config = model_configs
             .iter()
