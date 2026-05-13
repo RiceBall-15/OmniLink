@@ -619,12 +619,12 @@
 
 ### 阶段十三：核心 IM 体验增强 🔥
 
-#### 57. 消息线程/话题回复 ⏳
-- [ ] Thread 模型（parent_message_id, thread_id, reply_count）
-- [ ] 创建话题回复 API（POST /api/im/messages/:id/thread）
-- [ ] 获取话题回复列表 API（GET /api/im/messages/:id/thread）
-- [ ] 话题回复计数更新
-- [ ] 会话中话题摘要展示
+#### 57. 消息线程/话题回复 ✅ (2026-05-14)
+- [x] Thread 模型（parent_message_id, thread_id, reply_count）- ThreadSummaryRow, ThreadSummary, ThreadDetail, ThreadQuery
+- [x] 创建话题回复 API（利用已有 reply_to 字段实现）
+- [x] 获取话题回复列表 API（GET /api/im/messages/:id/thread）
+- [x] 话题回复计数 API（GET /api/im/messages/:id/thread/count）
+- [x] 会话中话题摘要展示 API（GET /api/im/conversations/:id/threads）
 
 #### 58. 联系人管理系统 ⏳
 - [ ] Contact 模型（user_id, contact_id, nickname, created_at）
