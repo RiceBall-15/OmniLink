@@ -585,13 +585,13 @@
 
 ### 阶段十二：平台完善功能 🔥
 
-#### 53. 消息收藏/书签 ⏳
-- [ ] MessageBookmark 模型（user_id, message_id, note, created_at）
-- [ ] 收藏消息 API（POST /api/im/messages/:id/bookmark）
-- [ ] 取消收藏 API（DELETE /api/im/messages/:id/bookmark）
-- [ ] 获取收藏列表 API（GET /api/im/bookmarks）
-- [ ] 收藏备注功能
-- [ ] 数据库迁移脚本
+#### 53. 消息收藏/书签 ✅ (2026-05-14)
+- [x] MessageBookmark 模型（user_id, message_id, note, created_at）
+- [x] 收藏消息 API（POST /api/im/messages/:id/bookmark）
+- [x] 取消收藏 API（DELETE /api/im/messages/:id/bookmark）
+- [x] 获取收藏列表 API（GET /api/im/bookmarks）
+- [x] 收藏备注功能
+- [x] 数据库迁移脚本
 
 #### 54. 草稿消息 ⏳
 - [ ] DraftMessage 模型（user_id, conversation_id, content, updated_at）

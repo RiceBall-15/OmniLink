@@ -161,6 +161,78 @@ pub struct BookmarkInfo {
     pub bookmarked_at: String,
 }
 
+/// 草稿消息
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct DraftMessage {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub conversation_id: Uuid,
+    pub content: String,
+    #[sqlx(rename = "type")]
+    pub type_: String,
+    pub reply_to: Option<Uuid>,
+    pub metadata: Option<JsonValue>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// 保存草稿请求
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct SaveDraftRequest {
+    pub content: String,
+    #[serde(rename = "type", default = "default_draft_type")]
+    pub type_: String,
+    #[serde(rename = "replyTo", skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<JsonValue>,
+}
+
+fn default_draft_type() -> String { "text".to_string() }
+
+/// 草稿信息（API 响应）
+#[derive(Debug, Serialize)]
+pub struct DraftInfo {
+    pub id: String,
+    #[serde(rename = "conversationId")]
+    pub conversation_id: String,
+    pub content: String,
+    #[serde(rename = "type")]
+    pub type_: String,
+    #[serde(rename = "replyTo", skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<JsonValue>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+}
+
+impl DraftMessage {
+    pub fn to_draft_info(&self) -> DraftInfo {
+        DraftInfo {
+            id: self.id.to_string(),
+            conversation_id: self.conversation_id.to_string(),
+            content: self.content.clone(),
+            type_: self.type_.clone(),
+            reply_to: self.reply_to.map(|u| u.to_string()),
+            metadata: self.metadata.clone(),
+            created_at: self.created_at.to_rfc3339(),
+            updated_at: self.updated_at.to_rfc3339(),
+        }
+    }
+}
+
+/// 草稿查询参数
+#[derive(Debug, Deserialize)]
+pub struct DraftQuery {
+    #[serde(default = "default_page")]
+    pub page: i64,
+    #[serde(default = "default_page_size")]
+    pub limit: i64,
+}
+
 /// 消息实体（与前端接口完全匹配）
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Message {

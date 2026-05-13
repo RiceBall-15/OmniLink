@@ -1999,3 +1999,203 @@ pub async fn check_bookmark_handler(
         ),
     }
 }
+
+// === 草稿消息处理 ===
+
+use crate::models::message::{SaveDraftRequest, DraftQuery};
+use crate::db::message::{save_draft, get_draft, delete_draft, get_all_drafts};
+
+/// 保存草稿
+pub async fn save_draft_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+    Json(req): Json<SaveDraftRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的会话ID")),
+            );
+        }
+    };
+
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    // 检查用户是否在会话中
+    let is_member = match sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2)"
+    )
+    .bind(conv_uuid)
+    .bind(user_uuid)
+    .fetch_one(&pool)
+    .await
+    {
+        Ok(exists) => exists,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("DB_ERROR", format!("检查成员失败: {}", e))),
+            );
+        }
+    };
+
+    if !is_member {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiResponse::error("NOT_MEMBER", "您不是该会话的成员")),
+        );
+    }
+
+    let reply_to_uuid = req.reply_to.as_deref().and_then(|s| s.parse::<Uuid>().ok());
+
+    match save_draft(
+        &pool,
+        &user_uuid,
+        &conv_uuid,
+        &req.content,
+        &req.type_,
+        reply_to_uuid.as_ref(),
+        req.metadata.as_ref(),
+    ).await {
+        Ok(draft) => {
+            let info = draft.to_draft_info();
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::to_value(info).unwrap())),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("SAVE_FAILED", format!("保存草稿失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取指定会话的草稿
+pub async fn get_draft_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的会话ID")),
+            );
+        }
+    };
+
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match get_draft(&pool, &user_uuid, &conv_uuid).await {
+        Ok(Some(draft)) => {
+            let info = draft.to_draft_info();
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::to_value(info).unwrap())),
+            )
+        }
+        Ok(None) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!(null))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("GET_FAILED", format!("获取草稿失败: {}", e))),
+        ),
+    }
+}
+
+/// 删除指定会话的草稿
+pub async fn delete_draft_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(conversation_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let conv_uuid = match conversation_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_ID", "无效的会话ID")),
+            );
+        }
+    };
+
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match delete_draft(&pool, &user_uuid, &conv_uuid).await {
+        Ok(deleted) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({ "deleted": deleted }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("DELETE_FAILED", format!("删除草稿失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取用户的所有草稿列表
+pub async fn get_all_drafts_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Query(query): Query<DraftQuery>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    match get_all_drafts(&pool, &user_uuid, query.page, query.limit).await {
+        Ok(drafts) => {
+            let draft_infos: Vec<_> = drafts.iter().map(|d| d.to_draft_info()).collect();
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "drafts": draft_infos,
+                    "page": query.page,
+                    "limit": query.limit,
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("LIST_FAILED", format!("获取草稿列表失败: {}", e))),
+        ),
+    }
+}

@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, types::JsonValue};
 use uuid::Uuid;
 use chrono::{Utc, DateTime, Duration};
 use anyhow::Result;
@@ -6,6 +6,7 @@ use anyhow::Result;
 use crate::models::message::{
     MessageEntity, CreateMessageParams, MessageStatus,
     MessageBookmark, BookmarkInfo,
+    DraftMessage,
 };
 
 /// 创建消息
@@ -584,4 +585,101 @@ pub async fn is_bookmarked(
     .map_err(|e| anyhow::anyhow!("检查收藏状态失败: {}", e))?;
 
     Ok(exists)
+}
+
+// === 草稿消息 ===
+
+/// 保存草稿（UPSERT：同一会话只有一个草稿）
+pub async fn save_draft(
+    pool: &PgPool,
+    user_id: &Uuid,
+    conversation_id: &Uuid,
+    content: &str,
+    type_: &str,
+    reply_to: Option<&Uuid>,
+    metadata: Option<&JsonValue>,
+) -> Result<DraftMessage> {
+    let id = Uuid::new_v4();
+    let reply_to_val = reply_to.cloned();
+    let metadata_val = metadata.cloned();
+
+    let draft = sqlx::query_as::<_, DraftMessage>(
+        r#"
+        INSERT INTO draft_messages (id, user_id, conversation_id, content, type, reply_to, metadata, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+        ON CONFLICT (user_id, conversation_id) 
+        DO UPDATE SET content = EXCLUDED.content, type = EXCLUDED.type, reply_to = EXCLUDED.reply_to, metadata = EXCLUDED.metadata, updated_at = NOW()
+        RETURNING *
+        "#
+    )
+    .bind(id)
+    .bind(user_id)
+    .bind(conversation_id)
+    .bind(content)
+    .bind(type_)
+    .bind(reply_to_val)
+    .bind(metadata_val)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("保存草稿失败: {}", e))?;
+
+    Ok(draft)
+}
+
+/// 获取指定会话的草稿
+pub async fn get_draft(
+    pool: &PgPool,
+    user_id: &Uuid,
+    conversation_id: &Uuid,
+) -> Result<Option<DraftMessage>> {
+    let draft = sqlx::query_as::<_, DraftMessage>(
+        "SELECT * FROM draft_messages WHERE user_id = $1 AND conversation_id = $2"
+    )
+    .bind(user_id)
+    .bind(conversation_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取草稿失败: {}", e))?;
+
+    Ok(draft)
+}
+
+/// 删除指定会话的草稿
+pub async fn delete_draft(
+    pool: &PgPool,
+    user_id: &Uuid,
+    conversation_id: &Uuid,
+) -> Result<bool> {
+    let result = sqlx::query(
+        "DELETE FROM draft_messages WHERE user_id = $1 AND conversation_id = $2"
+    )
+    .bind(user_id)
+    .bind(conversation_id)
+    .execute(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("删除草稿失败: {}", e))?;
+
+    Ok(result.rows_affected() > 0)
+}
+
+/// 获取用户的所有草稿列表
+pub async fn get_all_drafts(
+    pool: &PgPool,
+    user_id: &Uuid,
+    page: i64,
+    limit: i64,
+) -> Result<Vec<DraftMessage>> {
+    let offset = (page - 1) * limit;
+
+    let drafts = sqlx::query_as::<_, DraftMessage>(
+        "SELECT * FROM draft_messages WHERE user_id = $1 ORDER BY updated_at DESC LIMIT $2 OFFSET $3"
+    )
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取草稿列表失败: {}", e))?;
+
+    Ok(drafts)
 }
