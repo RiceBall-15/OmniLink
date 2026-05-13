@@ -123,6 +123,190 @@ impl CacheManager {
     pub fn connection_mut(&mut self) -> &mut ConnectionManager {
         &mut self.conn
     }
+
+    /// 记录缓存命中（用于统计）
+    pub async fn record_hit(&mut self, key: &str) -> Result<()> {
+        let stats_key = format!("omnilink:cache_stats:hits");
+        self.conn.incr::<_, _, i64>(&stats_key, 1).await?;
+        let specific_key = format!("omnilink:cache_stats:hits:{}", key);
+        self.conn.incr::<_, _, i64>(&specific_key, 1).await?;
+        Ok(())
+    }
+
+    /// 记录缓存未命中（用于统计）
+    pub async fn record_miss(&mut self, key: &str) -> Result<()> {
+        let stats_key = format!("omnilink:cache_stats:misses");
+        self.conn.incr::<_, _, i64>(&stats_key, 1).await?;
+        let specific_key = format!("omnilink:cache_stats:misses:{}", key);
+        self.conn.incr::<_, _, i64>(&specific_key, 1).await?;
+        Ok(())
+    }
+
+    /// 获取缓存命中率统计
+    pub async fn get_hit_rate(&mut self) -> Result<CacheHitRate> {
+        let hits: i64 = self.conn.get("omnilink:cache_stats:hits").await.unwrap_or(0);
+        let misses: i64 = self.conn.get("omnilink:cache_stats:misses").await.unwrap_or(0);
+        let total = hits + misses;
+        let hit_rate = if total > 0 {
+            hits as f64 / total as f64
+        } else {
+            0.0
+        };
+
+        Ok(CacheHitRate {
+            hits,
+            misses,
+            total,
+            hit_rate,
+        })
+    }
+
+    /// 重置缓存统计
+    pub async fn reset_stats(&mut self) -> Result<()> {
+        self.conn.del::<_, ()>("omnilink:cache_stats:hits").await?;
+        self.conn.del::<_, ()>("omnilink:cache_stats:misses").await?;
+        Ok(())
+    }
+}
+
+/// 缓存命中率统计
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CacheHitRate {
+    /// 命中次数
+    pub hits: i64,
+    /// 未命中次数
+    pub misses: i64,
+    /// 总请求次数
+    pub total: i64,
+    /// 命中率 (0.0 - 1.0)
+    pub hit_rate: f64,
+}
+
+/// ETag 生成工具
+///
+/// 基于内容生成 ETag，用于 HTTP 缓存控制。
+pub struct ETagGenerator;
+
+impl ETagGenerator {
+    /// 基于内容生成 ETag
+    ///
+    /// 使用内容的哈希值生成 ETag，确保内容变化时 ETag 也会变化。
+    pub fn generate(content: &[u8]) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        content.hash(&mut hasher);
+        let hash = hasher.finish();
+        format!("\"{:x}\"", hash)
+    }
+
+    /// 基于字符串内容生成 ETag
+    pub fn generate_from_str(content: &str) -> String {
+        Self::generate(content.as_bytes())
+    }
+
+    /// 基于时间戳和内容生成强 ETag
+    pub fn generate_strong(content: &[u8], timestamp: i64) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        content.hash(&mut hasher);
+        timestamp.hash(&mut hasher);
+        let hash = hasher.finish();
+        format!("\"{:x}\"", hash)
+    }
+
+    /// 验证 If-None-Match 头部是否匹配
+    ///
+    /// 返回 true 表示资源未变化（304 Not Modified）
+    pub fn matches(if_none_match: &str, etag: &str) -> bool {
+        // 支持 * 和逗号分隔的多个 ETag
+        if if_none_match == "*" {
+            return true;
+        }
+        if_none_match
+            .split(',')
+            .map(|s| s.trim())
+            .any(|s| s == etag)
+    }
+}
+
+/// 缓存控制头部
+#[derive(Debug, Clone)]
+pub struct CacheControl {
+    /// max-age（秒）
+    pub max_age: Option<u64>,
+    /// s-maxage（秒，共享缓存）
+    pub s_maxage: Option<u64>,
+    /// no-cache
+    pub no_cache: bool,
+    /// no-store
+    pub no_store: bool,
+    /// must-revalidate
+    pub must_revalidate: bool,
+    /// private
+    pub private: bool,
+    /// public
+    pub public: bool,
+}
+
+impl CacheControl {
+    /// 创建默认的 API 缓存控制
+    pub fn api_default() -> Self {
+        Self {
+            max_age: Some(0),
+            s_maxage: None,
+            no_cache: true,
+            no_store: false,
+            must_revalidate: true,
+            private: true,
+            public: false,
+        }
+    }
+
+    /// 创建静态资源缓存控制
+    pub fn static_asset(max_age: u64) -> Self {
+        Self {
+            max_age: Some(max_age),
+            s_maxage: None,
+            no_cache: false,
+            no_store: false,
+            must_revalidate: false,
+            private: false,
+            public: true,
+        }
+    }
+
+    /// 转换为 Cache-Control 头部值
+    pub fn to_header_value(&self) -> String {
+        let mut parts = Vec::new();
+
+        if self.no_cache {
+            parts.push("no-cache".to_string());
+        }
+        if self.no_store {
+            parts.push("no-store".to_string());
+        }
+        if self.must_revalidate {
+            parts.push("must-revalidate".to_string());
+        }
+        if self.private {
+            parts.push("private".to_string());
+        }
+        if self.public {
+            parts.push("public".to_string());
+        }
+        if let Some(max_age) = self.max_age {
+            parts.push(format!("max-age={}", max_age));
+        }
+        if let Some(s_maxage) = self.s_maxage {
+            parts.push(format!("s-maxage={}", s_maxage));
+        }
+
+        parts.join(", ")
+    }
 }
 
 /// 缓存键前缀常量
