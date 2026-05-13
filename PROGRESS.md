@@ -361,3 +361,20 @@
 - **状态**: ✅ 完成
 - **详情**: 提交: c42e0a06
 
+### 2026-05-14 00:30 - N+1查询优化 & 性能/安全增强
+- **任务**: 会话列表N+1查询优化、API密钥轮换、敏感数据加密、WebSocket心跳清理
+- **状态**: ✅ 完成
+- **提交**:
+  - `395673f` - feat: optimize N+1 queries in conversation list handler
+  - `8722ad4` - feat: add API key rotation, WebSocket heartbeat cleanup, and secrets encryption
+  - `5314b48` - docs: update TASK_QUEUE.md with performance and security task details
+- **详情**:
+  - 添加 `get_last_messages_batch()` 使用 PostgreSQL DISTINCT ON 批量查询
+  - 添加 `get_conversation_tags_batch()` 使用 JOIN 批量查询标签
+  - 重构会话列表处理器，从 N*2 次查询减少到 2 次查询
+  - 创建 `api_key_store` 模块：运行时API密钥管理（轮换、回滚、启用/禁用）
+  - 创建 `secrets` 模块：AES-256-GCM 敏感数据加密存储
+  - 添加 API密钥管理端点（/keys, /keys/rotate, /keys/rollback, /keys/toggle）
+  - 添加 WebSocket 心跳清理任务（定期清理过期连接）
+  - 更新 TASK_QUEUE.md 任务清单
+
