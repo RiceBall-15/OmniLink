@@ -316,6 +316,57 @@ impl OnlineStatusManager {
         }
     }
 
+    /// 检查空闲用户并自动切换为 Away 状态
+    ///
+    /// 当用户在指定时间内没有活动时，自动从 Online 切换为 Away
+    /// idle_threshold: 空闲阈值（秒），建议 300 秒（5分钟）
+    pub async fn check_idle_users(&self, idle_threshold: i64) {
+        let now = Utc::now().timestamp();
+        let mut to_set_away = Vec::new();
+
+        {
+            let statuses = self.statuses.read().await;
+            for (user_id, status) in statuses.iter() {
+                if matches!(status.status, UserStatus::Online)
+                    && now - status.last_seen > idle_threshold
+                {
+                    to_set_away.push(*user_id);
+                }
+            }
+        }
+
+        for user_id in to_set_away {
+            tracing::info!(
+                "User {} idle for > {} seconds, switching to Away",
+                user_id,
+                idle_threshold
+            );
+            self.update_status(user_id, UserStatus::Away).await;
+        }
+    }
+
+    /// 启动自动状态管理后台任务
+    ///
+    /// 每 60 秒检查一次：
+    /// - 空闲 5 分钟以上的用户自动切换为 Away
+    /// - 空闲 60 秒以上的用户（含 Away）自动切换为 Offline
+    pub fn start_auto_status_task(self: Arc<Self>) {
+        let manager = self.clone();
+        tokio::spawn(async move {
+            tracing::info!("自动状态管理任务已启动（每60秒检查一次）");
+
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+
+                // 检查空闲用户（5分钟无活动 → Away）
+                manager.check_idle_users(300).await;
+
+                // 清理过期用户（60秒无活动 → Offline）
+                manager.cleanup_expired().await;
+            }
+        });
+    }
+
     /// 批量获取用户状态
     pub async fn get_batch_statuses(&self, user_ids: &[Uuid]) -> HashMap<Uuid, UserStatusInfo> {
         let mut result = HashMap::new();

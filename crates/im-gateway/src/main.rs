@@ -47,6 +47,10 @@ async fn main() -> Result<()> {
     tracing::info!("Initializing OnlineStatusManager with Redis backend");
     let status_manager = Arc::new(OnlineStatusManager::with_redis(db_manager.redis().clone()));
 
+    // 启动自动状态管理（空闲5分钟→Away，空闲60秒→Offline）
+    status_manager.clone().start_auto_status_task();
+    tracing::info!("自动状态管理任务已启动");
+
     // 创建离线消息队列
     tracing::info!("Initializing OfflineMessageQueue with Redis backend");
     let offline_queue = Arc::new(OfflineMessageQueue::new(db_manager.redis().clone()));

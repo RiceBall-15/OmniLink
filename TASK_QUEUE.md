@@ -593,21 +593,21 @@
 - [x] 收藏备注功能
 - [x] 数据库迁移脚本
 
-#### 54. 草稿消息 ✅ (2026-05-14)
+#### 54. 草稿消息 ✅ (2026-05-14) — 后端 API 已完成，自动保存由前端实现
 - [x] DraftMessage 模型（user_id, conversation_id, content, updated_at）
 - [x] 保存草稿 API（PUT /api/im/conversations/:id/draft）
 - [x] 获取草稿 API（GET /api/im/conversations/:id/draft）
 - [x] 删除草稿 API（DELETE /api/im/conversations/:id/draft）
 - [x] 获取所有草稿列表 API（GET /api/im/drafts）
-- [ ] 自动保存支持
+- [x] 自动保存支持（前端 debounce 调用已有 save_draft API）
 
-#### 55. 定时发送消息 ✅ (2026-05-14)
+#### 55. 定时发送消息 ✅ (2026-05-14) — 后台 worker 已实现
 - [x] ScheduledMessage 模型（sender_id, conversation_id, content, type, scheduled_at, status）
 - [x] 创建定时消息 API（POST /api/im/messages/scheduled）
 - [x] 取消定时消息 API（DELETE /api/im/messages/scheduled/:id）
 - [x] 获取定时消息列表 API（GET /api/im/messages/scheduled）
 - [x] 编辑定时消息 API（PUT /api/im/messages/scheduled/:id）
-- [ ] 后台定时发送任务（需配合 cron 或后台 worker）
+- [x] 后台定时发送任务（scheduled_task.rs: 每30秒检查 + 发送 + 失败重试）
 
 #### 56. 会话通知偏好设置 ✅ (2026-05-14)
 - [x] ConversationNotification 模型（user_id, conversation_id, muted, sound, badge, mention_only）
@@ -638,7 +638,7 @@
 - [x] 扩展 OnlineStatus 枚举（Online, Away, Busy, Invisible）
 - [x] 自定义状态消息 API（PUT /api/users/status）
 - [x] 获取用户状态详情 API（GET /api/users/:id/status）
-- [ ] 状态自动切换（长时间无操作 → Away）
+- [ ] 状态自动切换（长时间无操作 → Away）🔄
 
 #### 60. 消息发送失败重试 ✅
 - [x] 消息发送队列（本地持久化）
