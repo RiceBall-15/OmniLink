@@ -252,14 +252,14 @@ pub struct AuditLogStats {
 }
 
 /// 操作类型计数
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ActionCount {
     pub action: String,
     pub count: i64,
 }
 
 /// 严重级别计数
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct SeverityCount {
     pub severity: String,
     pub count: i64,
@@ -433,7 +433,7 @@ impl AuditLogRepository {
     async fn count_logs(&self, query: &AuditLogQuery) -> Result<i64, sqlx::Error> {
         // 使用条件构建查询
         let mut sql = "SELECT COUNT(*) as count FROM audit_logs WHERE 1=1".to_string();
-        let mut binds: Vec<String> = Vec::new();
+        let mut _binds: Vec<String> = Vec::new();
 
         if let Some(user_id) = &query.user_id {
             sql.push_str(&format!(" AND user_id = '{}'", user_id));

@@ -20,6 +20,7 @@ use im_api::handlers::conversation;
 use im_api::handlers::health::health_check_with_deps;
 use im_api::handlers::encryption;
 use im_api::handlers::metrics::{get_metrics, get_prometheus_metrics, init_start_time};
+use im_api::handlers::audit;
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::security_headers::security_headers_middleware;

@@ -94,8 +94,8 @@ pub struct ImageProcessParams {
 /// 视频处理参数
 #[derive(Debug, Deserialize)]
 pub struct VideoProcessParams {
-    pub format: Option<String>, // 'mp4', 'webm'
-    pub quality: Option<String>, // 'low', 'medium', 'high'
+    pub format: Option<String>,     // 'mp4', 'webm'
+    pub quality: Option<String>,    // 'low', 'medium', 'high'
     pub resolution: Option<String>, // '720p', '1080p'
     pub thumbnail: Option<bool>,
 }

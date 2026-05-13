@@ -476,7 +476,7 @@ impl HeartbeatMessage {
 
     /// 计算往返延迟（毫秒）
     pub fn calculate_rtt(&self) -> Option<f64> {
-        if let Some(server_ts) = self.server_timestamp {
+        if let Some(_server_ts) = self.server_timestamp {
             let now = chrono::Utc::now().timestamp_millis();
             Some((now - self.client_timestamp) as f64)
         } else {
