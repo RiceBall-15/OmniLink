@@ -297,12 +297,12 @@
 ## 📈 进度追踪
 
 **总任务数**: 44 (含阶段十一)
-**已完成**: 37
+**已完成**: 38
 **进行中**: 0
-**待开发**: 7
+**待开发**: 6
 **受阻**: 0
 
-**完成率**: 84%
+**完成率**: 86%
 
 ---
 
@@ -537,11 +537,14 @@
 
 ### 阶段十一：高级功能与质量提升 🔥
 
-#### 46. 批量操作 API ⏳
-- [ ] 批量消息发送（POST /api/im/messages/batch）
-- [ ] 批量消息删除（DELETE /api/im/messages/batch）
-- [ ] 批量标记已读（POST /api/im/conversations/batch/read）
-- [ ] 批量操作事务性保证
+#### 46. 批量操作 API ✅ (2026-05-14)
+- [x] 批量消息发送（POST /api/im/messages/batch/send）
+- [x] 批量消息删除（POST /api/im/messages/batch/delete）
+- [x] 批量标记已读（POST /api/im/messages/batch/mark-read）
+- [x] 批量操作事务性保证（batch_create_messages 使用数据库事务）
+- [x] 请求验证（批量发送最大100条，删除最大200条）
+- [x] 数据库层实现（batch_create_messages, batch_delete_messages, batch_mark_conversations_as_read）
+- [x] 权限验证（删除仅限发送者，已读标记仅限会话成员）
 
 #### 47. 用户屏蔽系统 ⏳
 - [ ] BlockUser 模型（blocker_id, blocked_id, created_at）
