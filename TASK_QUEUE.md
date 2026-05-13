@@ -551,7 +551,7 @@
 - [x] 屏蔽用户 API（POST /api/users/:id/block）
 - [x] 取消屏蔽 API（DELETE /api/users/:id/block）
 - [x] 获取屏蔽列表 API（GET /api/users/blocked）
-- [ ] 屏蔽后消息过滤（待集成到 im-gateway）
+- [x] 屏蔽后消息过滤（BlockManager + WebSocket 消息过滤）
 
 #### 48. 离线消息队列 ✅ (2026-05-14)
 - [x] 离线消息存储（Redis队列）
@@ -560,26 +560,26 @@
 - [x] 离线消息过期清理
 
 #### 49. 数据库连接池监控 ✅
-- [ ] 连接池状态指标（active, idle, waiting）
-- [ ] 慢查询日志记录
-- [ ] 连接池健康检查端点
-- [ ] Prometheus 指标导出
+- [x] 连接池状态指标（active, idle, waiting）- common/src/pool_monitor.rs
+- [x] 慢查询日志记录 - SlowQueryTracker
+- [x] 连接池健康检查端点 - /health/pool
+- [x] Prometheus 指标导出 - PoolMetrics with prometheus labels
 
 #### 50. API 响应缓存 ✅
-- [ ] Redis 缓存层（用户资料、会话列表）
-- [ ] 缓存失效策略（TTL + 主动失效）
-- [ ] 缓存命中率统计
-- [ ] ETag 支持
+- [x] Redis 缓存层（用户资料、会话列表）- common/src/cache.rs
+- [x] 缓存失效策略（TTL + 主动失效）- CacheManager with ttl
+- [x] 缓存命中率统计 - get/incr/stats methods
+- [ ] ETag 支持（待实现）
 
 #### 51. 审计日志系统 ✅
-- [ ] AuditLog 模型（user_id, action, resource, details, ip, timestamp）
-- [ ] 审计日志记录中间件
-- [ ] 审计日志查询 API
-- [ ] 敏感操作审计（登录、删除、权限变更）
+- [x] AuditLog 模型（user_id, action, resource, details, ip, timestamp）
+- [x] 审计日志记录中间件
+- [x] 审计日志查询 API - im-api/src/handlers/audit.rs
+- [x] 敏感操作审计（登录、删除、权限变更）
 
 #### 52. WebSocket 连接质量增强 ✅
-- [ ] 消息送达确认（ACK机制）
-- [ ] 消息重发策略（指数退避）
-- [ ] 连接质量指标（延迟、丢包率）
-- [ ] 自适应心跳间隔
+- [x] 消息送达确认（ACK机制）- PendingAck/AckStatus
+- [x] 消息重发策略（指数退避）- ExponentialBackoff 1s-30s
+- [x] 连接质量指标（延迟、丢包率）- ConnectionQuality/QualityLevel
+- [x] 自适应心跳间隔 - Adaptive heartbeat based on quality
 
