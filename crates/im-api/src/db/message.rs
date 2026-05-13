@@ -17,7 +17,7 @@ pub async fn create_message(pool: &PgPool, params: CreateMessageParams) -> Resul
 
     let id = Uuid::new_v4();
 
-    sqlx::query_as::<_, MessageEntity>(
+    let message = sqlx::query_as::<_, MessageEntity>(
         r#"
         INSERT INTO messages (id, conversation_id, sender_id, content, type, status, reply_to, metadata, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -36,7 +36,42 @@ pub async fn create_message(pool: &PgPool, params: CreateMessageParams) -> Resul
     .bind(now)
     .fetch_one(pool)
     .await
-    .map_err(|e| anyhow::anyhow!("创建消息失败: {}", e))
+    .map_err(|e| anyhow::anyhow!("创建消息失败: {}", e))?;
+
+    // Update conversation's last_message_at and last_message_preview
+    let preview = if params.content.len() > 50 {
+        format!("{}...", &params.content[..47])
+    } else {
+        params.content.clone()
+    };
+    let _ = sqlx::query(
+        r#"
+        UPDATE conversations
+        SET last_message_at = $1, last_message_preview = $2, updated_at = $1
+        WHERE id = $3
+        "#
+    )
+    .bind(now)
+    .bind(&preview)
+    .bind(params.conversation_id)
+    .execute(pool)
+    .await;
+
+    // Increment unread count for all other participants
+    let _ = sqlx::query(
+        r#"
+        UPDATE conversation_user_state
+        SET unread_count = unread_count + 1, updated_at = $1
+        WHERE conversation_id = $2 AND user_id != $3
+        "#
+    )
+    .bind(now)
+    .bind(params.conversation_id)
+    .bind(params.sender_id)
+    .execute(pool)
+    .await;
+
+    Ok(message)
 }
 
 /// 获取会话的消息列表（分页）
@@ -154,6 +189,21 @@ pub async fn mark_conversation_as_read(
     .execute(pool)
     .await
     .map_err(|e| anyhow::anyhow!("标记消息已读失败: {}", e))?;
+
+    // Update per-user unread count
+    let _ = sqlx::query(
+        r#"
+        INSERT INTO conversation_user_state (conversation_id, user_id, last_read_at, unread_count, created_at, updated_at)
+        VALUES ($1, $2, $3, 0, $3, $3)
+        ON CONFLICT (conversation_id, user_id)
+        DO UPDATE SET last_read_at = $3, unread_count = 0, updated_at = $3
+        "#
+    )
+    .bind(conversation_id)
+    .bind(user_id)
+    .bind(now)
+    .execute(pool)
+    .await;
 
     Ok(())
 }

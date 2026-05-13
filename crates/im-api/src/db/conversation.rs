@@ -52,6 +52,21 @@ pub async fn create_conversation(pool: &PgPool, params: CreateConversationParams
         .execute(&mut *tx)
         .await
         .map_err(|e| anyhow::anyhow!("添加参与者失败: {}", e))?;
+
+        // 初始化每用户会话状态（未读计数 = 0）
+        sqlx::query(
+            r#"
+            INSERT INTO conversation_user_state (conversation_id, user_id, last_read_at, unread_count, created_at, updated_at)
+            VALUES ($1, $2, $3, 0, $3, $3)
+            ON CONFLICT (conversation_id, user_id) DO NOTHING
+            "#
+        )
+        .bind(id)
+        .bind(participant_id)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| anyhow::anyhow!("初始化用户会话状态失败: {}", e))?;
     }
 
     // 提交事务
@@ -307,6 +322,20 @@ pub async fn add_participant(
     .await
     .map_err(|e| anyhow::anyhow!("添加参与者失败: {}", e))?;
 
+    // 初始化每用户会话状态
+    let _ = sqlx::query(
+        r#"
+        INSERT INTO conversation_user_state (conversation_id, user_id, last_read_at, unread_count, created_at, updated_at)
+        VALUES ($1, $2, $3, 0, $3, $3)
+        ON CONFLICT (conversation_id, user_id) DO NOTHING
+        "#
+    )
+    .bind(conversation_id)
+    .bind(user_id)
+    .bind(now)
+    .execute(pool)
+    .await;
+
     Ok(())
 }
 
@@ -521,6 +550,76 @@ pub async fn search_conversations(
     };
 
     conversations.map_err(|e| anyhow::anyhow!("搜索会话失败: {}", e))
+}
+
+/// 获取用户的未读会话数量
+pub async fn get_user_unread_count(
+    pool: &PgPool,
+    user_id: &Uuid,
+) -> Result<i64> {
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*) FROM conversation_user_state
+        WHERE user_id = $1 AND unread_count > 0
+        "#
+    )
+    .bind(user_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取未读会话数量失败: {}", e))?;
+
+    Ok(count)
+}
+
+/// 获取用户的所有未读会话 ID 列表
+pub async fn get_user_unread_conversation_ids(
+    pool: &PgPool,
+    user_id: &Uuid,
+) -> Result<Vec<Uuid>> {
+    let ids = sqlx::query_scalar::<_, Uuid>(
+        r#"
+        SELECT conversation_id FROM conversation_user_state
+        WHERE user_id = $1 AND unread_count > 0
+        ORDER BY updated_at DESC
+        "#
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取未读会话列表失败: {}", e))?;
+
+    Ok(ids)
+}
+
+/// 批量获取用户在多个会话中的未读计数
+pub async fn get_user_unread_counts_batch(
+    pool: &PgPool,
+    user_id: &Uuid,
+    conversation_ids: &[Uuid],
+) -> Result<HashMap<Uuid, i32>> {
+    if conversation_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, i32)>(
+        r#"
+        SELECT conversation_id, unread_count
+        FROM conversation_user_state
+        WHERE user_id = $1 AND conversation_id = ANY($2)
+        "#
+    )
+    .bind(user_id)
+    .bind(conversation_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("批量获取未读计数失败: {}", e))?;
+
+    let mut map = HashMap::new();
+    for (conv_id, count) in rows {
+        map.insert(conv_id, count);
+    }
+
+    Ok(map)
 }
 
 /// 获取用户的会话列表（支持排序和标签过滤）

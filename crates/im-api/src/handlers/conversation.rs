@@ -32,6 +32,7 @@ use crate::models::conversation::{
 use crate::db::conversation as db;
 use crate::db::message::{get_last_message, get_last_messages_batch};
 use crate::db::conversation::get_conversation_tags_batch;
+use crate::db::conversation::get_user_unread_counts_batch;
 
 /// 获取用户的会话列表
 pub async fn get_conversations(
@@ -78,6 +79,9 @@ pub async fn get_conversations(
             let conv_tags = get_conversation_tags_batch(&pool, &conv_ids)
                 .await
                 .unwrap_or_default();
+            let user_unread_counts = get_user_unread_counts_batch(&pool, &user_uuid, &conv_ids)
+                .await
+                .unwrap_or_default();
 
             for conv_entity in conversation_entities {
                 let mut conversation = conv_entity.to_conversation();
@@ -85,6 +89,11 @@ pub async fn get_conversations(
                 // 从批量结果中获取最后一条消息
                 if let Some(last_msg_entity) = last_messages.get(&conv_entity.id) {
                     conversation.last_message = Some(last_msg_entity.to_message());
+                }
+                
+                // 使用每用户未读计数（如果存在）
+                if let Some(unread) = user_unread_counts.get(&conv_entity.id) {
+                    conversation.unread_count = *unread;
                 }
 
                 // 从批量结果中获取会话标签

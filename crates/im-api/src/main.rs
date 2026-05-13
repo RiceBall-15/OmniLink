@@ -22,6 +22,7 @@ use im_api::handlers::encryption;
 use im_api::handlers::metrics::{get_metrics, get_prometheus_metrics, init_start_time};
 use im_api::handlers::audit;
 use im_api::handlers::contact;
+use im_api::handlers::message_retry;
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::security_headers::security_headers_middleware;
@@ -220,6 +221,12 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/im/messages/:id/thread", get(message::get_message_thread_handler))
             .route("/api/im/messages/:id/thread/count", get(message::get_thread_count_handler))
             .route("/api/im/conversations/:id/threads", get(message::get_conversation_threads_handler));
+
+        // 消息重试队列 API
+        let app = app
+            .route("/api/im/messages/:id/retry", post(message_retry::retry_message_handler))
+            .route("/api/im/messages/failed", get(message_retry::get_failed_messages_handler))
+            .route("/api/im/messages/:id/retry-status", get(message_retry::get_retry_status_handler));
 
         // 联系人管理 API
         let app = app

@@ -626,25 +626,25 @@
 - [x] 话题回复计数 API（GET /api/im/messages/:id/thread/count）
 - [x] 会话中话题摘要展示 API（GET /api/im/conversations/:id/threads）
 
-#### 58. 联系人管理系统 ⏳
-- [ ] Contact 模型（user_id, contact_id, nickname, created_at）
-- [ ] 添加联系人 API（POST /api/users/contacts）
-- [ ] 删除联系人 API（DELETE /api/users/contacts/:id）
-- [ ] 获取联系人列表 API（GET /api/users/contacts）
-- [ ] 搜索用户 API（GET /api/users/search?q=keyword）
-- [ ] 联系人备注名支持
+#### 58. 联系人管理系统 ✅ (2026-05-14)
+- [x] Contact 模型（user_id, contact_id, nickname, created_at）
+- [x] 添加联系人 API（POST /api/users/contacts）
+- [x] 删除联系人 API（DELETE /api/users/contacts/:id）
+- [x] 获取联系人列表 API（GET /api/users/contacts）
+- [x] 搜索用户 API（GET /api/users/search?q=keyword）
+- [x] 联系人备注名支持
 
-#### 59. 用户在线状态展示增强 ⏳
-- [ ] 扩展 OnlineStatus 枚举（Online, Away, Busy, Invisible）
-- [ ] 自定义状态消息 API（PUT /api/users/status）
-- [ ] 获取用户状态详情 API（GET /api/users/:id/status）
+#### 59. 用户在线状态展示增强 ✅ (2026-05-14)
+- [x] 扩展 OnlineStatus 枚举（Online, Away, Busy, Invisible）
+- [x] 自定义状态消息 API（PUT /api/users/status）
+- [x] 获取用户状态详情 API（GET /api/users/:id/status）
 - [ ] 状态自动切换（长时间无操作 → Away）
 
-#### 60. 消息发送失败重试 ⏳
-- [ ] 消息发送队列（本地持久化）
-- [ ] 失败自动重试（指数退避）
-- [ ] 发送状态跟踪（sending, sent, delivered, failed）
-- [ ] 手动重试 API（POST /api/im/messages/:id/retry）
+#### 60. 消息发送失败重试 ✅
+- [x] 消息发送队列（本地持久化）
+- [x] 失败自动重试（指数退避）
+- [x] 发送状态跟踪（sending, sent, delivered, failed）
+- [x] 手动重试 API（POST /api/im/messages/:id/retry）
 
 #### 61. 会话最后活跃时间优化 ⏳
 - [ ] 会话最后消息摘要（last_message_preview）

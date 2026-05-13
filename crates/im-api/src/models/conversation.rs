@@ -101,6 +101,10 @@ pub struct Conversation {
     pub avatar: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_message: Option<Message>,
+    #[serde(rename = "lastMessagePreview", skip_serializing_if = "Option::is_none")]
+    pub last_message_preview: Option<String>,
+    #[serde(rename = "lastMessageAt", skip_serializing_if = "Option::is_none")]
+    pub last_message_at: Option<String>,
     #[serde(rename = "unreadCount")]
     pub unread_count: i32,
     #[serde(rename = "isPinned")]
@@ -130,6 +134,8 @@ pub struct ConversationEntity {
     pub is_archived: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub last_message_at: Option<DateTime<Utc>>,
+    pub last_message_preview: Option<String>,
 }
 
 impl ConversationEntity {
@@ -141,6 +147,8 @@ impl ConversationEntity {
             name: self.name.clone(),
             avatar: self.avatar.clone(),
             last_message: None,
+            last_message_preview: self.last_message_preview.clone(),
+            last_message_at: self.last_message_at.map(|dt| dt.to_rfc3339()),
             unread_count: self.unread_count,
             is_pinned: self.is_pinned,
             is_muted: self.is_muted,
