@@ -13,3 +13,4 @@ pub mod conversation;
 pub mod encryption;
 pub mod health;
 pub mod metrics;
+pub mod audit;

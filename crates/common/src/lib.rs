@@ -8,6 +8,7 @@
 //! - `db`: 数据库连接管理
 //! - `crypto`: 加密工具（ECDH 密钥交换、AES 加解密）
 //! - `middleware`: HTTP 认证中间件
+//! - `pool_monitor`: 连接池监控和健康检查
 
 pub mod error;
 pub mod models;
@@ -18,8 +19,11 @@ pub mod cache;
 pub mod crypto;
 pub mod security;
 pub mod secrets;
+pub mod pool_monitor;
+pub mod audit;
 
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};
 pub use db::{DatabaseManager};
 pub use models::ApiResponse;
+pub use pool_monitor::{PoolMonitor, PoolStats, HealthCheckResult, HealthStatus};

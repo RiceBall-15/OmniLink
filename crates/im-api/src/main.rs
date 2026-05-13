@@ -182,6 +182,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/encryption/key-exchange", post(key_exchange_with_auth))
         .route("/api/im/encryption/store", post(store_encrypted_message_with_auth))
         .route("/api/im/encryption/messages/:conversation_id", get(get_encrypted_messages_with_auth))
+        // 审计日志 API
+        .route("/api/audit/logs", get(audit::get_audit_logs))
+        .route("/api/audit/stats", get(audit::get_audit_stats))
+        .route("/api/audit/user", get(audit::get_user_audit_logs))
+        .route("/api/audit/cleanup", post(audit::cleanup_audit_logs))
 
         // 添加数据库连接池到状态
         .with_state(pool)

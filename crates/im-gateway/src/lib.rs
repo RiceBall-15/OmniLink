@@ -23,3 +23,4 @@ pub mod middleware;
 pub mod connection_manager;
 pub mod status_manager;
 pub mod offline_queue;
+pub mod connection_quality;
