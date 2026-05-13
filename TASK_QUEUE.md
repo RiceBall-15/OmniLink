@@ -546,12 +546,12 @@
 - [x] 数据库层实现（batch_create_messages, batch_delete_messages, batch_mark_conversations_as_read）
 - [x] 权限验证（删除仅限发送者，已读标记仅限会话成员）
 
-#### 47. 用户屏蔽系统 ⏳
-- [ ] BlockUser 模型（blocker_id, blocked_id, created_at）
-- [ ] 屏蔽用户 API（POST /api/users/:id/block）
-- [ ] 取消屏蔽 API（DELETE /api/users/:id/block）
-- [ ] 获取屏蔽列表 API（GET /api/users/blocked）
-- [ ] 屏蔽后消息过滤
+#### 47. 用户屏蔽系统 ✅ (2026-05-14)
+- [x] BlockUser 模型（blocker_id, blocked_id, created_at）
+- [x] 屏蔽用户 API（POST /api/users/:id/block）
+- [x] 取消屏蔽 API（DELETE /api/users/:id/block）
+- [x] 获取屏蔽列表 API（GET /api/users/blocked）
+- [ ] 屏蔽后消息过滤（待集成到 im-gateway）
 
 #### 48. 离线消息队列 ⏳
 - [ ] 离线消息存储（Redis队列）
