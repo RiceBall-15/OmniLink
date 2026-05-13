@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State, Multipart},
-    http::StatusCode,
+    http::{StatusCode, HeaderMap, header},
     Json,
     response::{Response, IntoResponse},
 };
@@ -122,23 +122,51 @@ pub async fn batch_upload_files(
     Ok(Json(ApiResponse::success(response)))
 }
 
-/// 下载文件
+/// 下载文件（支持 ETag 缓存）
 pub async fn download_file(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(file_id): Path<Uuid>,
 ) -> Result<Response, StatusCode> {
-    match state.file_service.download_file(file_id).await {
-        Ok((file_info, data)) => {
-            let headers = [
-                ("Content-Type", file_info.mime_type.as_str()),
-                ("Content-Disposition", &format!("attachment; filename=\"{}\"", file_info.original_name)),
-                ("Content-Length", &file_info.file_size.to_string()),
-            ];
+    match state.file_service.get_file_by_id(file_id).await {
+        Ok(Some(file_info)) => {
+            // 生成 ETag: 基于文件ID和更新时间
+            let etag = format!(
+                "\"{}-{}\"",
+                file_info.id,
+                file_info.updated_at.timestamp()
+            );
 
-            Ok((headers, data).into_response())
+            // 检查 If-None-Match 头
+            if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
+                if let Ok(client_etag) = if_none_match.to_str() {
+                    if client_etag == etag {
+                        return Ok(StatusCode::NOT_MODIFIED.into_response());
+                    }
+                }
+            }
+
+            // 下载文件数据
+            match state.file_service.download_file(file_id).await {
+                Ok((_, data)) => {
+                    let response_headers = [
+                        ("Content-Type", file_info.mime_type.as_str()),
+                        ("Content-Disposition", &format!("attachment; filename=\"{}\"", file_info.original_name)),
+                        ("Content-Length", &file_info.file_size.to_string()),
+                        ("ETag", &etag),
+                        ("Cache-Control", "private, max-age=3600"),
+                    ];
+                    Ok((response_headers, data).into_response())
+                }
+                Err(e) => {
+                    tracing::error!("Failed to download file data: {:?}", e);
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
         }
+        Ok(None) => Err(StatusCode::NOT_FOUND),
         Err(e) => {
-            tracing::error!("Failed to download file: {:?}", e);
+            tracing::error!("Failed to get file info: {:?}", e);
             Err(StatusCode::NOT_FOUND)
         }
     }
