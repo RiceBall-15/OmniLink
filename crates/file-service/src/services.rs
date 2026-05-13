@@ -146,6 +146,11 @@ impl FileService {
         Ok((file_info, data))
     }
 
+    /// 根据ID获取文件信息
+    pub async fn get_file_by_id(&self, file_id: Uuid) -> Result<Option<FileInfo>> {
+        self.repository.get_file(file_id).await
+    }
+
     /// 删除文件
     pub async fn delete_file(&self, file_id: Uuid, user_id: Uuid) -> Result<bool> {
         let file_info = self.repository.get_file(file_id).await?;
