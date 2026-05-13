@@ -8,6 +8,7 @@ use crate::user_repository::UserRepository;
 use crate::connection_manager::WSConnectionManager;
 use crate::status_manager::OnlineStatusManager;
 use crate::offline_queue::{OfflineMessageQueue, OfflineMessage};
+use crate::block_manager::BlockManager;
 use common::models::User;
 use common::{AppError, Result};
 use uuid::Uuid;
@@ -23,6 +24,7 @@ pub struct IMService {
     connection_manager: Arc<WSConnectionManager>,
     status_manager: Arc<OnlineStatusManager>,
     offline_queue: Arc<OfflineMessageQueue>,
+    block_manager: Arc<BlockManager>,
     user_cache: Arc<RwLock<HashMap<Uuid, User>>>,
 }
 
@@ -34,14 +36,21 @@ impl IMService {
         status_manager: Arc<OnlineStatusManager>,
         offline_queue: Arc<OfflineMessageQueue>,
     ) -> Self {
+        let block_manager = Arc::new(BlockManager::new(user_repository.clone(), None));
         Self {
             message_repository,
             user_repository,
             connection_manager,
             status_manager,
             offline_queue,
+            block_manager,
             user_cache: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    /// 获取屏蔽管理器引用（供外部使用）
+    pub fn block_manager(&self) -> &BlockManager {
+        &self.block_manager
     }
 
     /// 发送消息
@@ -81,16 +90,29 @@ impl IMService {
             .send_to_conversation(request.conversation_id, ws_message)
             .await;
 
-        // 获取对话参与者并标记已送达
+        // 获取对话参与者并标记已送达（过滤被屏蔽用户）
         if let Ok(participants) = self.get_conversation_participants(request.conversation_id).await {
-            for participant_id in participants {
-                if participant_id != sender_id {
+            // 过滤掉屏蔽了发送者的用户
+            let filtered_participants = self.block_manager
+                .filter_blocked_recipients(sender_id, &participants)
+                .await;
+
+            let blocked_count = participants.len() - filtered_participants.len();
+            if blocked_count > 0 {
+                tracing::info!(
+                    "Filtered {} blocked users from message delivery for conversation {}",
+                    blocked_count, request.conversation_id
+                );
+            }
+
+            for participant_id in &filtered_participants {
+                if *participant_id != sender_id {
                     // 检查用户是否在线
-                    let is_online = self.connection_manager.is_online(participant_id).await;
+                    let is_online = self.connection_manager.is_online(*participant_id).await;
 
                     if is_online {
                         // 在线用户：标记为已送达
-                        if let Err(e) = self.message_repository.mark_as_delivered(message_id, participant_id).await {
+                        if let Err(e) = self.message_repository.mark_as_delivered(message_id, *participant_id).await {
                             tracing::warn!("Failed to mark message as delivered: {:?}", e);
                         }
                         
@@ -107,7 +129,7 @@ impl IMService {
                                 "conversation_id": request.conversation_id,
                             })),
                         };
-                        self.connection_manager.send_to_user(participant_id, delivery_notification).await;
+                        self.connection_manager.send_to_user(*participant_id, delivery_notification).await;
                     } else {
                         // 离线用户：将消息加入离线队列
                         let offline_msg = OfflineMessage {
@@ -119,7 +141,7 @@ impl IMService {
                             timestamp: message.created_at.timestamp(),
                         };
 
-                        if let Err(e) = self.offline_queue.enqueue_message(participant_id, offline_msg).await {
+                        if let Err(e) = self.offline_queue.enqueue_message(*participant_id, offline_msg).await {
                             tracing::warn!("Failed to enqueue offline message for user {}: {:?}", participant_id, e);
                         } else {
                             tracing::info!("Queued offline message {} for user {}", message_id, participant_id);

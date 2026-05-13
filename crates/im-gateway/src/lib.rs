@@ -24,3 +24,4 @@ pub mod connection_manager;
 pub mod status_manager;
 pub mod offline_queue;
 pub mod connection_quality;
+pub mod block_manager;

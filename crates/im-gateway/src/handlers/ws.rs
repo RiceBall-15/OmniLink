@@ -348,7 +348,7 @@ async fn handle_authenticated_message(
         }
 
         WSMessageType::Message => {
-            // 处理普通消息 - 转发到对话中的其他用户
+            // 处理普通消息 - 转发到对话中的其他用户（过滤屏蔽关系）
             tracing::info!(
                 "Received message from user {} in conversation {:?}",
                 user_id,
@@ -356,7 +356,12 @@ async fn handle_authenticated_message(
             );
 
             if let Some(conversation_id) = ws_msg.conversation_id {
-                // 广播消息到对话中的其他用户
+                // 获取屏蔽关系
+                let block_manager = state.im_service.block_manager();
+                let blocked_by_sender = block_manager.get_blocked_list(user_id).await;
+                let blocked_senders = block_manager.get_blocked_by_list(user_id).await;
+
+                // 广播消息到对话中的其他用户（过滤屏蔽用户）
                 let broadcast_msg = WSMessage {
                     message_type: WSMessageType::Message,
                     conversation_id: Some(conversation_id),
@@ -366,7 +371,14 @@ async fn handle_authenticated_message(
                     timestamp: Some(Utc::now().timestamp()),
                     data: ws_msg.data.clone(),
                 };
-                state.connection_manager.send_to_conversation(conversation_id, broadcast_msg).await;
+                let sent = state.connection_manager.send_to_conversation_filtered(
+                    conversation_id,
+                    user_id,
+                    &blocked_by_sender,
+                    &blocked_senders,
+                    broadcast_msg,
+                ).await;
+                tracing::debug!("Message broadcast to {} recipients (after block filter)", sent);
             }
         }
 

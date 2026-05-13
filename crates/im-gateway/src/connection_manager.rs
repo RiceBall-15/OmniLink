@@ -296,6 +296,54 @@ impl WSConnectionManager {
         0
     }
 
+    /// 向会话中的所有连接发送消息（过滤屏蔽用户）
+    ///
+    /// 排除 sender_id 屏蔽的用户以及屏蔽了 sender_id 的用户的连接。
+    /// blocked_by_sender: 被发送者屏蔽的用户ID集合
+    /// blocked_senders: 屏蔽了发送者的用户ID集合
+    pub async fn send_to_conversation_filtered(
+        &self,
+        conversation_id: Uuid,
+        sender_id: Uuid,
+        blocked_by_sender: &std::collections::HashSet<Uuid>,
+        blocked_senders: &std::collections::HashSet<Uuid>,
+        message: WSMessage,
+    ) -> usize {
+        let conv_connections = self.conversation_connections.read().await;
+        let connections = self.connections.read().await;
+
+        if let Some(conn_ids) = conv_connections.get(&conversation_id) {
+            if let Ok(json) = serde_json::to_string(&message) {
+                let ws_message = Message::Text(json);
+                let mut sent_count = 0;
+
+                for conn_id in conn_ids {
+                    if let Some(conn) = connections.get(conn_id) {
+                        // 跳过发送者自己
+                        if conn.user_id == sender_id {
+                            continue;
+                        }
+                        // 跳过被发送者屏蔽的用户
+                        if blocked_by_sender.contains(&conn.user_id) {
+                            continue;
+                        }
+                        // 跳过屏蔽了发送者的用户
+                        if blocked_senders.contains(&conn.user_id) {
+                            continue;
+                        }
+                        if conn.sender.send(ws_message.clone()).is_ok() {
+                            sent_count += 1;
+                        }
+                    }
+                }
+
+                return sent_count;
+            }
+        }
+
+        0
+    }
+
     /// 向特定连接发送消息
     pub async fn send_to_connection(
         &self,
