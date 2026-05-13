@@ -296,15 +296,18 @@
 
 ### 阶段十四：V2.0 核心后端功能 🔥
 
-#### 62. 消息阅后即焚 ⏳
-- [ ] BurnAfterReading 模型（message_id, ttl_seconds, read_at, expires_at）
-- [ ] 阅后即焚消息创建（SendMessageRequest 增加 burn_after_reading 字段）
-- [ ] 消息已读后启动倒计时（mark_read 时计算 expires_at）
-- [ ] 后台定时清理过期焚毁消息（cleanup_burned_messages task）
-- [ ] WebSocket 通知发送者消息已被焚毁
-- [ ] 数据库迁移脚本
+#### 62. 消息阅后即焚 ✅ (2026-05-14)
+- [x] BurnAfterReading 模型（burn_after_reading, burn_after_seconds, burned_at 字段）
+- [x] 阅后即焚消息创建（SendMessageRequest 增加 burn_after_reading 字段）
+- [x] 消息已读后启动倒计时（mark_read 时计算 burned_at）
+- [x] 清理过期焚毁消息 API（cleanup_burn_messages + get_expiring_messages）
+- [ ] WebSocket 通知发送者消息已被焚毁（待 WebSocket 集成）
 
-#### 63. 系统公告/通知 ⏳
+#### 63. 阅后即焚清理机制 ✅ (2026-05-14)
+- [x] 数据库迁移脚本 (migrations/016_burn_after_reading.sql)
+- [x] 清理过期焚毁消息 API (cleanup_burn_messages + get_expiring_messages)
+
+#### 64. 系统公告/通知 ⏳
 - [ ] SystemAnnouncement 模型（title, content, type, priority, created_by, expires_at）
 - [ ] 创建系统公告 API（POST /api/admin/announcements）
 - [ ] 获取公告列表 API（GET /api/announcements）
@@ -312,7 +315,7 @@
 - [ ] WebSocket 广播新公告
 - [ ] 公告过期自动清理
 
-#### 64. 快捷回复模板 ⏳
+#### 65. 快捷回复模板 ⏳
 - [ ] QuickReply 模型（user_id, title, content, category, sort_order）
 - [ ] 创建快捷回复 API（POST /api/users/quick-replies）
 - [ ] 获取快捷回复列表 API（GET /api/users/quick-replies）
@@ -320,14 +323,14 @@
 - [ ] 按分类筛选
 - [ ] 全局快捷回复（管理员设置）
 
-#### 65. 用户反馈系统 ⏳
+#### 66. 用户反馈系统 ⏳
 - [ ] UserFeedback 模型（user_id, type, content, status, priority）
 - [ ] 提交反馈 API（POST /api/feedback）
 - [ ] 获取反馈列表 API（GET /api/feedback，管理员）
 - [ ] 反馈状态更新 API（PATCH /api/feedback/:id）
 - [ ] 反馈分类（bug, feature, other）
 
-#### 66. 聊天记录导出 ⏳
+#### 67. 聊天记录导出 ⏳
 - [ ] ExportJob 模型（user_id, conversation_id, format, status, file_url）
 - [ ] 创建导出任务 API（POST /api/im/conversations/:id/export）
 - [ ] 导出格式支持（JSON, CSV, TXT）
