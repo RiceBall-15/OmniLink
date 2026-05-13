@@ -16,6 +16,7 @@ pub mod auth;
 pub mod db;
 pub mod cache;
 pub mod crypto;
+pub mod security;
 
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};

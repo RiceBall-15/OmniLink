@@ -22,6 +22,7 @@ use im_api::handlers::encryption;
 use im_api::handlers::metrics::{get_metrics, get_prometheus_metrics, init_start_time};
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
+use im_api::middleware::security_headers::security_headers_middleware;
 use im_api::middleware::rate_limit::{RateLimitConfig, RateLimitState, rate_limit_middleware};
 use im_api::middleware::request_id::request_id_middleware;
 use im_api::middleware::request_timing::request_timing_middleware;
@@ -184,7 +185,28 @@ async fn main() -> anyhow::Result<()> {
         .layer(axum::middleware::from_fn_with_state(
             rate_limit_state,
             rate_limit_middleware,
-        ));
+        ))
+        // 添加安全头中间件层
+        .layer(axum::middleware::from_fn(security_headers_middleware))
+        // 添加CORS中间件层
+        .layer(tower_http::cors::CorsLayer::new()
+            .allow_origin(tower_http::cors::Any)
+            .allow_headers([
+                axum::http::header::AUTHORIZATION,
+                axum::http::header::ACCEPT,
+                axum::http::header::CONTENT_TYPE,
+            ])
+            .allow_methods([
+                axum::http::Method::GET,
+                axum::http::Method::POST,
+                axum::http::Method::PUT,
+                axum::http::Method::DELETE,
+                axum::http::Method::PATCH,
+                axum::http::Method::OPTIONS,
+            ])
+            .allow_credentials(true)
+            .max_age(std::time::Duration::from_secs(3600))
+        );
 
     let listener = TcpListener::bind("0.0.0.0:8002").await?;
     info!("IM API listening on http://0.0.0.0:8002");
