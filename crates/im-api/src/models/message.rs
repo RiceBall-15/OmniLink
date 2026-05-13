@@ -325,6 +325,8 @@ pub enum OnlineStatus {
     Away,
     #[serde(rename = "busy")]
     Busy,
+    #[serde(rename = "invisible")]
+    Invisible,
 }
 
 impl std::fmt::Display for OnlineStatus {
@@ -334,6 +336,7 @@ impl std::fmt::Display for OnlineStatus {
             OnlineStatus::Online => write!(f, "online"),
             OnlineStatus::Away => write!(f, "away"),
             OnlineStatus::Busy => write!(f, "busy"),
+            OnlineStatus::Invisible => write!(f, "invisible"),
         }
     }
 }
@@ -347,6 +350,7 @@ impl std::str::FromStr for OnlineStatus {
             "online" => Ok(OnlineStatus::Online),
             "away" => Ok(OnlineStatus::Away),
             "busy" => Ok(OnlineStatus::Busy),
+            "invisible" => Ok(OnlineStatus::Invisible),
             _ => Err(format!("无效的在线状态: {}", s)),
         }
     }
@@ -356,6 +360,8 @@ impl std::str::FromStr for OnlineStatus {
 #[derive(Debug, Deserialize)]
 pub struct UpdateStatusRequest {
     pub status: OnlineStatus,
+    #[serde(default)]
+    pub status_message: Option<String>,
 }
 
 /// 创建消息参数（用于数据库插入）
@@ -597,6 +603,7 @@ mod tests {
         assert_eq!(OnlineStatus::Online.to_string(), "online");
         assert_eq!(OnlineStatus::Away.to_string(), "away");
         assert_eq!(OnlineStatus::Busy.to_string(), "busy");
+        assert_eq!(OnlineStatus::Invisible.to_string(), "invisible");
     }
 
     #[test]
@@ -605,11 +612,12 @@ mod tests {
         assert_eq!("online".parse::<OnlineStatus>().unwrap(), OnlineStatus::Online);
         assert_eq!("away".parse::<OnlineStatus>().unwrap(), OnlineStatus::Away);
         assert_eq!("busy".parse::<OnlineStatus>().unwrap(), OnlineStatus::Busy);
+        assert_eq!("invisible".parse::<OnlineStatus>().unwrap(), OnlineStatus::Invisible);
     }
 
     #[test]
     fn test_online_status_from_str_invalid() {
-        assert!("invisible".parse::<OnlineStatus>().is_err());
+        assert!("unknown_status".parse::<OnlineStatus>().is_err());
         assert!("".parse::<OnlineStatus>().is_err());
     }
 

@@ -27,7 +27,7 @@ pub struct User {
 }
 
 /// 数据库中的用户实体（包含密码）
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct UserEntity {
     pub id: Uuid,
     pub username: String,
@@ -439,4 +439,92 @@ pub struct BlockStatusResponse {
     /// 是否屏蔽了该用户
     #[serde(rename = "hasBlocked")]
     pub has_blocked: bool,
+}
+
+/// 联系人实体（数据库模型）
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct ContactEntity {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub contact_id: Uuid,
+    pub nickname: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// 联系人 API 响应
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct Contact {
+    #[serde(rename = "id")]
+    pub id: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
+    #[serde(rename = "contactId")]
+    pub contact_id: String,
+    #[serde(rename = "nickname", skip_serializing_if = "Option::is_none")]
+    pub nickname: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+}
+
+impl ContactEntity {
+    pub fn to_contact(&self) -> Contact {
+        Contact {
+            id: self.id.to_string(),
+            user_id: self.user_id.to_string(),
+            contact_id: self.contact_id.to_string(),
+            nickname: self.nickname.clone(),
+            created_at: self.created_at.to_rfc3339(),
+            updated_at: self.updated_at.to_rfc3339(),
+        }
+    }
+}
+
+/// 添加联系人请求
+#[derive(Debug, Deserialize, Validate, utoipa::ToSchema)]
+pub struct AddContactRequest {
+    /// 联系人用户ID
+    #[serde(rename = "contactId")]
+    pub contact_id: String,
+    /// 联系人备注名（可选）
+    #[serde(rename = "nickname", skip_serializing_if = "Option::is_none")]
+    #[validate(length(max = 100, message = "备注名长度不能超过100字符"))]
+    pub nickname: Option<String>,
+}
+
+/// 更新联系人备注请求
+#[derive(Debug, Deserialize, Validate, utoipa::ToSchema)]
+pub struct UpdateContactRequest {
+    /// 新的备注名
+    #[serde(rename = "nickname")]
+    #[validate(length(max = 100, message = "备注名长度不能超过100字符"))]
+    pub nickname: String,
+}
+
+/// 联系人列表响应
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ContactListResponse {
+    #[serde(rename = "contacts")]
+    pub contacts: Vec<Contact>,
+    #[serde(rename = "total")]
+    pub total: i64,
+}
+
+/// 用户搜索结果
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct UserSearchResult {
+    #[serde(rename = "id")]
+    pub id: String,
+    #[serde(rename = "username")]
+    pub username: String,
+    #[serde(rename = "nickname", skip_serializing_if = "Option::is_none")]
+    pub nickname: Option<String>,
+    #[serde(rename = "avatar", skip_serializing_if = "Option::is_none")]
+    pub avatar: Option<String>,
+    #[serde(rename = "bio", skip_serializing_if = "Option::is_none")]
+    pub bio: Option<String>,
+    #[serde(rename = "isContact")]
+    pub is_contact: bool,
 }

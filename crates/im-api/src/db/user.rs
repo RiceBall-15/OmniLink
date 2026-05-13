@@ -416,3 +416,95 @@ pub async fn get_blocked_user_ids(
 
     Ok(rows)
 }
+
+/// 用户在线状态详情
+#[derive(Debug, serde::Serialize)]
+pub struct UserStatusInfo {
+    pub user_id: String,
+    pub online_status: String,
+    pub status_message: Option<String>,
+    pub last_active_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// 更新用户在线状态
+pub async fn update_user_online_status(
+    pool: &PgPool,
+    user_id: &str,
+    online_status: &str,
+    status_message: Option<&str>,
+) -> Result<(), String> {
+    let uuid = Uuid::parse_str(user_id)
+        .map_err(|_| "无效的用户 ID 格式".to_string())?;
+
+    let now = Utc::now();
+
+    // 确保 online_status 列存在
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS online_status VARCHAR(20) DEFAULT 'offline'"
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("添加 online_status 列失败: {}", e))?;
+
+    sqlx::query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMP WITH TIME ZONE"
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| format!("添加 last_active_at 列失败: {}", e))?;
+
+    // 更新状态
+    let mut query = String::from("UPDATE users SET online_status = $1, last_active_at = $2");
+    let mut param_count = 3;
+
+    if status_message.is_some() {
+        query.push_str(&format!(", status_message = ${}", param_count));
+        param_count += 1;
+    }
+
+    query.push_str(&format!(" WHERE id = ${}", param_count));
+
+    let mut sqlx_query = sqlx::query(&query)
+        .bind(online_status)
+        .bind(now);
+
+    if let Some(msg) = status_message {
+        sqlx_query = sqlx_query.bind(msg);
+    }
+
+    sqlx_query = sqlx_query.bind(uuid);
+
+    sqlx_query
+        .execute(pool)
+        .await
+        .map_err(|e| format!("更新在线状态失败: {}", e))?;
+
+    Ok(())
+}
+
+/// 获取用户在线状态详情
+pub async fn get_user_status(
+    pool: &PgPool,
+    user_id: &str,
+) -> Result<UserStatusInfo, String> {
+    let uuid = Uuid::parse_str(user_id)
+        .map_err(|_| "无效的用户 ID 格式".to_string())?;
+
+    let row = sqlx::query(
+        r#"SELECT id, COALESCE(online_status, 'offline') as online_status,
+                  status_message, last_active_at
+           FROM users WHERE id = $1"#
+    )
+    .bind(uuid)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("查询用户状态失败: {}", e))?
+    .ok_or_else(|| "用户不存在".to_string())?;
+
+    Ok(UserStatusInfo {
+        user_id: row.get::<Uuid, _>("id").to_string(),
+        online_status: row.get("online_status"),
+        status_message: row.get("status_message"),
+        last_active_at: row.get("last_active_at"),
+    })
+}

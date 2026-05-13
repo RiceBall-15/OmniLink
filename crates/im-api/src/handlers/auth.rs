@@ -22,7 +22,10 @@ use crate::models::auth::{
 use crate::db::user::{
     create_user, find_user_by_email, find_user_by_id, update_user, verify_password, update_user_profile,
     block_user, unblock_user, get_blocked_users, is_user_blocked,
+    update_user_online_status, get_user_status,
 };
+use crate::models::message::OnlineStatus;
+use crate::middleware::auth::AuthUser;
 use crate::utils::jwt::generate_token;
 
 /// 用户注册
@@ -413,4 +416,59 @@ pub async fn check_block_status_handler(
         StatusCode::OK,
         Json(ApiResponse::success(serde_json::to_value(response).unwrap())),
     )
+}
+
+/// 更新用户在线状态
+///
+/// PUT /api/users/status
+pub async fn update_user_status_handler(
+    State(pool): State<PgPool>,
+    AuthUser { user_id, .. }: AuthUser,
+    Json(request): Json<crate::models::message::UpdateStatusRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let status_str = request.status.to_string();
+    let msg_ref = request.status_message.as_deref();
+
+    match update_user_online_status(&pool, &user_id, &status_str, msg_ref).await {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "status": status_str,
+                "statusMessage": request.status_message,
+                "message": "在线状态已更新"
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("UPDATE_STATUS_FAILED", format!("更新状态失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取用户在线状态详情
+///
+/// GET /api/users/:id/status
+pub async fn get_user_status_handler(
+    State(pool): State<PgPool>,
+    Path(target_user_id): Path<String>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    match get_user_status(&pool, &target_user_id).await {
+        Ok(status_info) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::to_value(status_info).unwrap())),
+        ),
+        Err(e) => {
+            if e.contains("不存在") {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(ApiResponse::error("USER_NOT_FOUND", &e)),
+                )
+            } else {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::error("GET_STATUS_FAILED", format!("获取状态失败: {}", e))),
+                )
+            }
+        }
+    }
 }

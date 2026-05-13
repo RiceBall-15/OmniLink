@@ -15,3 +15,4 @@ pub mod health;
 pub mod metrics;
 pub mod audit;
 pub mod scheduled_task;
+pub mod contact;

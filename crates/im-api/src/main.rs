@@ -21,6 +21,7 @@ use im_api::handlers::health::health_check_with_deps;
 use im_api::handlers::encryption;
 use im_api::handlers::metrics::{get_metrics, get_prometheus_metrics, init_start_time};
 use im_api::handlers::audit;
+use im_api::handlers::contact;
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::security_headers::security_headers_middleware;
@@ -168,6 +169,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/users/blocked", get(get_blocked_list_with_auth))
         .route("/api/users/:id/block-status", get(check_block_status_with_auth))
 
+        // 用户在线状态
+        .route("/api/users/status", put(update_user_status_with_auth))
+        .route("/api/users/:id/status", get(get_user_status_with_auth))
+
         // 群组管理
         .route("/api/im/conversations/:id/members", get(get_group_members_with_auth).post(add_group_members_with_auth))
         .route("/api/im/conversations/:id/members/:member_id", delete(remove_group_member_with_auth))
@@ -215,6 +220,15 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/im/messages/:id/thread", get(message::get_message_thread_handler))
             .route("/api/im/messages/:id/thread/count", get(message::get_thread_count_handler))
             .route("/api/im/conversations/:id/threads", get(message::get_conversation_threads_handler));
+
+        // 联系人管理 API
+        let app = app
+            .route("/api/users/contacts", post(contact::add_contact_handler))
+            .route("/api/users/contacts", get(contact::get_contacts_handler))
+            .route("/api/users/contacts/:id", get(contact::get_contact_handler))
+            .route("/api/users/contacts/:id", put(contact::update_contact_handler))
+            .route("/api/users/contacts/:id", delete(contact::remove_contact_handler))
+            .route("/api/users/search", get(contact::search_users_handler));
 
     // 克隆连接池用于后台定时消息处理任务
     let bg_pool = pool.clone();
@@ -578,6 +592,23 @@ async fn check_block_status_with_auth(
 ) -> impl IntoResponse {
     let user_id = auth.user_id;
     auth::check_block_status_handler(State(pool), Extension(user_id), Path(other_user_id)).await
+}
+
+/// 更新用户在线状态（包装认证中间件）
+async fn update_user_status_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<im_api::models::message::UpdateStatusRequest>,
+) -> impl IntoResponse {
+    auth::update_user_status_handler(State(pool), auth, Json(req)).await
+}
+
+/// 获取用户在线状态详情（包装认证中间件）
+async fn get_user_status_with_auth(
+    State(pool): State<PgPool>,
+    Path(user_id): Path<String>,
+) -> impl IntoResponse {
+    auth::get_user_status_handler(State(pool), Path(user_id)).await
 }
 
 /// 获取群组成员列表（包装认证中间件）
