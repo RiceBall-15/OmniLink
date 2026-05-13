@@ -12,7 +12,7 @@ use super::repository::PushRepository;
 /// - FCM (Firebase Cloud Messaging)
 /// - Web Push
 pub struct PushService {
-    repository: PushRepository,
+    pub repository: PushRepository,
 }
 
 impl PushService {
