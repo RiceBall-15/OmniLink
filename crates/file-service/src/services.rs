@@ -2,12 +2,11 @@ use anyhow::{Context, Result};
 use sqlx::PgPool;
 use std::path::PathBuf;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
-
 
 use super::models::*;
 use super::repository::{FileRepository, FileUpdate};
+use super::storage::{self, StorageBackend};
 
 /// 允许的文件类型和最大大小
 const ALLOWED_TYPES: &[(&str, u64)] = &[
@@ -31,6 +30,7 @@ pub struct FileService {
     repository: FileRepository,
     upload_dir: PathBuf,
     storage_type: String,
+    storage_backend: Box<dyn StorageBackend>,
 }
 
 impl FileService {
@@ -48,10 +48,15 @@ impl FileService {
             let _ = fs::create_dir_all(&path_clone).await;
         });
 
+        // 创建存储后端
+        let storage_backend = storage::create_storage_backend(&upload_dir)
+            .expect("Failed to create storage backend");
+
         Self {
             repository: FileRepository::new(pool),
             upload_dir: path,
             storage_type,
+            storage_backend,
         }
     }
 
@@ -272,24 +277,19 @@ impl FileService {
     }
 
     async fn _save_file(&self, path: &str, data: &[u8]) -> Result<()> {
-        let full_path = self.upload_dir.join(path);
-        if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent).await?;
-        }
-
-        let mut file = fs::File::create(&full_path).await?;
-        file.write_all(data).await?;
+        // Use storage backend (supports local filesystem or MinIO)
+        self.storage_backend.upload(path, data, "application/octet-stream").await?;
         Ok(())
     }
 
     pub async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
-        let full_path = self.upload_dir.join(path);
-        fs::read(&full_path).await.map_err(Into::into)
+        // Use storage backend (supports local filesystem or MinIO)
+        self.storage_backend.download(path).await
     }
 
     async fn _delete_file(&self, path: &str) -> Result<()> {
-        let full_path = self.upload_dir.join(path);
-        fs::remove_file(&full_path).await.map_err(Into::into)
+        // Use storage backend (supports local filesystem or MinIO)
+        self.storage_backend.delete(path).await
     }
 
     async fn _process_media(
