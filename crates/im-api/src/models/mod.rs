@@ -8,5 +8,8 @@
 pub mod auth;
 pub mod message;
 pub mod conversation;
+pub mod announcement;
+pub mod quick_reply;
+pub mod feedback;
 
 pub use auth::{ApiResponse, ApiError};

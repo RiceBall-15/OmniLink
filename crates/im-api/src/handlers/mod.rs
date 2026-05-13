@@ -17,3 +17,6 @@ pub mod audit;
 pub mod scheduled_task;
 pub mod contact;
 pub mod message_retry;
+pub mod announcement;
+pub mod quick_reply;
+pub mod feedback;

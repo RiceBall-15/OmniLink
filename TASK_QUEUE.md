@@ -307,21 +307,21 @@
 - [x] 数据库迁移脚本 (migrations/016_burn_after_reading.sql)
 - [x] 清理过期焚毁消息 API (cleanup_burn_messages + get_expiring_messages)
 
-#### 64. 系统公告/通知 ⏳
-- [ ] SystemAnnouncement 模型（title, content, type, priority, created_by, expires_at）
-- [ ] 创建系统公告 API（POST /api/admin/announcements）
-- [ ] 获取公告列表 API（GET /api/announcements）
-- [ ] 标记已读 API（POST /api/announcements/:id/read）
-- [ ] WebSocket 广播新公告
-- [ ] 公告过期自动清理
+#### 64. 系统公告/通知 ✅ (2026-05-14)
+- [x] SystemAnnouncement 模型（title, content, type, priority, created_by, expires_at）
+- [x] 创建系统公告 API（POST /api/admin/announcements）
+- [x] 获取公告列表 API（GET /api/announcements）
+- [x] 标记已读 API（POST /api/announcements/:id/read）
+- [x] WebSocket 广播新公告（已注册路由）
+- [x] 公告过期自动清理（migration 017）
 
-#### 65. 快捷回复模板 ⏳
-- [ ] QuickReply 模型（user_id, title, content, category, sort_order）
-- [ ] 创建快捷回复 API（POST /api/users/quick-replies）
-- [ ] 获取快捷回复列表 API（GET /api/users/quick-replies）
-- [ ] 更新/删除快捷回复 API
-- [ ] 按分类筛选
-- [ ] 全局快捷回复（管理员设置）
+#### 65. 快捷回复模板 ✅
+- [x] QuickReply 模型（user_id, title, content, category, sort_order）
+- [x] 创建快捷回复 API（POST /api/users/quick-replies）
+- [x] 获取快捷回复列表 API（GET /api/users/quick-replies）
+- [x] 更新/删除快捷回复 API
+- [x] 按分类筛选
+- [x] 全局快捷回复（管理员设置）
 
 #### 66. 用户反馈系统 ⏳
 - [ ] UserFeedback 模型（user_id, type, content, status, priority）

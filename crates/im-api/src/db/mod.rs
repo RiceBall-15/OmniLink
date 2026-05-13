@@ -10,3 +10,6 @@ pub mod message;
 pub mod conversation;
 pub mod contact;
 pub mod message_retry;
+pub mod announcement;
+pub mod quick_reply;
+pub mod feedback;

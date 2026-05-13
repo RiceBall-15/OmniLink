@@ -23,6 +23,10 @@ use im_api::handlers::metrics::{get_metrics, get_prometheus_metrics, init_start_
 use im_api::handlers::audit;
 use im_api::handlers::contact;
 use im_api::handlers::message_retry;
+use im_api::handlers::announcement;
+use im_api::handlers::quick_reply;
+use im_api::handlers::feedback;
+use uuid::Uuid;
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::security_headers::security_headers_middleware;
@@ -170,6 +174,19 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/expiring-messages", get(get_expiring_messages_with_auth))
         .route("/api/im/messages/cleanup-burn", post(cleanup_burn_messages_with_auth))
 
+        // 系统公告
+        .route("/api/announcements", get(get_active_announcements_with_auth))
+        .route("/api/announcements/:id", get(get_announcement_with_auth))
+        .route("/api/announcements/:id/read", post(mark_announcement_read_with_auth))
+        .route("/api/announcements/unread-count", get(get_unread_announcement_count_with_auth))
+        .route("/api/admin/announcements", get(get_all_announcements_with_auth).post(create_announcement_with_auth))
+        .route("/api/admin/announcements/:id", put(update_announcement_with_auth).delete(delete_announcement_with_auth))
+
+        // 快捷回复模板
+        .route("/api/users/quick-replies", get(get_quick_replies_with_auth).post(create_quick_reply_with_auth))
+        .route("/api/users/quick-replies/:id", get(get_quick_reply_with_auth).put(update_quick_reply_with_auth).delete(delete_quick_reply_with_auth))
+        .route("/api/admin/quick-replies", post(create_global_quick_reply_with_auth))
+
         // 用户屏蔽
         .route("/api/users/:id/block", post(block_user_with_auth).delete(unblock_user_with_auth))
         .route("/api/users/blocked", get(get_blocked_list_with_auth))
@@ -241,6 +258,16 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/users/contacts/:id", put(contact::update_contact_handler))
             .route("/api/users/contacts/:id", delete(contact::remove_contact_handler))
             .route("/api/users/search", get(contact::search_users_handler));
+
+        // 用户反馈 API
+        let app = app
+            .route("/api/users/feedbacks", post(feedback::submit_feedback_handler))
+            .route("/api/users/feedbacks", get(feedback::get_my_feedbacks_handler))
+            .route("/api/users/feedbacks/:id", get(feedback::get_feedback_handler))
+            .route("/api/admin/feedbacks", get(feedback::get_all_feedbacks_handler))
+            .route("/api/admin/feedbacks/:id", put(feedback::update_feedback_handler))
+            .route("/api/admin/feedbacks/:id", delete(feedback::delete_feedback_handler))
+            .route("/api/admin/feedbacks/stats", get(feedback::get_feedback_stats_handler));
 
     // 克隆连接池用于后台定时消息处理任务
     let bg_pool = pool.clone();
@@ -592,6 +619,99 @@ async fn cleanup_burn_messages_with_auth(
     State(pool): State<PgPool>,
 ) -> impl IntoResponse {
     message::cleanup_burn_messages_handler(State(pool)).await
+}
+
+/// 获取活跃公告列表（用户视图）
+async fn get_active_announcements_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Query(params): Query<im_api::handlers::announcement::PaginationParams>,
+) -> impl IntoResponse {
+    im_api::handlers::announcement::get_active_announcements_handler(
+        State(pool),
+        auth,
+        Query(params),
+    )
+    .await
+}
+
+/// 获取单个公告详情
+async fn get_announcement_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    im_api::handlers::announcement::get_announcement_handler(State(pool), auth, Path(id)).await
+}
+
+/// 标记公告为已读
+async fn mark_announcement_read_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    im_api::handlers::announcement::mark_announcement_read_handler(
+        State(pool),
+        auth,
+        Path(id),
+    )
+    .await
+}
+
+/// 获取未读公告数量
+async fn get_unread_announcement_count_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+) -> impl IntoResponse {
+    im_api::handlers::announcement::get_unread_announcement_count_handler(State(pool), auth).await
+}
+
+/// 获取全部公告列表（管理员视图）
+async fn get_all_announcements_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Query(params): Query<im_api::handlers::announcement::PaginationParams>,
+) -> impl IntoResponse {
+    im_api::handlers::announcement::get_all_announcements_handler(
+        State(pool),
+        auth,
+        Query(params),
+    )
+    .await
+}
+
+/// 创建系统公告（管理员）
+async fn create_announcement_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<im_api::models::announcement::CreateAnnouncementRequest>,
+) -> impl IntoResponse {
+    im_api::handlers::announcement::create_announcement_handler(State(pool), auth, Json(req)).await
+}
+
+/// 更新系统公告（管理员）
+async fn update_announcement_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+    Json(req): Json<im_api::handlers::announcement::UpdateAnnouncementRequest>,
+) -> impl IntoResponse {
+    im_api::handlers::announcement::update_announcement_handler(
+        State(pool),
+        auth,
+        Path(id),
+        Json(req),
+    )
+    .await
+}
+
+/// 删除系统公告（管理员）
+async fn delete_announcement_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    im_api::handlers::announcement::delete_announcement_handler(State(pool), auth, Path(id)).await
 }
 
 /// 屏蔽用户（包装认证中间件）
@@ -1047,6 +1167,56 @@ async fn get_scheduled_messages_with_auth(
     message::get_scheduled_messages_handler(State(pool), auth, Query(query)).await
 }
 
+
+// ===== 快捷回复包装函数 =====
+async fn create_quick_reply_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(request): Json<im_api::models::quick_reply::CreateQuickReplyRequest>,
+) -> impl IntoResponse {
+    quick_reply::create_quick_reply_handler(State(pool), auth, Json(request)).await
+}
+
+async fn get_quick_replies_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Query(params): Query<quick_reply::QuickReplyQuery>,
+) -> impl IntoResponse {
+    quick_reply::get_quick_replies_handler(State(pool), auth, Query(params)).await
+}
+
+async fn get_quick_reply_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    quick_reply::get_quick_reply_handler(State(pool), auth, Path(id)).await
+}
+
+async fn update_quick_reply_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+    Json(request): Json<im_api::models::quick_reply::UpdateQuickReplyRequest>,
+) -> impl IntoResponse {
+    quick_reply::update_quick_reply_handler(State(pool), auth, Path(id), Json(request)).await
+}
+
+async fn delete_quick_reply_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    quick_reply::delete_quick_reply_handler(State(pool), auth, Path(id)).await
+}
+
+async fn create_global_quick_reply_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(request): Json<im_api::models::quick_reply::CreateQuickReplyRequest>,
+) -> impl IntoResponse {
+    quick_reply::create_global_quick_reply_handler(State(pool), auth, Json(request)).await
+}
 /// 初始化数据库表
 async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     info!("Initializing database tables...");
@@ -1382,5 +1552,29 @@ async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
 
     info!("Notification preferences tables initialized successfully");
 
+
+    // 创建快捷回复模板表
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS quick_replies (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            title VARCHAR(100) NOT NULL,
+            content TEXT NOT NULL,
+            category VARCHAR(50),
+            sort_order INT NOT NULL DEFAULT 0,
+            is_global BOOLEAN NOT NULL DEFAULT false,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_quick_replies_user ON quick_replies(user_id);
+        CREATE INDEX IF NOT EXISTS idx_quick_replies_global ON quick_replies(is_global) WHERE is_global = true;
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    info!("Quick replies table initialized successfully");
     Ok(())
 }
