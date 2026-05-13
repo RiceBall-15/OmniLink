@@ -22,3 +22,4 @@ pub mod user_repository;
 pub mod middleware;
 pub mod connection_manager;
 pub mod status_manager;
+pub mod offline_queue;

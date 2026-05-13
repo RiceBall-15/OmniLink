@@ -17,6 +17,7 @@ use im_gateway::repository::{MessageRepository, ConversationRepository};
 use im_gateway::user_repository::UserRepository;
 use im_gateway::connection_manager::WSConnectionManager;
 use im_gateway::status_manager::OnlineStatusManager;
+use im_gateway::offline_queue::OfflineMessageQueue;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -28,7 +29,7 @@ async fn main() -> Result<()> {
 
     // 数据库连接
     let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost/omnilink".to_string());
+        .unwrap_or_else(|_| "postgres://postgres:***@localhost/omnilink".to_string());
     let redis_url = std::env::var("REDIS_URL")
         .unwrap_or_else(|_| "redis://127.0.0.1".to_string());
     
@@ -46,12 +47,17 @@ async fn main() -> Result<()> {
     tracing::info!("Initializing OnlineStatusManager with Redis backend");
     let status_manager = Arc::new(OnlineStatusManager::with_redis(db_manager.redis().clone()));
 
+    // 创建离线消息队列
+    tracing::info!("Initializing OfflineMessageQueue with Redis backend");
+    let offline_queue = Arc::new(OfflineMessageQueue::new(db_manager.redis().clone()));
+
     // 创建服务实例
     let im_service = Arc::new(IMService::new(
         message_repository.clone(),
         user_repository.clone(),
         connection_manager.clone(),
         status_manager.clone(),
+        offline_queue.clone(),
     ));
 
     let conv_service = Arc::new(ConversationService::new(
@@ -69,6 +75,7 @@ async fn main() -> Result<()> {
         connection_manager: connection_manager.clone(),
         status_manager: status_manager.clone(),
         token_manager: token_manager.clone(),
+        im_service: im_service.clone(),
     });
 
     // 认证中间件

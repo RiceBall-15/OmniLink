@@ -7,6 +7,7 @@ use crate::repository::MessageRepository;
 use crate::user_repository::UserRepository;
 use crate::connection_manager::WSConnectionManager;
 use crate::status_manager::OnlineStatusManager;
+use crate::offline_queue::{OfflineMessageQueue, OfflineMessage};
 use common::models::User;
 use common::{AppError, Result};
 use uuid::Uuid;
@@ -21,6 +22,7 @@ pub struct IMService {
     user_repository: Arc<UserRepository>,
     connection_manager: Arc<WSConnectionManager>,
     status_manager: Arc<OnlineStatusManager>,
+    offline_queue: Arc<OfflineMessageQueue>,
     user_cache: Arc<RwLock<HashMap<Uuid, User>>>,
 }
 
@@ -30,12 +32,14 @@ impl IMService {
         user_repository: Arc<UserRepository>,
         connection_manager: Arc<WSConnectionManager>,
         status_manager: Arc<OnlineStatusManager>,
+        offline_queue: Arc<OfflineMessageQueue>,
     ) -> Self {
         Self {
             message_repository,
             user_repository,
             connection_manager,
             status_manager,
+            offline_queue,
             user_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -68,7 +72,7 @@ impl IMService {
             conversation_id: Some(request.conversation_id),
             message_id: Some(message_id),
             sender_id: Some(sender_id),
-            content: Some(request.content),
+            content: Some(request.content.clone()),
             timestamp: Some(message.created_at.timestamp()),
             data: None,
         };
@@ -81,25 +85,46 @@ impl IMService {
         if let Ok(participants) = self.get_conversation_participants(request.conversation_id).await {
             for participant_id in participants {
                 if participant_id != sender_id {
-                    // 标记为已送达
-                    if let Err(e) = self.message_repository.mark_as_delivered(message_id, participant_id).await {
-                        tracing::warn!("Failed to mark message as delivered: {:?}", e);
+                    // 检查用户是否在线
+                    let is_online = self.connection_manager.is_online(participant_id).await;
+
+                    if is_online {
+                        // 在线用户：标记为已送达
+                        if let Err(e) = self.message_repository.mark_as_delivered(message_id, participant_id).await {
+                            tracing::warn!("Failed to mark message as delivered: {:?}", e);
+                        }
+                        
+                        // 通知在线用户有新消息
+                        let delivery_notification = WSMessage {
+                            message_type: WSMessageType::NewMessage,
+                            conversation_id: Some(request.conversation_id),
+                            message_id: Some(message_id),
+                            sender_id: Some(sender_id),
+                            content: None,
+                            timestamp: Some(message.created_at.timestamp()),
+                            data: Some(serde_json::json!({
+                                "message_id": message_id,
+                                "conversation_id": request.conversation_id,
+                            })),
+                        };
+                        self.connection_manager.send_to_user(participant_id, delivery_notification).await;
+                    } else {
+                        // 离线用户：将消息加入离线队列
+                        let offline_msg = OfflineMessage {
+                            message_id,
+                            conversation_id: request.conversation_id,
+                            sender_id,
+                            content: request.content.clone(),
+                            message_type: message_type.clone(),
+                            timestamp: message.created_at.timestamp(),
+                        };
+
+                        if let Err(e) = self.offline_queue.enqueue_message(participant_id, offline_msg).await {
+                            tracing::warn!("Failed to enqueue offline message for user {}: {:?}", participant_id, e);
+                        } else {
+                            tracing::info!("Queued offline message {} for user {}", message_id, participant_id);
+                        }
                     }
-                    
-                    // 通知在线用户有新消息
-                    let delivery_notification = WSMessage {
-                        message_type: WSMessageType::NewMessage,
-                        conversation_id: Some(request.conversation_id),
-                        message_id: Some(message_id),
-                        sender_id: Some(sender_id),
-                        content: None,
-                        timestamp: Some(message.created_at.timestamp()),
-                        data: Some(serde_json::json!({
-                            "message_id": message_id,
-                            "conversation_id": request.conversation_id,
-                        })),
-                    };
-                    self.connection_manager.send_to_user(participant_id, delivery_notification).await;
                 }
             }
         }
@@ -112,6 +137,56 @@ impl IMService {
             sender_id,
             created_at: message.created_at.timestamp(),
         })
+    }
+
+    /// 为上线用户推送离线消息
+    pub async fn deliver_offline_messages(&self, user_id: Uuid) -> Result<()> {
+        let messages = self.offline_queue.dequeue_messages(user_id).await?;
+
+        if messages.is_empty() {
+            return Ok(());
+        }
+
+        tracing::info!(
+            "Delivering {} offline messages to user {}",
+            messages.len(),
+            user_id
+        );
+
+        // 发送离线消息通知
+        let notification = WSMessage {
+            message_type: WSMessageType::NewMessage,
+            conversation_id: None,
+            message_id: None,
+            sender_id: None,
+            content: None,
+            timestamp: Some(Utc::now().timestamp()),
+            data: Some(serde_json::json!({
+                "type": "offline_messages",
+                "count": messages.len(),
+                "messages": messages.iter().map(|m| {
+                    serde_json::json!({
+                        "message_id": m.message_id,
+                        "conversation_id": m.conversation_id,
+                        "sender_id": m.sender_id,
+                        "content": m.content,
+                        "message_type": m.message_type,
+                        "timestamp": m.timestamp,
+                    })
+                }).collect::<Vec<_>>(),
+            })),
+        };
+
+        self.connection_manager.send_to_user(user_id, notification).await;
+
+        // 标记所有离线消息为已送达
+        for msg in &messages {
+            if let Err(e) = self.message_repository.mark_as_delivered(msg.message_id, user_id).await {
+                tracing::warn!("Failed to mark offline message as delivered: {:?}", e);
+            }
+        }
+
+        Ok(())
     }
 
     /// 获取消息历史

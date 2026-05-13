@@ -7,6 +7,7 @@ use chrono::Utc;
 
 use crate::connection_manager::{WSConnection, WSConnectionManager, ConnectionId};
 use crate::status_manager::OnlineStatusManager;
+use crate::services::IMService;
 use crate::models::{WSMessage, WSMessageType, WSConnectRequest};
 use common::auth::TokenManager;
 
@@ -16,6 +17,7 @@ pub struct AppState {
     pub connection_manager: Arc<WSConnectionManager>,
     pub status_manager: Arc<OnlineStatusManager>,
     pub token_manager: Arc<TokenManager>,
+    pub im_service: Arc<IMService>,
 }
 
 /// WebSocket 路由处理器
@@ -272,6 +274,15 @@ async fn handle_auth_message(
                     if let Ok(json) = serde_json::to_string(&response) {
                         let _ = tx.send(Message::Text(json));
                     }
+
+                    // 推送离线消息给用户（异步执行，不阻塞连接）
+                    let im_service = state.im_service.clone();
+                    let uid_for_offline = uid;
+                    tokio::spawn(async move {
+                        if let Err(e) = im_service.deliver_offline_messages(uid_for_offline).await {
+                            tracing::warn!("Failed to deliver offline messages to user {}: {:?}", uid_for_offline, e);
+                        }
+                    });
                 }
                 Err(e) => {
                     tracing::warn!("Token validation failed from {}: {}", addr, e);
