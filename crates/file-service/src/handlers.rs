@@ -4,11 +4,12 @@ use axum::{
     Json,
     response::{Response, IntoResponse},
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use common::ApiResponse;
 use crate::middleware::AuthUser;
 use crate::models::*;
 use crate::services::FileService;
@@ -17,32 +18,6 @@ use crate::repository::StorageStats;
 #[derive(Clone)]
 pub struct AppState {
     pub file_service: Arc<FileService>,
-}
-
-/// 响应包装器
-#[derive(Debug, Serialize)]
-pub struct ApiResponse<T> {
-    pub success: bool,
-    pub data: Option<T>,
-    pub error: Option<String>,
-}
-
-impl<T> ApiResponse<T> {
-    pub fn success(data: T) -> Self {
-        Self {
-            success: true,
-            data: Some(data),
-            error: None,
-        }
-    }
-
-    pub fn error(message: String) -> Self {
-        Self {
-            success: false,
-            data: None,
-            error: Some(message),
-        }
-    }
 }
 
 /// 上传单个文件
@@ -60,7 +35,7 @@ pub async fn upload_file(
         // 验证文件类型和大小
         if let Err(e) = state.file_service.validate_file(&mime_type, file_size) {
             tracing::warn!("File validation failed for {}: {}", filename, e);
-            return Ok(Json(ApiResponse::error(format!("File validation failed: {}", e))));
+            return Ok(Json(ApiResponse::error(400, format!("File validation failed: {}", e))));
         }
 
         match state

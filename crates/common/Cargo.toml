@@ -26,3 +26,4 @@ rand_core = { version = "0.6", features = ["std"] }
 jsonwebtoken.workspace = true
 config.workspace = true
 http = "1.0"
+axum.workspace = true

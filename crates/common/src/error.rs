@@ -159,6 +159,20 @@ impl AppError {
     }
 }
 
+/// 实现 axum 的 IntoResponse trait，使 AppError 可以直接作为 axum handler 的返回类型
+impl axum::response::IntoResponse for AppError {
+    fn into_response(self) -> axum::response::Response {
+        let status = self.status_code();
+        let body = axum::Json(serde_json::json!({
+            "code": status.as_u16(),
+            "message": self.to_string(),
+            "data": null,
+            "timestamp": chrono::Utc::now().timestamp(),
+        }));
+        (status, body).into_response()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
