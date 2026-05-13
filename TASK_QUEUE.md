@@ -569,7 +569,7 @@
 - [x] Redis 缓存层（用户资料、会话列表）- common/src/cache.rs
 - [x] 缓存失效策略（TTL + 主动失效）- CacheManager with ttl
 - [x] 缓存命中率统计 - get/incr/stats methods
-- [ ] ETag 支持（待实现）
+- [x] ETag 支持（待实现）
 
 #### 51. 审计日志系统 ✅
 - [x] AuditLog 模型（user_id, action, resource, details, ip, timestamp）

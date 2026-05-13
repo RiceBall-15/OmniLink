@@ -130,11 +130,11 @@ pub async fn download_file(
 ) -> Result<Response, StatusCode> {
     match state.file_service.get_file_by_id(file_id).await {
         Ok(Some(file_info)) => {
-            // 生成 ETag: 基于文件ID和更新时间
+            // 生成 ETag: 基于文件ID和创建时间
             let etag = format!(
                 "\"{}-{}\"",
                 file_info.id,
-                file_info.updated_at.timestamp()
+                file_info.created_at.timestamp()
             );
 
             // 检查 If-None-Match 头
