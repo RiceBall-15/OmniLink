@@ -227,15 +227,16 @@ pub async fn health_check() -> &'static str {
 
 /// 注册设备
 pub async fn register_device(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(req): Json<RegisterDeviceRequest>,
 ) -> Result<Json<ApiResponse<DeviceInfo>>, StatusCode> {
     let device_id = Uuid::new_v4();
     let now = chrono::Utc::now();
+    let user_id = Uuid::nil(); // In production, from JWT
     
     let device = DeviceInfo {
         id: device_id,
-        user_id: Uuid::nil(), // In production, from JWT
+        user_id,
         device_type: req.device_type,
         device_token: req.device_token,
         device_name: req.device_name,
@@ -246,45 +247,83 @@ pub async fn register_device(
         created_at: now,
     };
     
-    // TODO: Save to database
-    Ok(Json(ApiResponse::success(device)))
+    match state.push_service.repository.create_device(device).await {
+        Ok(device) => Ok(Json(ApiResponse::success(device))),
+        Err(e) => {
+            tracing::error!("Failed to register device: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 /// 获取用户设备列表
 pub async fn get_user_devices(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<Vec<DeviceInfo>>>, StatusCode> {
-    // TODO: Implement device listing from database
-    Ok(Json(ApiResponse::success(vec![])))
+    let user_id = Uuid::nil(); // In production, from JWT
+    match state.push_service.repository.get_user_devices(user_id).await {
+        Ok(devices) => Ok(Json(ApiResponse::success(devices))),
+        Err(e) => {
+            tracing::error!("Failed to get user devices: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 /// 注销设备
 pub async fn unregister_device(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(device_id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<bool>>, StatusCode> {
-    // TODO: Implement device unregistration
-    tracing::info!("Unregistering device: {}", device_id);
-    Ok(Json(ApiResponse::success(true)))
+    match state.push_service.repository.delete_device(device_id).await {
+        Ok(deleted) => {
+            if deleted {
+                Ok(Json(ApiResponse::success(true)))
+            } else {
+                Err(StatusCode::NOT_FOUND)
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to unregister device: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 // ==================== 通知偏好 ====================
 
 /// 获取通知偏好
 pub async fn get_notification_preferences(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<NotificationPreferences>>, StatusCode> {
-    // TODO: Load from database
-    Ok(Json(ApiResponse::success(NotificationPreferences::default())))
+    let user_id = Uuid::nil(); // In production, from JWT
+    match state.push_service.repository.get_notification_preferences(user_id).await {
+        Ok(prefs) => Ok(Json(ApiResponse::success(prefs))),
+        Err(e) => {
+            tracing::error!("Failed to get notification preferences: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 /// 更新通知偏好
 pub async fn update_notification_preferences(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(req): Json<UpdateNotificationPreferencesRequest>,
 ) -> Result<Json<ApiResponse<NotificationPreferences>>, StatusCode> {
-    let mut prefs = NotificationPreferences::default();
+    let user_id = Uuid::nil(); // In production, from JWT
     
+    // Get current preferences first
+    let current = match state.push_service.repository.get_notification_preferences(user_id).await {
+        Ok(prefs) => prefs,
+        Err(e) => {
+            tracing::error!("Failed to get current preferences: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    // Apply updates
+    let mut prefs = current;
     if let Some(v) = req.enable_notifications {
         prefs.enable_notifications = v;
     }
@@ -304,23 +343,33 @@ pub async fn update_notification_preferences(
     prefs.quiet_hours_end = req.quiet_hours_end;
     prefs.updated_at = chrono::Utc::now();
     
-    // TODO: Save to database
-    Ok(Json(ApiResponse::success(prefs)))
+    match state.push_service.repository.upsert_notification_preferences(prefs).await {
+        Ok(updated) => Ok(Json(ApiResponse::success(updated))),
+        Err(e) => {
+            tracing::error!("Failed to update notification preferences: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 // ==================== 推送配置管理 ====================
 
 /// 获取所有推送配置
 pub async fn get_push_configs(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<Vec<PushConfigItem>>>, StatusCode> {
-    // TODO: Load from database
-    Ok(Json(ApiResponse::success(vec![])))
+    match state.push_service.repository.get_push_configs().await {
+        Ok(configs) => Ok(Json(ApiResponse::success(configs))),
+        Err(e) => {
+            tracing::error!("Failed to get push configs: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 /// 创建/更新推送配置
 pub async fn upsert_push_config(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(req): Json<UpsertPushConfigRequest>,
 ) -> Result<Json<ApiResponse<PushConfigItem>>, StatusCode> {
     let now = chrono::Utc::now();
@@ -333,35 +382,48 @@ pub async fn upsert_push_config(
         updated_at: now,
     };
     
-    // TODO: Save to database
-    Ok(Json(ApiResponse::success(config)))
+    match state.push_service.repository.upsert_push_config(config).await {
+        Ok(updated) => Ok(Json(ApiResponse::success(updated))),
+        Err(e) => {
+            tracing::error!("Failed to upsert push config: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 /// 删除推送配置
 pub async fn delete_push_config(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Result<Json<ApiResponse<bool>>, StatusCode> {
-    // TODO: Delete from database
-    tracing::info!("Deleting push config: {}", key);
-    Ok(Json(ApiResponse::success(true)))
+    match state.push_service.repository.delete_push_config(&key).await {
+        Ok(deleted) => {
+            if deleted {
+                Ok(Json(ApiResponse::success(true)))
+            } else {
+                Err(StatusCode::NOT_FOUND)
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to delete push config: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 // ==================== 增强监控 ====================
 
 /// 获取推送健康状态
 pub async fn get_push_health(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<Json<ApiResponse<PushHealthStatus>>, StatusCode> {
-    // TODO: Implement real health monitoring
-    let health = PushHealthStatus {
-        total_devices: 0,
-        active_devices: 0,
-        devices_by_type: vec![],
-        recent_failures: 0,
-        success_rate: 100.0,
-    };
-    Ok(Json(ApiResponse::success(health)))
+    match state.push_service.repository.get_push_health().await {
+        Ok(health) => Ok(Json(ApiResponse::success(health))),
+        Err(e) => {
+            tracing::error!("Failed to get push health: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 /// 发送测试推送
