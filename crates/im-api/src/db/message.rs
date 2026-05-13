@@ -243,12 +243,9 @@ pub async fn search_messages_in_conversation(
     );
 
     let mut param_count = 3;
-    let mut has_start = false;
-
     if start_date.is_some() {
         query.push_str(&format!(" AND created_at >= ${}", param_count));
         param_count += 1;
-        has_start = true;
     }
 
     if end_date.is_some() {

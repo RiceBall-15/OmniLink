@@ -168,7 +168,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// 健康检查
+/// 健康检查（简单版本，已被 health_check_with_deps 替代）
+#[allow(dead_code)]
 async fn health_check() -> &'static str {
     "IM API is healthy"
 }
@@ -299,6 +300,7 @@ async fn recall_message_with_auth(
 }
 
 /// 转发消息（包装认证中间件）
+#[allow(dead_code)]
 async fn forward_message_with_auth(
     State(pool): State<PgPool>,
     auth: AuthUser,
