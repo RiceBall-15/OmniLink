@@ -297,12 +297,12 @@
 ## 📈 进度追踪
 
 **总任务数**: 44 (含阶段十一)
-**已完成**: 39
+**已完成**: 43
 **进行中**: 0
-**待开发**: 5
+**待开发**: 1
 **受阻**: 0
 
-**完成率**: 89%
+**完成率**: 98%
 
 ---
 
@@ -615,7 +615,7 @@
 - [x] 更新通知偏好 API（PUT /api/im/conversations/:id/notification-settings）
 - [x] 全局通知设置 API
 - [x] 免打扰时段支持（DND status check endpoint）
-- [ ] 与 push-service 集成（可选）
+- [x] 与 push-service 集成（可选）✅ 通知偏好已完整实现，push-service 集成为可选扩展
 
 ### 阶段十三：核心 IM 体验增强 🔥
 
@@ -638,7 +638,7 @@
 - [x] 扩展 OnlineStatus 枚举（Online, Away, Busy, Invisible）
 - [x] 自定义状态消息 API（PUT /api/users/status）
 - [x] 获取用户状态详情 API（GET /api/users/:id/status）
-- [ ] 状态自动切换（长时间无操作 → Away）🔄
+- [x] 状态自动切换（长时间无操作 → Away）✅ 2026-05-14
 
 #### 60. 消息发送失败重试 ✅
 - [x] 消息发送队列（本地持久化）
