@@ -47,11 +47,18 @@ async fn main() -> anyhow::Result<()> {
     // 初始化启动时间（用于指标统计）
     init_start_time();
 
-    // 初始化数据库连接池
+    // 初始化数据库连接池（优化配置）
     let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://postgres:***@localhost/omnilink".to_string());
+        .unwrap_or_else(|_| "postgresql://postgres:password@localhost/omnilink".to_string());
 
-    let pool = PgPool::connect(&database_url).await?;
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(10)          // 最大连接数：适配2核2G服务器
+        .min_connections(2)           // 最小连接数：保持基本连接池
+        .acquire_timeout(std::time::Duration::from_secs(15))  // 获取连接超时：15秒
+        .idle_timeout(std::time::Duration::from_secs(300))    // 空闲连接超时：5分钟
+        .max_lifetime(std::time::Duration::from_secs(1800))   // 连接最大生命周期：30分钟
+        .connect(&database_url)
+        .await?;
 
     info!("Connected to PostgreSQL database");
 
