@@ -19,7 +19,7 @@ use im_api::handlers::message;
 use im_api::handlers::conversation;
 use im_api::handlers::health::health_check_with_deps;
 use im_api::handlers::encryption;
-use im_api::handlers::metrics::{get_metrics, init_start_time};
+use im_api::handlers::metrics::{get_metrics, get_prometheus_metrics, init_start_time};
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::rate_limit::{RateLimitConfig, RateLimitState, rate_limit_middleware};
@@ -103,6 +103,7 @@ async fn main() -> anyhow::Result<()> {
         // 健康检查（标准化版本，包含依赖检查）
         .route("/health", get(health_check_with_deps))
         .route("/metrics", get(get_metrics))
+        .route("/metrics/prometheus", get(get_prometheus_metrics))
 
         // Swagger UI
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", openapi))

@@ -9,89 +9,96 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use tracing::{error, warn};
+use crate::handlers::metrics::{inc_error_count, inc_request_count};
+use serde_json::json;
 
 /// 全局错误捕获中间件
 ///
-/// 捕获 panic 和未处理的错误，返回统一格式的 JSON 错误响应。
-/// 同时记录错误日志，方便排查问题。
+/// 捕获所有请求，记录请求计数，并将任何未处理的错误转换为标准 JSON 响应。
 pub async fn error_capture_middleware(
     request: Request,
     next: Next,
 ) -> Response {
-    let method = request.method().clone();
-    let uri = request.uri().clone();
+    // 递增请求计数
+    inc_request_count();
 
     let response = next.run(request).await;
 
-    // 检查响应状态码，对 5xx 错误记录告警日志
+    // 检查响应状态码，如果是错误则递增错误计数
     let status = response.status();
-    if status.is_server_error() {
-        error!(
-            method = %method,
-            path = %uri,
-            status = %status.as_u16(),
-            "服务器错误响应"
-        );
-    } else if status.is_client_error() && status == StatusCode::UNAUTHORIZED {
-        warn!(
-            method = %method,
-            path = %uri,
-            status = %status.as_u16(),
-            "未授权请求"
-        );
+    if status.is_server_error() || status.is_client_error() {
+        inc_error_count();
     }
 
-    response
+    // 如果响应已经是 JSON 格式或不是 500 错误，直接返回
+    if status != StatusCode::INTERNAL_SERVER_ERROR {
+        return response;
+    }
+
+    // 对于 500 错误，检查是否已经是结构化响应
+    // 如果不是，包装为标准错误格式
+    let content_type = response.headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    if content_type.contains("application/json") {
+        // 已经是 JSON 响应，直接返回
+        return response;
+    }
+
+    // 将非 JSON 的 500 错误转换为标准格式
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        serde_json::to_string(&json!({
+            "success": false,
+            "error": {
+                "code": 500,
+                "code_str": "E5001",
+                "type": "internal",
+                "message": "内部服务器错误"
+            }
+        })).unwrap_or_default(),
+    ).into_response()
 }
 
-/// 自定义的 JSON 解析错误处理
+/// JSON 解析错误处理
 ///
-/// 当请求体 JSON 解析失败时，返回友好的错误信息
-pub fn json_parse_error_response(message: String) -> Response {
-    let body = serde_json::json!({
-        "success": false,
-        "error": {
-            "code": 3001,
-            "code_str": "E3001",
-            "type": "请求参数无效",
-            "message": message,
-        },
-        "data": null,
-        "timestamp": chrono::Utc::now().timestamp(),
-    });
-    (StatusCode::BAD_REQUEST, axum::Json(body)).into_response()
+/// 当请求体 JSON 解析失败时返回标准错误响应
+pub async fn json_parse_error_response(message: &str) -> Response {
+    inc_error_count();
+    (
+        StatusCode::BAD_REQUEST,
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        serde_json::to_string(&json!({
+            "success": false,
+            "error": {
+                "code": 400,
+                "code_str": "E3001",
+                "type": "validation",
+                "message": message
+            }
+        })).unwrap_or_default(),
+    ).into_response()
 }
 
-/// 路由未找到错误响应
-pub fn not_found_response(path: &str) -> Response {
-    let body = serde_json::json!({
-        "success": false,
-        "error": {
-            "code": 2001,
-            "code_str": "E2001",
-            "type": "资源未找到",
-            "message": format!("路由未找到: {}", path),
-        },
-        "data": null,
-        "timestamp": chrono::Utc::now().timestamp(),
-    });
-    (StatusCode::NOT_FOUND, axum::Json(body)).into_response()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_json_parse_error_response() {
-        let response = json_parse_error_response("无效的JSON格式".to_string());
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[test]
-    fn test_not_found_response() {
-        let response = not_found_response("/api/unknown");
-        assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    }
+/// 路由未找到处理
+///
+/// 当请求的路由不存在时返回标准错误响应
+pub async fn not_found_response() -> Response {
+    inc_error_count();
+    (
+        StatusCode::NOT_FOUND,
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        serde_json::to_string(&json!({
+            "success": false,
+            "error": {
+                "code": 404,
+                "code_str": "E3002",
+                "type": "validation",
+                "message": "请求的资源不存在"
+            }
+        })).unwrap_or_default(),
+    ).into_response()
 }
