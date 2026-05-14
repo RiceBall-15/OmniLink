@@ -2,6 +2,20 @@ use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(
+    paths(
+        // 认证
+        crate::handlers::auth::register,
+        crate::handlers::auth::login,
+        crate::handlers::auth::get_me,
+        // 消息
+        crate::handlers::message::get_messages,
+        crate::handlers::message::send_message,
+        crate::handlers::message::edit_message,
+        crate::handlers::message::recall_message_handler,
+        crate::handlers::message::batch_send_messages,
+        crate::handlers::message::batch_delete_messages,
+        crate::handlers::message::batch_mark_as_read,
+    ),
     info(
         title = "OmniLink IM API",
         version = "0.1.0",

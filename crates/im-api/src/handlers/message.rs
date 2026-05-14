@@ -36,6 +36,22 @@ pub struct GetMessagesQuery {
 fn default_page() -> i64 { 1 }
 fn default_limit() -> i64 { 50 }
 
+/// 获取会话消息列表
+#[utoipa::path(
+    get,
+    path = "/api/im/conversations/{conversation_id}/messages",
+    tag = "messages",
+    params(
+        ("conversation_id" = String, Path, description = "会话ID"),
+        ("page" = Option<i64>, Query, description = "页码，默认1"),
+        ("limit" = Option<i64>, Query, description = "每页数量，默认50"),
+    ),
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "无效的会话ID", body = ApiResponse<serde_json::Value>),
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_messages(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
@@ -99,6 +115,21 @@ pub async fn get_messages(
 }
 
 /// 发送消息
+#[utoipa::path(
+    post,
+    path = "/api/im/conversations/{conversation_id}/messages",
+    tag = "messages",
+    params(
+        ("conversation_id" = String, Path, description = "会话ID"),
+    ),
+    request_body = SendMessageRequest,
+    responses(
+        (status = 201, description = "发送成功", body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "请求参数错误", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "无权发送消息", body = ApiResponse<serde_json::Value>),
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn send_message(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
@@ -205,6 +236,23 @@ pub async fn send_message(
 }
 
 /// 编辑消息
+#[utoipa::path(
+    put,
+    path = "/api/im/conversations/{conversation_id}/messages/{message_id}",
+    tag = "messages",
+    params(
+        ("conversation_id" = String, Path, description = "会话ID"),
+        ("message_id" = String, Path, description = "消息ID"),
+    ),
+    request_body = EditMessageRequest,
+    responses(
+        (status = 200, description = "编辑成功", body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "请求参数错误", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "无权编辑此消息", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "消息不存在", body = ApiResponse<serde_json::Value>),
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn edit_message(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
@@ -282,6 +330,22 @@ pub async fn edit_message(
 }
 
 /// 撤回消息
+#[utoipa::path(
+    post,
+    path = "/api/im/conversations/{conversation_id}/messages/{message_id}/recall",
+    tag = "messages",
+    params(
+        ("conversation_id" = String, Path, description = "会话ID"),
+        ("message_id" = String, Path, description = "消息ID"),
+    ),
+    responses(
+        (status = 200, description = "撤回成功", body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "消息不在可撤回范围内", body = ApiResponse<serde_json::Value>),
+        (status = 403, description = "无权撤回此消息", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "消息不存在", body = ApiResponse<serde_json::Value>),
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn recall_message_handler(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,

@@ -29,6 +29,16 @@ use crate::middleware::auth::AuthUser;
 use crate::utils::jwt::generate_token;
 
 /// 用户注册
+#[utoipa::path(
+    post,
+    path = "/api/auth/register",
+    tag = "auth",
+    request_body = RegisterRequest,
+    responses(
+        (status = 201, description = "注册成功", body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "请求参数错误", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn register(
     State(pool): State<PgPool>,
     Json(req): Json<RegisterRequest>,
@@ -89,6 +99,17 @@ pub async fn register(
 }
 
 /// 用户登录
+#[utoipa::path(
+    post,
+    path = "/api/auth/login",
+    tag = "auth",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "登录成功", body = ApiResponse<LoginResponse>),
+        (status = 400, description = "请求参数错误", body = ApiResponse<LoginResponse>),
+        (status = 401, description = "邮箱或密码错误", body = ApiResponse<LoginResponse>),
+    )
+)]
 pub async fn login(
     State(pool): State<PgPool>,
     Json(req): Json<LoginRequest>,
@@ -154,6 +175,16 @@ pub async fn login(
 }
 
 /// 获取当前用户信息
+#[utoipa::path(
+    get,
+    path = "/api/user/me",
+    tag = "auth",
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "用户不存在", body = ApiResponse<serde_json::Value>),
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_me(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
