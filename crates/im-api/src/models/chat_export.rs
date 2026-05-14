@@ -141,3 +141,116 @@ impl ExportJobEntity {
         self.status == ExportStatus::Failed
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_export_format_to_string() {
+        assert_eq!(ExportFormat::Json.to_string(), "json");
+        assert_eq!(ExportFormat::Csv.to_string(), "csv");
+        assert_eq!(ExportFormat::Txt.to_string(), "txt");
+    }
+
+    #[test]
+    fn test_export_format_from_str() {
+        assert_eq!(ExportFormat::from_str("json"), ExportFormat::Json);
+        assert_eq!(ExportFormat::from_str("csv"), ExportFormat::Csv);
+        assert_eq!(ExportFormat::from_str("txt"), ExportFormat::Txt);
+        // 默认为 Json
+        assert_eq!(ExportFormat::from_str("unknown"), ExportFormat::Json);
+    }
+
+    #[test]
+    fn test_export_format_file_extension() {
+        assert_eq!(ExportFormat::Json.file_extension(), "json");
+        assert_eq!(ExportFormat::Csv.file_extension(), "csv");
+        assert_eq!(ExportFormat::Txt.file_extension(), "txt");
+    }
+
+    #[test]
+    fn test_export_format_content_type() {
+        assert_eq!(ExportFormat::Json.content_type(), "application/json");
+        assert_eq!(ExportFormat::Csv.content_type(), "text/csv");
+        assert_eq!(ExportFormat::Txt.content_type(), "text/plain");
+    }
+
+    #[test]
+    fn test_export_status_to_string() {
+        assert_eq!(ExportStatus::Pending.to_string(), "pending");
+        assert_eq!(ExportStatus::Processing.to_string(), "processing");
+        assert_eq!(ExportStatus::Completed.to_string(), "completed");
+        assert_eq!(ExportStatus::Failed.to_string(), "failed");
+    }
+
+    #[test]
+    fn test_export_status_from_str() {
+        assert_eq!(ExportStatus::from_str("pending"), ExportStatus::Pending);
+        assert_eq!(ExportStatus::from_str("processing"), ExportStatus::Processing);
+        assert_eq!(ExportStatus::from_str("completed"), ExportStatus::Completed);
+        assert_eq!(ExportStatus::from_str("failed"), ExportStatus::Failed);
+        // 默认为 Pending
+        assert_eq!(ExportStatus::from_str("unknown"), ExportStatus::Pending);
+    }
+
+    #[test]
+    fn test_export_job_entity_is_completed() {
+        let job = ExportJobEntity {
+            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            conversation_id: Uuid::new_v4(),
+            format: ExportFormat::Json,
+            status: ExportStatus::Completed,
+            message_count: 10,
+            file_path: Some("/tmp/test.json".to_string()),
+            file_size: Some(1024),
+            error_message: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            completed_at: Some(Utc::now()),
+        };
+        assert!(job.is_completed());
+        assert!(!job.is_failed());
+    }
+
+    #[test]
+    fn test_export_job_entity_is_failed() {
+        let job = ExportJobEntity {
+            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            conversation_id: Uuid::new_v4(),
+            format: ExportFormat::Csv,
+            status: ExportStatus::Failed,
+            message_count: 0,
+            file_path: None,
+            file_size: None,
+            error_message: Some("导出失败".to_string()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            completed_at: Some(Utc::now()),
+        };
+        assert!(!job.is_completed());
+        assert!(job.is_failed());
+    }
+
+    #[test]
+    fn test_export_job_entity_pending() {
+        let job = ExportJobEntity {
+            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            conversation_id: Uuid::new_v4(),
+            format: ExportFormat::Txt,
+            status: ExportStatus::Pending,
+            message_count: 0,
+            file_path: None,
+            file_size: None,
+            error_message: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            completed_at: None,
+        };
+        assert!(!job.is_completed());
+        assert!(!job.is_failed());
+    }
+}
