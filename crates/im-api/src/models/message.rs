@@ -342,6 +342,111 @@ pub struct EditMessageRequest {
     pub content: String,
 }
 
+/// 媒体消息元数据
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct MediaMetadata {
+    /// 媒体时长（秒），用于 Voice/Video 消息
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration: Option<f64>,
+    /// 媒体宽度（像素），用于 Image/Video 消息
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    /// 媒体高度（像素），用于 Image/Video 消息
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    /// 缩略图 URL
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail_url: Option<String>,
+    /// 文件大小（字节）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_size: Option<u64>,
+    /// MIME 类型
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    /// 原始文件名
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_filename: Option<String>,
+}
+
+impl MediaMetadata {
+    /// 创建语音消息元数据
+    pub fn voice(duration: f64, file_size: u64, mime_type: &str) -> Self {
+        Self {
+            duration: Some(duration),
+            width: None,
+            height: None,
+            thumbnail_url: None,
+            file_size: Some(file_size),
+            mime_type: Some(mime_type.to_string()),
+            original_filename: None,
+        }
+    }
+
+    /// 创建视频消息元数据
+    pub fn video(duration: f64, width: u32, height: u32, file_size: u64, thumbnail_url: Option<String>) -> Self {
+        Self {
+            duration: Some(duration),
+            width: Some(width),
+            height: Some(height),
+            thumbnail_url,
+            file_size: Some(file_size),
+            mime_type: Some("video/mp4".to_string()),
+            original_filename: None,
+        }
+    }
+
+    /// 创建图片消息元数据
+    pub fn image(width: u32, height: u32, file_size: u64, mime_type: &str) -> Self {
+        Self {
+            duration: None,
+            width: Some(width),
+            height: Some(height),
+            thumbnail_url: None,
+            file_size: Some(file_size),
+            mime_type: Some(mime_type.to_string()),
+            original_filename: None,
+        }
+    }
+
+    /// 创建文件消息元数据
+    pub fn file(file_size: u64, mime_type: &str, original_filename: &str) -> Self {
+        Self {
+            duration: None,
+            width: None,
+            height: None,
+            thumbnail_url: None,
+            file_size: Some(file_size),
+            mime_type: Some(mime_type.to_string()),
+            original_filename: Some(original_filename.to_string()),
+        }
+    }
+
+    /// 转换为 JSON Value
+    pub fn to_json(&self) -> JsonValue {
+        serde_json::to_value(self).unwrap_or_default()
+    }
+}
+
+/// 带元数据的发送消息请求
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct SendMessageWithMetadataRequest {
+    pub content: String,
+    #[serde(rename = "type")]
+    pub type_: MessageType,
+    /// 回复的消息 ID（可选）
+    #[serde(rename = "replyTo", skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
+    /// 阅后即焚（可选）
+    #[serde(rename = "burnAfterReading", default)]
+    pub burn_after_reading: bool,
+    /// 阅读后焚毁时间（秒），默认30秒
+    #[serde(rename = "burnAfterSeconds", skip_serializing_if = "Option::is_none")]
+    pub burn_after_seconds: Option<i32>,
+    /// 媒体元数据（可选）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<MediaMetadata>,
+}
+
 /// 在线状态（与前端枚举匹配）
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type, utoipa::ToSchema)]
 #[sqlx(type_name = "varchar", rename_all = "lowercase")]
@@ -734,6 +839,90 @@ mod tests {
         let json = r#"{"content": "Updated message"}"#;
         let request: EditMessageRequest = serde_json::from_str(json).unwrap();
         assert_eq!(request.content, "Updated message");
+    }
+
+    // === MediaMetadata 测试 ===
+
+    #[test]
+    fn test_media_metadata_voice() {
+        let metadata = MediaMetadata::voice(30.5, 1024000, "audio/ogg");
+        assert_eq!(metadata.duration, Some(30.5));
+        assert_eq!(metadata.file_size, Some(1024000));
+        assert_eq!(metadata.mime_type, Some("audio/ogg".to_string()));
+        assert!(metadata.width.is_none());
+        assert!(metadata.height.is_none());
+    }
+
+    #[test]
+    fn test_media_metadata_video() {
+        let metadata = MediaMetadata::video(120.0, 1920, 1080, 5120000, Some("https://example.com/thumb.jpg".to_string()));
+        assert_eq!(metadata.duration, Some(120.0));
+        assert_eq!(metadata.width, Some(1920));
+        assert_eq!(metadata.height, Some(1080));
+        assert_eq!(metadata.file_size, Some(5120000));
+        assert_eq!(metadata.thumbnail_url, Some("https://example.com/thumb.jpg".to_string()));
+        assert_eq!(metadata.mime_type, Some("video/mp4".to_string()));
+    }
+
+    #[test]
+    fn test_media_metadata_image() {
+        let metadata = MediaMetadata::image(800, 600, 512000, "image/png");
+        assert_eq!(metadata.width, Some(800));
+        assert_eq!(metadata.height, Some(600));
+        assert_eq!(metadata.file_size, Some(512000));
+        assert_eq!(metadata.mime_type, Some("image/png".to_string()));
+        assert!(metadata.duration.is_none());
+    }
+
+    #[test]
+    fn test_media_metadata_file() {
+        let metadata = MediaMetadata::file(2048000, "application/pdf", "document.pdf");
+        assert_eq!(metadata.file_size, Some(2048000));
+        assert_eq!(metadata.mime_type, Some("application/pdf".to_string()));
+        assert_eq!(metadata.original_filename, Some("document.pdf".to_string()));
+    }
+
+    #[test]
+    fn test_media_metadata_serialization() {
+        let metadata = MediaMetadata::voice(30.5, 1024000, "audio/ogg");
+        let json = serde_json::to_value(&metadata).unwrap();
+        assert!(json.is_object());
+        assert_eq!(json["duration"], 30.5);
+        assert_eq!(json["file_size"], 1024000);
+        assert_eq!(json["mime_type"], "audio/ogg");
+        // Optional fields should not be present
+        assert!(json.get("width").is_none());
+        assert!(json.get("height").is_none());
+    }
+
+    #[test]
+    fn test_media_metadata_to_json() {
+        let metadata = MediaMetadata::image(800, 600, 512000, "image/png");
+        let json = metadata.to_json();
+        assert!(json.is_object());
+        assert_eq!(json["width"], 800);
+        assert_eq!(json["height"], 600);
+    }
+
+    #[test]
+    fn test_send_message_with_metadata_request() {
+        let json = r#"{
+            "content": "https://example.com/voice.ogg",
+            "type": "voice",
+            "metadata": {
+                "duration": 30.5,
+                "file_size": 1024000,
+                "mime_type": "audio/ogg"
+            }
+        }"#;
+
+        let request: SendMessageWithMetadataRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.content, "https://example.com/voice.ogg");
+        assert_eq!(request.type_, MessageType::Voice);
+        assert!(request.metadata.is_some());
+        let metadata = request.metadata.unwrap();
+        assert_eq!(metadata.duration, Some(30.5));
+        assert_eq!(metadata.file_size, Some(1024000));
     }
 }
 
