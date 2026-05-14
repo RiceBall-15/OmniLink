@@ -24,6 +24,11 @@ const AdminDashboard = createRouteComponent(
   { preload: false }
 )
 
+const AIAssistantPage = createRouteComponent(
+  () => import('./pages/AIAssistantPage'),
+  { preload: false }
+)
+
 // 路由守卫组件
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
@@ -103,6 +108,16 @@ function App() {
           element={
             <ProtectedRoute>
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* AI 助手路由 */}
+        <Route
+          path="/ai"
+          element={
+            <ProtectedRoute>
+              <AIAssistantPage />
             </ProtectedRoute>
           }
         />
