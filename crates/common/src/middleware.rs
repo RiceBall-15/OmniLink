@@ -202,3 +202,53 @@ pub fn limit_body_size(
         tower_http::limit::RequestBodyLimitAction::default(),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rate_limiter_creation() {
+        let limiter = RateLimiter::new(100, 60);
+        assert_eq!(limiter.max_requests, 100);
+        assert_eq!(limiter.window_secs, 60);
+    }
+
+    #[test]
+    fn test_rate_limiter_zero_limits() {
+        let limiter = RateLimiter::new(0, 0);
+        assert_eq!(limiter.max_requests, 0);
+        assert_eq!(limiter.window_secs, 0);
+    }
+
+    #[test]
+    fn test_rate_limiter_large_limits() {
+        let limiter = RateLimiter::new(10000, 3600);
+        assert_eq!(limiter.max_requests, 10000);
+        assert_eq!(limiter.window_secs, 3600);
+    }
+
+    #[test]
+    fn test_cors_middleware_creates() {
+        // Should not panic
+        let _cors = cors_middleware();
+    }
+
+    #[test]
+    fn test_compression_middleware_creates() {
+        // Should not panic
+        let _compression = compression_middleware();
+    }
+
+    #[test]
+    fn test_timeout_middleware_creates() {
+        // Should not panic
+        let _timeout = timeout_middleware(std::time::Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_limit_body_size_creates() {
+        // Should not panic
+        let _limiter = limit_body_size(1024 * 1024);
+    }
+}

@@ -162,4 +162,72 @@ mod tests {
         assert_eq!(truncate_utf8("你好世界", 10), "你好世...");
         assert_eq!(truncate_utf8("hello", 5), "hello");
     }
+
+    #[test]
+    fn test_truncate_utf8_exact_boundary() {
+        // 3-byte Chinese chars, max_bytes=6 should fit exactly 2 chars
+        assert_eq!(truncate_utf8("你好世界", 6), "你好...");
+    }
+
+    #[test]
+    fn test_truncate_utf8_empty() {
+        assert_eq!(truncate_utf8("", 5), "");
+    }
+
+    #[test]
+    fn test_truncate_utf8_zero_max() {
+        assert_eq!(truncate_utf8("hello", 0), "...");
+    }
+
+    #[test]
+    fn test_sanitize_filename_null_char() {
+        assert_eq!(sanitize_filename("test\0file.txt"), "test_file.txt");
+    }
+
+    #[test]
+    fn test_sanitize_filename_safe_name() {
+        assert_eq!(sanitize_filename("normal-file_v2.txt"), "normal-file_v2.txt");
+    }
+
+    #[test]
+    fn test_format_timestamp_known_value() {
+        // 2023-11-14 22:13:20 UTC = 1700000000 seconds = 1700000000000 millis
+        let result = format_timestamp(1700000000000);
+        assert_eq!(result, "2023-11-14 22:13:20");
+    }
+
+    #[test]
+    fn test_format_timestamp_zero() {
+        // Unix epoch: 1970-01-01 00:00:00
+        let result = format_timestamp(0);
+        assert_eq!(result, "1970-01-01 00:00:00");
+    }
+
+    #[test]
+    fn test_generate_short_id_hex_format() {
+        let id = generate_short_id();
+        // Should be hex characters (0-9, a-f)
+        assert!(id.chars().all(|c| c.is_ascii_hexdigit()), "ID should be hex: {}", id);
+    }
+
+    #[test]
+    fn test_truncate_at_max_len() {
+        assert_eq!(truncate("exact", 5), "exact");
+    }
+
+    #[test]
+    fn test_truncate_one_over() {
+        assert_eq!(truncate("exactly", 5), "ex...");
+    }
+
+    #[test]
+    fn test_validate_email_with_dots_in_prefix() {
+        assert!(validate_email("first.last@example.com"));
+    }
+
+    #[test]
+    fn test_validate_email_with_plus() {
+        // Simple validation doesn't check for '+', so it should pass
+        assert!(validate_email("user+tag@example.com"));
+    }
 }

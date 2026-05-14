@@ -374,6 +374,10 @@ pub mod cache_ttl {
 #[cfg(test)]
 mod tests {
     use super::cache_keys::*;
+    use super::*;
+    use std::time::Duration;
+
+    // ========== Cache Key Tests ==========
 
     #[test]
     fn test_cache_key_generation() {
@@ -383,5 +387,278 @@ mod tests {
         assert_eq!(user_conversations_key("123"), "omnilink:user_convs:123");
         assert_eq!(online_key("123"), "omnilink:online:123");
         assert_eq!(conversation_members_key("456"), "omnilink:conv_members:456");
+    }
+
+    #[test]
+    fn test_cache_key_with_empty_id() {
+        assert_eq!(user_key(""), "omnilink:user:");
+        assert_eq!(conversation_key(""), "omnilink:conv:");
+    }
+
+    #[test]
+    fn test_cache_key_with_special_chars() {
+        assert_eq!(user_key("user@123"), "omnilink:user:user@123");
+        assert_eq!(message_key("msg/with/slash"), "omnilink:msg:msg/with/slash");
+    }
+
+    // ========== ETagGenerator Tests ==========
+
+    #[test]
+    fn test_etag_generate_deterministic() {
+        let content = b"Hello, World!";
+        let etag1 = ETagGenerator::generate(content);
+        let etag2 = ETagGenerator::generate(content);
+        assert_eq!(etag1, etag2);
+    }
+
+    #[test]
+    fn test_etag_generate_format() {
+        let etag = ETagGenerator::generate(b"test data");
+        // ETag should be enclosed in double quotes
+        assert!(etag.starts_with('"'), "ETag should start with quote: {}", etag);
+        assert!(etag.ends_with('"'), "ETag should end with quote: {}", etag);
+    }
+
+    #[test]
+    fn test_etag_generate_different_content() {
+        let etag1 = ETagGenerator::generate(b"content A");
+        let etag2 = ETagGenerator::generate(b"content B");
+        assert_ne!(etag1, etag2, "Different content should produce different ETags");
+    }
+
+    #[test]
+    fn test_etag_generate_empty_content() {
+        let etag = ETagGenerator::generate(b"");
+        assert!(etag.starts_with('"'));
+        assert!(etag.ends_with('"'));
+    }
+
+    #[test]
+    fn test_etag_generate_from_str() {
+        let content = "Hello, World!";
+        let etag = ETagGenerator::generate_from_str(content);
+        let etag_bytes = ETagGenerator::generate(content.as_bytes());
+        assert_eq!(etag, etag_bytes, "generate_from_str should equal generate with bytes");
+    }
+
+    #[test]
+    fn test_etag_generate_from_str_empty() {
+        let etag = ETagGenerator::generate_from_str("");
+        assert_eq!(etag, ETagGenerator::generate(b""));
+    }
+
+    #[test]
+    fn test_etag_generate_strong_deterministic() {
+        let content = b"test data";
+        let timestamp = 1700000000i64;
+        let etag1 = ETagGenerator::generate_strong(content, timestamp);
+        let etag2 = ETagGenerator::generate_strong(content, timestamp);
+        assert_eq!(etag1, etag2);
+    }
+
+    #[test]
+    fn test_etag_generate_strong_different_timestamps() {
+        let content = b"test data";
+        let etag1 = ETagGenerator::generate_strong(content, 1000);
+        let etag2 = ETagGenerator::generate_strong(content, 2000);
+        assert_ne!(etag1, etag2, "Different timestamps should produce different ETags");
+    }
+
+    #[test]
+    fn test_etag_generate_strong_differs_from_weak() {
+        let content = b"test data";
+        let weak_etag = ETagGenerator::generate(content);
+        let strong_etag = ETagGenerator::generate_strong(content, 1234567890);
+        assert_ne!(weak_etag, strong_etag, "Strong ETag should differ from weak ETag");
+    }
+
+    #[test]
+    fn test_etag_matches_exact() {
+        let etag = "\"abc123\"";
+        assert!(ETagGenerator::matches(etag, etag));
+    }
+
+    #[test]
+    fn test_etag_matches_wildcard() {
+        let etag = "\"abc123\"";
+        assert!(ETagGenerator::matches("*", etag));
+    }
+
+    #[test]
+    fn test_etag_matches_multiple() {
+        let etag = "\"abc123\"";
+        let if_none_match = "\"xyz\", \"abc123\", \"def\"";
+        assert!(ETagGenerator::matches(if_none_match, etag));
+    }
+
+    #[test]
+    fn test_etag_matches_no_match() {
+        let etag = "\"abc123\"";
+        assert!(!ETagGenerator::matches("\"xyz\"", etag));
+    }
+
+    #[test]
+    fn test_etag_matches_empty_header() {
+        let etag = "\"abc123\"";
+        assert!(!ETagGenerator::matches("", etag));
+    }
+
+    #[test]
+    fn test_etag_matches_whitespace_in_list() {
+        let etag = "\"abc123\"";
+        let if_none_match = "  \"xyz\" ,  \"abc123\"  ";
+        assert!(ETagGenerator::matches(if_none_match, etag));
+    }
+
+    // ========== CacheControl Tests ==========
+
+    #[test]
+    fn test_cache_control_api_default() {
+        let cc = CacheControl::api_default();
+        assert_eq!(cc.max_age, Some(0));
+        assert_eq!(cc.s_maxage, None);
+        assert!(cc.no_cache);
+        assert!(!cc.no_store);
+        assert!(cc.must_revalidate);
+        assert!(cc.private);
+        assert!(!cc.public);
+    }
+
+    #[test]
+    fn test_cache_control_static_asset() {
+        let cc = CacheControl::static_asset(3600);
+        assert_eq!(cc.max_age, Some(3600));
+        assert_eq!(cc.s_maxage, None);
+        assert!(!cc.no_cache);
+        assert!(!cc.no_store);
+        assert!(!cc.must_revalidate);
+        assert!(!cc.private);
+        assert!(cc.public);
+    }
+
+    #[test]
+    fn test_cache_control_api_default_header_value() {
+        let cc = CacheControl::api_default();
+        let header = cc.to_header_value();
+        assert!(header.contains("no-cache"), "Should contain no-cache: {}", header);
+        assert!(header.contains("must-revalidate"), "Should contain must-revalidate: {}", header);
+        assert!(header.contains("private"), "Should contain private: {}", header);
+        assert!(header.contains("max-age=0"), "Should contain max-age=0: {}", header);
+        assert!(!header.contains("no-store"), "Should NOT contain no-store: {}", header);
+        assert!(!header.contains("public"), "Should NOT contain public: {}", header);
+    }
+
+    #[test]
+    fn test_cache_control_static_asset_header_value() {
+        let cc = CacheControl::static_asset(86400);
+        let header = cc.to_header_value();
+        assert!(header.contains("public"), "Should contain public: {}", header);
+        assert!(header.contains("max-age=86400"), "Should contain max-age=86400: {}", header);
+        assert!(!header.contains("no-cache"), "Should NOT contain no-cache: {}", header);
+        assert!(!header.contains("private"), "Should NOT contain private: {}", header);
+    }
+
+    #[test]
+    fn test_cache_control_custom() {
+        let cc = CacheControl {
+            max_age: Some(300),
+            s_maxage: Some(600),
+            no_cache: false,
+            no_store: true,
+            must_revalidate: true,
+            private: false,
+            public: true,
+        };
+        let header = cc.to_header_value();
+        assert!(header.contains("no-store"));
+        assert!(header.contains("must-revalidate"));
+        assert!(header.contains("public"));
+        assert!(header.contains("max-age=300"));
+        assert!(header.contains("s-maxage=600"));
+    }
+
+    #[test]
+    fn test_cache_control_empty() {
+        let cc = CacheControl {
+            max_age: None,
+            s_maxage: None,
+            no_cache: false,
+            no_store: false,
+            must_revalidate: false,
+            private: false,
+            public: false,
+        };
+        let header = cc.to_header_value();
+        assert!(header.is_empty(), "Empty CacheControl should produce empty string, got: '{}'", header);
+    }
+
+    #[test]
+    fn test_cache_control_clone() {
+        let cc = CacheControl::api_default();
+        let cc2 = cc.clone();
+        assert_eq!(cc.max_age, cc2.max_age);
+        assert_eq!(cc.no_cache, cc2.no_cache);
+        assert_eq!(cc.private, cc2.private);
+    }
+
+    #[test]
+    fn test_cache_control_debug() {
+        let cc = CacheControl::static_asset(60);
+        let debug_str = format!("{:?}", cc);
+        assert!(debug_str.contains("CacheControl"));
+        assert!(debug_str.contains("max_age"));
+    }
+
+    // ========== CacheHitRate Tests ==========
+
+    #[test]
+    fn test_cache_hit_rate_default_values() {
+        let rate = CacheHitRate {
+            hits: 0,
+            misses: 0,
+            total: 0,
+            hit_rate: 0.0,
+        };
+        assert_eq!(rate.hits, 0);
+        assert_eq!(rate.misses, 0);
+        assert_eq!(rate.total, 0);
+        assert_eq!(rate.hit_rate, 0.0);
+    }
+
+    #[test]
+    fn test_cache_hit_rate_calculation() {
+        let hits = 75i64;
+        let misses = 25i64;
+        let total = hits + misses;
+        let hit_rate = hits as f64 / total as f64;
+        let rate = CacheHitRate { hits, misses, total, hit_rate };
+        assert_eq!(rate.hit_rate, 0.75);
+    }
+
+    #[test]
+    fn test_cache_hit_rate_serialize_deserialize() {
+        let rate = CacheHitRate {
+            hits: 100,
+            misses: 50,
+            total: 150,
+            hit_rate: 0.6666666666666666,
+        };
+        let json = serde_json::to_string(&rate).unwrap();
+        let deserialized: CacheHitRate = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.hits, 100);
+        assert_eq!(deserialized.misses, 50);
+        assert_eq!(deserialized.total, 150);
+        assert!((deserialized.hit_rate - 0.6666666666666666).abs() < f64::EPSILON);
+    }
+
+    // ========== Cache TTL Constants Tests ==========
+
+    #[test]
+    fn test_cache_ttl_constants() {
+        assert_eq!(cache_ttl::USER_TTL, Duration::from_secs(1800));
+        assert_eq!(cache_ttl::CONVERSATION_TTL, Duration::from_secs(600));
+        assert_eq!(cache_ttl::MESSAGE_TTL, Duration::from_secs(300));
+        assert_eq!(cache_ttl::CONVERSATION_LIST_TTL, Duration::from_secs(300));
+        assert_eq!(cache_ttl::ONLINE_TTL, Duration::from_secs(60));
     }
 }

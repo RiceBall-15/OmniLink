@@ -285,3 +285,259 @@ impl PoolMonitor {
         output
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ========== PoolStats Tests ==========
+
+    #[test]
+    fn test_pool_stats_fields() {
+        let stats = PoolStats {
+            active_connections: 5,
+            idle_connections: 10,
+            waiting_requests: 0,
+            max_connections: 20,
+            min_connections: 2,
+            usage_percent: 25.0,
+            last_check_timestamp: 1700000000,
+        };
+        assert_eq!(stats.active_connections, 5);
+        assert_eq!(stats.idle_connections, 10);
+        assert_eq!(stats.max_connections, 20);
+        assert_eq!(stats.min_connections, 2);
+        assert_eq!(stats.usage_percent, 25.0);
+    }
+
+    #[test]
+    fn test_pool_stats_zero_usage() {
+        let stats = PoolStats {
+            active_connections: 0,
+            idle_connections: 20,
+            waiting_requests: 0,
+            max_connections: 20,
+            min_connections: 2,
+            usage_percent: 0.0,
+            last_check_timestamp: 1700000000,
+        };
+        assert_eq!(stats.active_connections, 0);
+        assert_eq!(stats.usage_percent, 0.0);
+    }
+
+    #[test]
+    fn test_pool_stats_full_usage() {
+        let stats = PoolStats {
+            active_connections: 20,
+            idle_connections: 0,
+            waiting_requests: 5,
+            max_connections: 20,
+            min_connections: 2,
+            usage_percent: 100.0,
+            last_check_timestamp: 1700000000,
+        };
+        assert_eq!(stats.active_connections, 20);
+        assert_eq!(stats.idle_connections, 0);
+        assert_eq!(stats.usage_percent, 100.0);
+    }
+
+    #[test]
+    fn test_pool_stats_serialization() {
+        let stats = PoolStats {
+            active_connections: 5,
+            idle_connections: 10,
+            waiting_requests: 0,
+            max_connections: 20,
+            min_connections: 2,
+            usage_percent: 25.0,
+            last_check_timestamp: 1700000000,
+        };
+        let json = serde_json::to_string(&stats).unwrap();
+        assert!(json.contains("\"active_connections\":5"));
+        assert!(json.contains("\"idle_connections\":10"));
+        assert!(json.contains("\"max_connections\":20"));
+    }
+
+    // ========== HealthStatus Tests ==========
+
+    #[test]
+    fn test_health_status_variants() {
+        assert_eq!(HealthStatus::Healthy, HealthStatus::Healthy);
+        assert_eq!(HealthStatus::Warning, HealthStatus::Warning);
+        assert_eq!(HealthStatus::Unhealthy, HealthStatus::Unhealthy);
+        assert_ne!(HealthStatus::Healthy, HealthStatus::Warning);
+        assert_ne!(HealthStatus::Healthy, HealthStatus::Unhealthy);
+        assert_ne!(HealthStatus::Warning, HealthStatus::Unhealthy);
+    }
+
+    #[test]
+    fn test_health_status_clone() {
+        let status = HealthStatus::Healthy;
+        let cloned = status.clone();
+        assert_eq!(status, cloned);
+    }
+
+    #[test]
+    fn test_health_status_serialization() {
+        let status = HealthStatus::Healthy;
+        let json = serde_json::to_string(&status).unwrap();
+        assert_eq!(json, "\"Healthy\"");
+
+        let status = HealthStatus::Unhealthy;
+        let json = serde_json::to_string(&status).unwrap();
+        assert_eq!(json, "\"Unhealthy\"");
+    }
+
+    // ========== ServiceHealth Tests ==========
+
+    #[test]
+    fn test_service_health_healthy() {
+        let health = ServiceHealth {
+            available: true,
+            response_time_ms: 5,
+            error: None,
+        };
+        assert!(health.available);
+        assert_eq!(health.response_time_ms, 5);
+        assert!(health.error.is_none());
+    }
+
+    #[test]
+    fn test_service_health_unhealthy() {
+        let health = ServiceHealth {
+            available: false,
+            response_time_ms: 0,
+            error: Some("Connection refused".to_string()),
+        };
+        assert!(!health.available);
+        assert_eq!(health.error, Some("Connection refused".to_string()));
+    }
+
+    #[test]
+    fn test_service_health_serialization() {
+        let health = ServiceHealth {
+            available: true,
+            response_time_ms: 10,
+            error: None,
+        };
+        let json = serde_json::to_string(&health).unwrap();
+        assert!(json.contains("\"available\":true"));
+        assert!(json.contains("\"response_time_ms\":10"));
+    }
+
+    // ========== HealthCheckResult Tests ==========
+
+    #[test]
+    fn test_health_check_result_healthy() {
+        let result = HealthCheckResult {
+            status: HealthStatus::Healthy,
+            postgres: ServiceHealth {
+                available: true,
+                response_time_ms: 3,
+                error: None,
+            },
+            redis: ServiceHealth {
+                available: true,
+                response_time_ms: 1,
+                error: None,
+            },
+            timestamp: 1700000000,
+        };
+        assert_eq!(result.status, HealthStatus::Healthy);
+        assert!(result.postgres.available);
+        assert!(result.redis.available);
+    }
+
+    #[test]
+    fn test_health_check_result_unhealthy_pg_down() {
+        let result = HealthCheckResult {
+            status: HealthStatus::Unhealthy,
+            postgres: ServiceHealth {
+                available: false,
+                response_time_ms: 0,
+                error: Some("Connection refused".to_string()),
+            },
+            redis: ServiceHealth {
+                available: true,
+                response_time_ms: 1,
+                error: None,
+            },
+            timestamp: 1700000000,
+        };
+        assert_eq!(result.status, HealthStatus::Unhealthy);
+        assert!(!result.postgres.available);
+        assert!(result.redis.available);
+    }
+
+    // ========== SlowQuery Tests ==========
+
+    #[test]
+    fn test_slow_query_creation() {
+        let query = SlowQuery {
+            query: "SELECT * FROM users".to_string(),
+            duration_ms: 500,
+            timestamp: 1700000000,
+            source: "user-service".to_string(),
+        };
+        assert_eq!(query.query, "SELECT * FROM users");
+        assert_eq!(query.duration_ms, 500);
+        assert_eq!(query.source, "user-service");
+    }
+
+    #[test]
+    fn test_slow_query_clone() {
+        let query = SlowQuery {
+            query: "SELECT * FROM users WHERE id = 1".to_string(),
+            duration_ms: 200,
+            timestamp: 1700000000,
+            source: "api-gateway".to_string(),
+        };
+        let cloned = query.clone();
+        assert_eq!(query.query, cloned.query);
+        assert_eq!(query.duration_ms, cloned.duration_ms);
+        assert_eq!(query.source, cloned.source);
+    }
+
+    #[test]
+    fn test_slow_query_serialization() {
+        let query = SlowQuery {
+            query: "SELECT * FROM users".to_string(),
+            duration_ms: 500,
+            timestamp: 1700000000,
+            source: "user-service".to_string(),
+        };
+        let json = serde_json::to_string(&query).unwrap();
+        assert!(json.contains("\"query\""));
+        assert!(json.contains("\"duration_ms\":500"));
+        assert!(json.contains("\"source\":\"user-service\""));
+    }
+
+    // ========== PrometheusMetrics Tests ==========
+
+    #[test]
+    fn test_prometheus_metrics_empty() {
+        let metrics = PrometheusMetrics {
+            gauges: vec![],
+            counters: vec![],
+        };
+        assert!(metrics.gauges.is_empty());
+        assert!(metrics.counters.is_empty());
+    }
+
+    #[test]
+    fn test_prometheus_metrics_with_values() {
+        let metrics = PrometheusMetrics {
+            gauges: vec![
+                ("active_connections".to_string(), 5.0, "Active connections".to_string()),
+            ],
+            counters: vec![
+                ("total_requests".to_string(), 1000, "Total requests".to_string()),
+            ],
+        };
+        assert_eq!(metrics.gauges.len(), 1);
+        assert_eq!(metrics.gauges[0].0, "active_connections");
+        assert_eq!(metrics.gauges[0].1, 5.0);
+        assert_eq!(metrics.counters.len(), 1);
+        assert_eq!(metrics.counters[0].1, 1000);
+    }
+}
