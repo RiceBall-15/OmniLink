@@ -1,9 +1,23 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
-import { AuthPage } from './pages/AuthPage'
-import { ChatPage } from './pages/ChatPage'
-import { SettingsPage } from './pages/SettingsPage'
+import { createRouteComponent } from './utils/codeSplitting'
+
+// 懒加载页面组件
+const AuthPage = createRouteComponent(
+  () => import('./pages/AuthPage'),
+  { preload: true }
+)
+
+const ChatPage = createRouteComponent(
+  () => import('./pages/ChatPage'),
+  { preload: true }
+)
+
+const SettingsPage = createRouteComponent(
+  () => import('./pages/SettingsPage'),
+  { preload: false }
+)
 
 // 路由守卫组件
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
