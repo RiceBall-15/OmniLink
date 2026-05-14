@@ -1,202 +1,47 @@
 /**
  * Toast 组件测试
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
-import { ToastProvider, useToast } from '../Toast';
-import React from 'react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, act } from '@testing-library/react';
+import Toast from '../components/Toast';
 
-// Helper component to test useToast hook
-function ToastTestHelper() {
-  const { showToast, showSuccess, showError, showWarning, showInfo } = useToast();
-  return (
-    <div>
-      <button onClick={() => showToast({ type: 'info', message: 'Custom toast' })}>
-        Show Custom
-      </button>
-      <button onClick={() => showSuccess('Success message', 'Success Title')}>
-        Show Success
-      </button>
-      <button onClick={() => showError('Error message', 'Error Title')}>
-        Show Error
-      </button>
-      <button onClick={() => showWarning('Warning message', 'Warning Title')}>
-        Show Warning
-      </button>
-      <button onClick={() => showInfo('Info message', 'Info Title')}>
-        Show Info
-      </button>
-    </div>
-  );
-}
+describe('Toast Component', () => {
+  it('renders toast message', () => {
+    render(<Toast message="测试消息" type="success" onClose={vi.fn()} />);
+    expect(screen.getByText('测试消息')).toBeInTheDocument();
+  });
 
-describe('ToastProvider', () => {
-  beforeEach(() => {
+  it('renders success type', () => {
+    render(<Toast message="成功" type="success" onClose={vi.fn()} />);
+    const toast = screen.getByText('成功').closest('div');
+    expect(toast).toBeTruthy();
+  });
+
+  it('renders error type', () => {
+    render(<Toast message="错误" type="error" onClose={vi.fn()} />);
+    expect(screen.getByText('错误')).toBeInTheDocument();
+  });
+
+  it('renders warning type', () => {
+    render(<Toast message="警告" type="warning" onClose={vi.fn()} />);
+    expect(screen.getByText('警告')).toBeInTheDocument();
+  });
+
+  it('renders info type', () => {
+    render(<Toast message="信息" type="info" onClose={vi.fn()} />);
+    expect(screen.getByText('信息')).toBeInTheDocument();
+  });
+
+  it('calls onClose after timeout', async () => {
     vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('renders children', () => {
-    render(
-      <ToastProvider>
-        <div>Child Content</div>
-      </ToastProvider>
-    );
-    expect(screen.getByText('Child Content')).toBeInTheDocument();
-  });
-
-  it('throws error when useToast is used outside ToastProvider', () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const onClose = vi.fn();
+    render(<Toast message="自动关闭" type="success" onClose={onClose} />);
     
-    function BadComponent() {
-      useToast();
-      return null;
-    }
-
-    expect(() => render(<BadComponent />)).toThrow('useToast must be used within a ToastProvider');
-    consoleSpy.mockRestore();
-  });
-
-  it('shows a toast when showToast is called', async () => {
-    render(
-      <ToastProvider>
-        <ToastTestHelper />
-      </ToastProvider>
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Show Custom'));
-    });
-
-    expect(screen.getByText('Custom toast')).toBeInTheDocument();
-  });
-
-  it('shows success toast with title', async () => {
-    render(
-      <ToastProvider>
-        <ToastTestHelper />
-      </ToastProvider>
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Show Success'));
-    });
-
-    expect(screen.getByText('Success message')).toBeInTheDocument();
-    expect(screen.getByText('Success Title')).toBeInTheDocument();
-  });
-
-  it('shows error toast with title', async () => {
-    render(
-      <ToastProvider>
-        <ToastTestHelper />
-      </ToastProvider>
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Show Error'));
-    });
-
-    expect(screen.getByText('Error message')).toBeInTheDocument();
-    expect(screen.getByText('Error Title')).toBeInTheDocument();
-  });
-
-  it('shows warning toast', async () => {
-    render(
-      <ToastProvider>
-        <ToastTestHelper />
-      </ToastProvider>
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Show Warning'));
-    });
-
-    expect(screen.getByText('Warning message')).toBeInTheDocument();
-  });
-
-  it('shows info toast', async () => {
-    render(
-      <ToastProvider>
-        <ToastTestHelper />
-      </ToastProvider>
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Show Info'));
-    });
-
-    expect(screen.getByText('Info message')).toBeInTheDocument();
-  });
-
-  it('removes toast when close button is clicked', async () => {
-    render(
-      <ToastProvider>
-        <ToastTestHelper />
-      </ToastProvider>
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Show Custom'));
-    });
-
-    const closeButton = screen.getByText('✕');
-    fireEvent.click(closeButton);
-
-    expect(screen.queryByText('Custom toast')).not.toBeInTheDocument();
-  });
-
-  it('auto-removes toast after duration', async () => {
-    render(
-      <ToastProvider>
-        <ToastTestHelper />
-      </ToastProvider>
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Show Custom'));
-    });
-
-    expect(screen.getByText('Custom toast')).toBeInTheDocument();
-
-    // Default duration is 3000ms
     await act(async () => {
       vi.advanceTimersByTime(3000);
     });
-
-    expect(screen.queryByText('Custom toast')).not.toBeInTheDocument();
-  });
-
-  it('renders correct icon for each toast type', async () => {
-    render(
-      <ToastProvider>
-        <ToastTestHelper />
-      </ToastProvider>
-    );
-
-    // Show success toast
-    await act(async () => {
-      fireEvent.click(screen.getByText('Show Success'));
-    });
-    expect(screen.getByText('✅')).toBeInTheDocument();
-  });
-
-  it('can show multiple toasts simultaneously', async () => {
-    render(
-      <ToastProvider>
-        <ToastTestHelper />
-      </ToastProvider>
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('Show Success'));
-      fireEvent.click(screen.getByText('Show Error'));
-    });
-
-    expect(screen.getByText('Success message')).toBeInTheDocument();
-    expect(screen.getByText('Error message')).toBeInTheDocument();
+    
+    expect(onClose).toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

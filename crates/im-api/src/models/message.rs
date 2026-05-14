@@ -16,6 +16,10 @@ pub enum MessageType {
     File,
     #[serde(rename = "system")]
     System,
+    #[serde(rename = "voice")]
+    Voice,
+    #[serde(rename = "video")]
+    Video,
 }
 
 impl std::fmt::Display for MessageType {
@@ -25,6 +29,8 @@ impl std::fmt::Display for MessageType {
             MessageType::Image => write!(f, "image"),
             MessageType::File => write!(f, "file"),
             MessageType::System => write!(f, "system"),
+            MessageType::Voice => write!(f, "voice"),
+            MessageType::Video => write!(f, "video"),
         }
     }
 }
@@ -38,6 +44,8 @@ impl std::str::FromStr for MessageType {
             "image" => Ok(MessageType::Image),
             "file" => Ok(MessageType::File),
             "system" => Ok(MessageType::System),
+            "voice" => Ok(MessageType::Voice),
+            "video" => Ok(MessageType::Video),
             _ => Err(format!("无效的消息类型: {}", s)),
         }
     }
@@ -569,12 +577,15 @@ mod tests {
         assert_eq!("image".parse::<MessageType>().unwrap(), MessageType::Image);
         assert_eq!("file".parse::<MessageType>().unwrap(), MessageType::File);
         assert_eq!("system".parse::<MessageType>().unwrap(), MessageType::System);
+        assert_eq!("voice".parse::<MessageType>().unwrap(), MessageType::Voice);
+        assert_eq!("video".parse::<MessageType>().unwrap(), MessageType::Video);
         assert_eq!("TEXT".parse::<MessageType>().unwrap(), MessageType::Text);
+        assert_eq!("VOICE".parse::<MessageType>().unwrap(), MessageType::Voice);
     }
 
     #[test]
     fn test_message_type_from_str_invalid() {
-        assert!("video".parse::<MessageType>().is_err());
+        assert!("unknown".parse::<MessageType>().is_err());
         assert!("".parse::<MessageType>().is_err());
     }
 

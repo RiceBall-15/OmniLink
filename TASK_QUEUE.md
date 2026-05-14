@@ -69,7 +69,7 @@
 
 ### 阶段三：文件服务
 
-#### 9. 文件下载和预览 ⏳ (2026-05-13) — CDN集成为可选扩展
+#### 9. 文件下载和预览 ✅ (2026-05-15) — CDN集成为可选扩展（暂不实现）
 - [x] 文件下载 API（已在 Task 5 中实现）
 - [x] 图片缩略图获取
 - [x] 文件权限控制（用户所有权验证）
@@ -197,7 +197,7 @@
 - [x] 005_add_config_tables.sql - 配置表、配置历史、配置订阅
 - [x] 006_add_file_tables.sql - 文件表（支持图片/视频/音频/文档）
 
-#### 28. 健康检查标准化 ⏳
+#### 28. 健康检查标准化 ✅ (2026-05-15)
 - [x] 统一所有服务的健康检查格式（HealthCheckResponse）
 - [x] 添加数据库连接检查（SQLx SELECT 1）
 - [x] 添加 Redis 连接检查（TCP 连接检测）
@@ -296,12 +296,12 @@
 
 ### 阶段十四：V2.0 核心后端功能 🔥
 
-#### 62. 消息阅后即焚 ⏳ (2026-05-14)
+#### 62. 消息阅后即焚 ✅ (2026-05-15)
 - [x] BurnAfterReading 模型（burn_after_reading, burn_after_seconds, burned_at 字段）
 - [x] 阅后即焚消息创建（SendMessageRequest 增加 burn_after_reading 字段）
 - [x] 消息已读后启动倒计时（mark_read 时计算 burned_at）
 - [x] 清理过期焚毁消息 API（cleanup_burn_messages + get_expiring_messages）
-- [ ] WebSocket 通知发送者消息已被焚毁（待 WebSocket 集成）
+- [x] WebSocket 通知发送者消息已被焚毁（Burn WSMessageType + 后台清理任务）
 
 #### 63. 阅后即焚清理机制 ✅ (2026-05-14)
 - [x] 数据库迁移脚本 (migrations/016_burn_after_reading.sql)
