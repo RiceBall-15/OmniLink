@@ -15,6 +15,12 @@ use crate::models::chat_export::ExportFormat;
 #[derive(Debug, Deserialize)]
 pub struct CreateExportJobRequest {
     pub format: Option<String>,
+    /// 开始日期 (ISO 8601 格式，如 2024-01-01T00:00:00Z)
+    pub start_date: Option<String>,
+    /// 结束日期 (ISO 8601 格式，如 2024-12-31T23:59:59Z)
+    pub end_date: Option<String>,
+    /// 是否包含系统消息
+    pub include_system_messages: Option<bool>,
 }
 
 /// 创建导出任务
