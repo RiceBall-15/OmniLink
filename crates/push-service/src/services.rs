@@ -3,6 +3,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::models::*;
+use super::providers::PushProvider;
 use super::repository::PushRepository;
 
 /// Push Service - 处理所有推送相关业务逻辑
@@ -11,6 +12,8 @@ use super::repository::PushRepository;
 /// - APNs (Apple Push Notification Service)
 /// - FCM (Firebase Cloud Messaging)
 /// - Web Push
+///
+/// 配置通过环境变量读取，未配置时自动使用模拟模式（开发环境）
 pub struct PushService {
     pub repository: PushRepository,
 }
@@ -52,44 +55,17 @@ impl PushService {
         let message = self.repository.create_push_message(message).await?;
 
         // 根据设备类型选择推送平台并发送
-        let result = match message.device_type.as_str() {
-            "ios" => {
-                Self::send_apns(
-                    &message.device_token,
-                    &message.title,
-                    &message.body,
-                    message.data.as_ref(),
-                    message.badge,
-                    message.sound.as_deref(),
-                )
-                .await
-            }
-            "android" => {
-                Self::send_fcm(
-                    &message.device_token,
-                    &message.title,
-                    &message.body,
-                    message.data.as_ref(),
-                )
-                .await
-            }
-            "web" => {
-                Self::send_web_push(
-                    &message.device_token,
-                    &message.title,
-                    &message.body,
-                    message.data.as_ref(),
-                )
-                .await
-            }
-            _ => {
-                tracing::warn!("Unsupported device type: {}", message.device_type);
-                Err(anyhow::anyhow!(
-                    "Unsupported device type: {}",
-                    message.device_type
-                ))
-            }
-        };
+        let provider = PushProvider::for_device_type(&message.device_type);
+        let result = provider
+            .send(
+                &message.device_token,
+                &message.title,
+                &message.body,
+                message.data.as_ref(),
+                message.badge,
+                message.sound.as_deref(),
+            )
+            .await;
 
         // 更新推送状态
         if let Err(e) = &result {
@@ -233,61 +209,5 @@ impl PushService {
         }
 
         result
-    }
-
-    /// 发送APNs推送（模拟实现，生产环境需集成apns2）
-    async fn send_apns(
-        device_token: &str,
-        title: &str,
-        body: &str,
-        _data: Option<&serde_json::Value>,
-        _badge: Option<i32>,
-        _sound: Option<&str>,
-    ) -> Result<()> {
-        tracing::info!(
-            "Sending APNs push to {}: {} - {}",
-            device_token,
-            title,
-            body
-        );
-        // TODO: 实现真实APNs推送
-        // 需要集成 apns2 或类似库
-        Ok(())
-    }
-
-    /// 发送FCM推送（模拟实现，生产环境需集成FCM SDK）
-    async fn send_fcm(
-        device_token: &str,
-        title: &str,
-        body: &str,
-        _data: Option<&serde_json::Value>,
-    ) -> Result<()> {
-        tracing::info!(
-            "Sending FCM push to {}: {} - {}",
-            device_token,
-            title,
-            body
-        );
-        // TODO: 实现真实FCM推送
-        // 需要集成 fcm 或使用 REST API
-        Ok(())
-    }
-
-    /// 发送Web Push（模拟实现，生产环境需集成web-push）
-    async fn send_web_push(
-        device_token: &str,
-        title: &str,
-        body: &str,
-        _data: Option<&serde_json::Value>,
-    ) -> Result<()> {
-        tracing::info!(
-            "Sending Web Push to {}: {} - {}",
-            device_token,
-            title,
-            body
-        );
-        // TODO: 实现Web Push
-        // 需要集成 web-push 库
-        Ok(())
     }
 }

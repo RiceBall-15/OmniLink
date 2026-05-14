@@ -174,6 +174,7 @@ impl RateLimitState {
 
 /// 速率限制错误
 #[derive(Debug)]
+#[allow(dead_code)]
 enum RateLimitError {
     TooManyRequests { retry_after: Duration },
 }

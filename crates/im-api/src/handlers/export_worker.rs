@@ -8,7 +8,7 @@ use chrono::Utc;
 use std::path::PathBuf;
 
 use crate::db::chat_export::{get_pending_export_jobs, update_export_job_status};
-use crate::db::message::{get_all_messages_for_export, count_messages_in_conversation};
+use crate::db::message::get_all_messages_for_export;
 use crate::models::chat_export::{ExportFormat, ExportStatus};
 
 /// 导出文件存储目录

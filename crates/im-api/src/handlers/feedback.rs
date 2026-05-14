@@ -123,7 +123,7 @@ pub async fn get_my_feedbacks_handler(
 /// 获取反馈详情
 pub async fn get_feedback_handler(
     State(pool): State<PgPool>,
-    auth: crate::middleware::auth::AuthUser,
+    _auth: crate::middleware::auth::AuthUser,
     Path(id): Path<String>,
 ) -> Result<Json<ApiResponse<UserFeedback>>, (StatusCode, Json<ApiResponse<()>>)> {
     let feedback_id = match Uuid::parse_str(&id) {
@@ -163,7 +163,7 @@ pub async fn get_feedback_handler(
 )]
 pub async fn get_all_feedbacks_handler(
     State(pool): State<PgPool>,
-    auth: crate::middleware::auth::AuthUser,
+    _auth: crate::middleware::auth::AuthUser,
     Query(query): Query<FeedbackQuery>,
 ) -> Result<Json<ApiResponse<Vec<UserFeedback>>>, (StatusCode, Json<ApiResponse<()>>)> {
     // 验证管理员权限（简单检查：只允许admin邮箱用户）

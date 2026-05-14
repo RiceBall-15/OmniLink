@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -14,8 +14,8 @@ use crate::db::announcement::{
     get_announcement_by_id, get_unread_announcement_count, mark_announcement_read,
     update_announcement,
 };
-use crate::models::announcement::{Announcement, AnnouncementEntity, CreateAnnouncementRequest};
-use crate::models::auth::{ApiError, ApiResponse};
+use crate::models::announcement::{Announcement, CreateAnnouncementRequest};
+use crate::models::auth::ApiResponse;
 
 /// 分页查询参数
 #[derive(Debug, Deserialize)]

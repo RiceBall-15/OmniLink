@@ -24,7 +24,6 @@ use crate::db::user::{
     block_user, unblock_user, get_blocked_users, is_user_blocked,
     update_user_online_status, get_user_status,
 };
-use crate::models::message::OnlineStatus;
 use crate::middleware::auth::AuthUser;
 use crate::utils::jwt::generate_token;
 

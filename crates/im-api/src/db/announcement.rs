@@ -1,7 +1,7 @@
 //! 系统公告数据库操作
 
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
