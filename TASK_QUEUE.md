@@ -698,3 +698,22 @@
 - [x] 新增 get_user_unread_count, get_user_unread_counts_batch 函数
 - [x] 更新 conversation handler 使用每用户未读计数
 
+
+### 阶段十五：生产就绪增强 🔥
+
+#### 68. 图片缩略图生成
+- [ ] 添加 image crate 依赖
+- [ ] 实现图片缩略图生成逻辑（等比缩放，最大200x200）
+- [ ] 缩略图存储到独立路径（原路径 + .thumb）
+- [ ] 更新 get_thumbnail handler 返回真实缩略图
+- [ ] 编译验证
+
+#### 69. 错误处理增强
+- [ ] 统一所有服务的错误类型定义
+- [ ] 添加错误上下文信息
+- [ ] 改进错误消息的用户友好性
+
+#### 70. 测试覆盖率提升
+- [ ] im-gateway 核心逻辑单元测试
+- [ ] ai-service provider 单元测试
+- [ ] common crate 扩展测试覆盖

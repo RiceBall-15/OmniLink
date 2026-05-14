@@ -256,22 +256,19 @@ pub async fn get_thumbnail(
     State(state): State<Arc<AppState>>,
     Path(file_id): Path<Uuid>,
 ) -> Result<Response, StatusCode> {
-    match state.file_service.download_file(file_id).await {
+    match state.file_service.get_thumbnail(file_id).await {
         Ok((file_info, data)) => {
-            if let Some(ref _thumb_path) = file_info.thumbnail_path {
-                // 返回原图（缩略图生成TODO）
-                let headers = [
-                    ("Content-Type", file_info.mime_type.as_str()),
-                    ("Cache-Control", "public, max-age=86400"),
-                ];
-                Ok((headers, data).into_response())
+            // 缩略图使用 JPEG 格式，原图使用原始 MIME 类型
+            let content_type = if file_info.thumbnail_path.is_some() {
+                "image/jpeg"
             } else {
-                let headers = [
-                    ("Content-Type", file_info.mime_type.as_str()),
-                    ("Cache-Control", "public, max-age=86400"),
-                ];
-                Ok((headers, data).into_response())
-            }
+                &file_info.mime_type
+            };
+            let headers = [
+                ("Content-Type", content_type),
+                ("Cache-Control", "public, max-age=86400"),
+            ];
+            Ok((headers, data).into_response())
         }
         Err(e) => {
             tracing::error!("Failed to get thumbnail: {:?}", e);

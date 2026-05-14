@@ -77,6 +77,8 @@ regex = "1"
 dashmap = "5.5"
 parking_lot = "0.12"
 validator = { version = "0.16", features = ["derive"] }
+# 图片处理
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 
 # 测试
 mockall = "0.12"

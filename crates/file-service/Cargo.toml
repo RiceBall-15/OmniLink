@@ -23,3 +23,4 @@ sqlx = { workspace = true, features = ["runtime-tokio-rustls", "postgres"] }
 async-trait = "0.1"
 reqwest = { workspace = true }
 tempfile = "3"  # 用于测试
+image = { workspace = true }

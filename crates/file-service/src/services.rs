@@ -292,20 +292,82 @@ impl FileService {
 
     async fn _process_media(
         &self,
-        _path: &str,
+        path: &str,
         file_type: &str,
     ) -> Result<(Option<i32>, Option<i32>, Option<i32>, Option<String>)> {
         match file_type {
             "image" => {
-                // TODO: 实现图片处理（使用image crate）
-                Ok((Some(0), Some(0), None, None))
+                // 读取图片数据
+                let data = self.read_file(path).await?;
+
+                // 使用 image crate 处理图片
+                match image::load_from_memory(&data) {
+                    Ok(img) => {
+                        let width = img.width() as i32;
+                        let height = img.height() as i32;
+
+                        // 生成缩略图（最大 200x200，等比缩放）
+                        let thumbnail = img.thumbnail(200, 200);
+                        let thumb_path = format!("{}.thumb", path);
+
+                        // 编码缩略图为 JPEG（质量 80）
+                        let mut thumb_data = std::io::Cursor::new(Vec::new());
+                        match thumbnail.write_to(&mut thumb_data, image::ImageFormat::Jpeg) {
+                            Ok(_) => {
+                                let thumb_bytes = thumb_data.into_inner();
+                                // 保存缩略图
+                                if let Err(e) = self._save_file(&thumb_path, &thumb_bytes).await {
+                                    tracing::warn!("Failed to save thumbnail: {:?}", e);
+                                    return Ok((Some(width), Some(height), None, None));
+                                }
+                                tracing::info!(
+                                    "Generated thumbnail for {}: {}x{} -> {}bytes",
+                                    path, width, height, thumb_bytes.len()
+                                );
+                                Ok((Some(width), Some(height), None, Some(thumb_path)))
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to encode thumbnail: {:?}", e);
+                                Ok((Some(width), Some(height), None, None))
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to load image: {:?}", e);
+                        Ok((Some(0), Some(0), None, None))
+                    }
+                }
             }
             "video" => {
+                // 视频处理需要 FFmpeg，暂时返回默认值
                 // TODO: 实现视频处理（使用FFmpeg）
                 Ok((None, None, Some(0), None))
             }
             _ => Ok((None, None, None, None)),
         }
+    }
+
+    /// 获取缩略图数据
+    pub async fn get_thumbnail(&self, file_id: Uuid) -> Result<(FileInfo, Vec<u8>)> {
+        let file_info = self
+            .repository
+            .get_file(file_id)
+            .await?
+            .context("File not found")?;
+
+        // 如果有缩略图路径，读取缩略图
+        if let Some(ref thumb_path) = file_info.thumbnail_path {
+            match self.read_file(thumb_path).await {
+                Ok(data) => return Ok((file_info, data)),
+                Err(e) => {
+                    tracing::warn!("Failed to read thumbnail, falling back to original: {:?}", e);
+                }
+            }
+        }
+
+        // 如果没有缩略图或读取失败，返回原图
+        let data = self.read_file(&file_info.file_path).await?;
+        Ok((file_info, data))
     }
 
     // === 文件分享相关 ===
