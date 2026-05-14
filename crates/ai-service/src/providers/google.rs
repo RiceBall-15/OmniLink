@@ -233,3 +233,105 @@ struct Candidate {
 struct GoogleContent {
     parts: Vec<Part>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::providers::{AIMessage, MessageRole};
+
+    // === convert_messages 测试 ===
+
+    #[test]
+    fn test_convert_messages_user() {
+        let messages = vec![
+            AIMessage {
+                role: MessageRole::User,
+                content: "Hello".to_string(),
+            }
+        ];
+
+        let result = GoogleProvider::convert_messages(&messages);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].role, "user");
+        assert_eq!(result[0].parts[0].text, "Hello");
+    }
+
+    #[test]
+    fn test_convert_messages_assistant() {
+        let messages = vec![
+            AIMessage {
+                role: MessageRole::Assistant,
+                content: "Hi!".to_string(),
+            }
+        ];
+
+        let result = GoogleProvider::convert_messages(&messages);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].role, "model");
+    }
+
+    #[test]
+    fn test_convert_messages_system() {
+        let messages = vec![
+            AIMessage {
+                role: MessageRole::System,
+                content: "You are a helpful assistant".to_string(),
+            }
+        ];
+
+        let result = GoogleProvider::convert_messages(&messages);
+
+        assert_eq!(result.len(), 1);
+        // Google将系统消息放在用户消息中
+        assert_eq!(result[0].role, "user");
+    }
+
+    // === calculate_cost 测试 ===
+
+    #[test]
+    fn test_calculate_cost_gemini_pro() {
+        let provider = GoogleProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 500, "gemini-pro");
+        // input: 1000/1000 * 0.0005 = 0.0005
+        // output: 500/1000 * 0.0015 = 0.00075
+        // total: 0.00125
+        assert!((cost - 0.00125).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_unknown_model() {
+        let provider = GoogleProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "unknown-model");
+        // 应使用默认价格 (0.0005, 0.0015)
+        // input: 1000/1000 * 0.0005 = 0.0005
+        // output: 1000/1000 * 0.0015 = 0.0015
+        // total: 0.002
+        assert!((cost - 0.002).abs() < f64::EPSILON);
+    }
+
+    // === count_tokens 测试 ===
+
+    #[test]
+    fn test_count_tokens_english() {
+        let provider = GoogleProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("Hello, world!", "gemini-pro");
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_count_tokens_empty() {
+        let provider = GoogleProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("", "gemini-pro");
+        assert_eq!(tokens, 0);
+    }
+
+    // === name 测试 ===
+
+    #[test]
+    fn test_provider_name() {
+        let provider = GoogleProvider::new("test-key".to_string(), None);
+        assert_eq!(provider.name(), "Google");
+    }
+}

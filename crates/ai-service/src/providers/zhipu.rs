@@ -251,3 +251,70 @@ impl AIProvider for ZhipuProvider {
             + (completion_tokens as f64 / 1000.0) * output_price
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+
+    // === calculate_cost 测试 ===
+
+    #[test]
+    fn test_calculate_cost_glm4() {
+        let provider = ZhipuProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 500, "glm-4");
+        // input: 1000/1000 * 0.1 = 0.1
+        // output: 500/1000 * 0.1 = 0.05
+        // total: 0.15
+        assert!((cost - 0.15).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_glm4_air() {
+        let provider = ZhipuProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "glm-4-air");
+        // input: 1000/1000 * 0.001 = 0.001
+        // output: 1000/1000 * 0.001 = 0.001
+        // total: 0.002
+        assert!((cost - 0.002).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_unknown_model() {
+        let provider = ZhipuProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "unknown-model");
+        // 应使用默认价格 (0.001, 0.001)
+        assert!((cost - 0.002).abs() < f64::EPSILON);
+    }
+
+    // === count_tokens 测试 ===
+
+    #[test]
+    fn test_count_tokens_english() {
+        let provider = ZhipuProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("Hello, world!", "glm-4");
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_count_tokens_chinese() {
+        let provider = ZhipuProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("你好世界", "glm-4");
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_count_tokens_empty() {
+        let provider = ZhipuProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("", "glm-4");
+        assert_eq!(tokens, 0);
+    }
+
+    // === name 测试 ===
+
+    #[test]
+    fn test_provider_name() {
+        let provider = ZhipuProvider::new("test-key".to_string(), None);
+        assert_eq!(provider.name(), "ZhipuAI");
+    }
+}

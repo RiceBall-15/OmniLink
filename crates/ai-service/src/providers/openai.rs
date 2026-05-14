@@ -178,3 +178,152 @@ impl AIProvider for OpenAIProvider {
             + (completion_tokens as f64 / 1000.0) * output_price
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::providers::{AIMessage, MessageRole, ChatOptions};
+
+    // === convert_messages 测试 ===
+
+    #[test]
+    fn test_convert_messages_single_user() {
+        let messages = vec![AIMessage {
+            role: MessageRole::User,
+            content: "Hello!".to_string(),
+        }];
+
+        let result = OpenAIProvider::convert_messages(&messages);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].role, Role::User);
+        assert_eq!(result[0].content, Some("Hello!".to_string()));
+    }
+
+    #[test]
+    fn test_convert_messages_all_roles() {
+        let messages = vec![
+            AIMessage { role: MessageRole::System, content: "You are a helpful assistant".to_string() },
+            AIMessage { role: MessageRole::User, content: "What is Rust?".to_string() },
+            AIMessage { role: MessageRole::Assistant, content: "Rust is a programming language".to_string() },
+        ];
+
+        let result = OpenAIProvider::convert_messages(&messages);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].role, Role::System);
+        assert_eq!(result[1].role, Role::User);
+        assert_eq!(result[2].role, Role::Assistant);
+    }
+
+    #[test]
+    fn test_convert_messages_empty() {
+        let messages: Vec<AIMessage> = vec![];
+        let result = OpenAIProvider::convert_messages(&messages);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_convert_messages_preserves_content() {
+        let messages = vec![
+            AIMessage { role: MessageRole::User, content: "你好世界".to_string() },
+            AIMessage { role: MessageRole::Assistant, content: "👋 你好！".to_string() },
+        ];
+
+        let result = OpenAIProvider::convert_messages(&messages);
+        assert_eq!(result[0].content, Some("你好世界".to_string()));
+        assert_eq!(result[1].content, Some("👋 你好！".to_string()));
+    }
+
+    // === calculate_cost 测试 ===
+
+    #[test]
+    fn test_calculate_cost_gpt4() {
+        let provider = OpenAIProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 500, "gpt-4");
+        // input: 1000/1000 * 0.03 = 0.03
+        // output: 500/1000 * 0.06 = 0.03
+        // total: 0.06
+        assert!((cost - 0.06).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_gpt35_turbo() {
+        let provider = OpenAIProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "gpt-3.5-turbo");
+        // input: 1000/1000 * 0.0015 = 0.0015
+        // output: 1000/1000 * 0.002 = 0.002
+        // total: 0.0035
+        assert!((cost - 0.0035).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_unknown_model() {
+        let provider = OpenAIProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "unknown-model");
+        // 应使用默认价格
+        assert!((cost - 0.0035).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_zero_tokens() {
+        let provider = OpenAIProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(0, 0, "gpt-4");
+        assert!((cost - 0.0).abs() < f64::EPSILON);
+    }
+
+    // === count_tokens 测试 ===
+
+    #[test]
+    fn test_count_tokens_english() {
+        let provider = OpenAIProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("Hello, world!", "gpt-4");
+        assert!(tokens > 0);
+        assert!(tokens < 10); // 短文本应该少于10个token
+    }
+
+    #[test]
+    fn test_count_tokens_chinese() {
+        let provider = OpenAIProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("你好世界", "gpt-4");
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_count_tokens_empty() {
+        let provider = OpenAIProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("", "gpt-4");
+        assert_eq!(tokens, 0);
+    }
+
+    #[test]
+    fn test_count_tokens_longer_text() {
+        let provider = OpenAIProvider::new("test-key".to_string(), None);
+        let short = provider.count_tokens("Hello", "gpt-4");
+        let long = provider.count_tokens("Hello, this is a longer text for testing token counting", "gpt-4");
+        assert!(long > short);
+    }
+
+    // === name 测试 ===
+
+    #[test]
+    fn test_provider_name() {
+        let provider = OpenAIProvider::new("test-key".to_string(), None);
+        assert_eq!(provider.name(), "OpenAI");
+    }
+
+    // === new 测试 ===
+
+    #[test]
+    fn test_new_with_custom_base_url() {
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some("https://custom-api.example.com".to_string()),
+        );
+        assert_eq!(provider.name(), "OpenAI");
+    }
+
+    #[test]
+    fn test_new_with_default_base_url() {
+        let provider = OpenAIProvider::new("test-key".to_string(), None);
+        assert_eq!(provider.name(), "OpenAI");
+    }
+}

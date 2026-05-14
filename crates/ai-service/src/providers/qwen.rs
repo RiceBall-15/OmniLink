@@ -247,3 +247,121 @@ impl AIProvider for QwenProvider {
             + (completion_tokens as f64 / 1000.0) * output_price
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::providers::{AIMessage, MessageRole};
+
+    // === convert_messages 测试 ===
+
+    #[test]
+    fn test_convert_messages_user() {
+        let messages = vec![
+            AIMessage {
+                role: MessageRole::User,
+                content: "Hello".to_string(),
+            }
+        ];
+
+        let result = QwenProvider::convert_messages(&messages);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].role, "user");
+        assert_eq!(result[0].content, "Hello");
+    }
+
+    #[test]
+    fn test_convert_messages_assistant() {
+        let messages = vec![
+            AIMessage {
+                role: MessageRole::Assistant,
+                content: "Hi!".to_string(),
+            }
+        ];
+
+        let result = QwenProvider::convert_messages(&messages);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].role, "assistant");
+    }
+
+    #[test]
+    fn test_convert_messages_system() {
+        let messages = vec![
+            AIMessage {
+                role: MessageRole::System,
+                content: "You are a helpful assistant".to_string(),
+            }
+        ];
+
+        let result = QwenProvider::convert_messages(&messages);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].role, "system");
+    }
+
+    // === calculate_cost 测试 ===
+
+    #[test]
+    fn test_calculate_cost_qwen_turbo() {
+        let provider = QwenProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 500, "qwen-turbo");
+        // input: 1000/1000 * 0.002 = 0.002
+        // output: 500/1000 * 0.006 = 0.003
+        // total: 0.005
+        assert!((cost - 0.005).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_qwen_max() {
+        let provider = QwenProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "qwen-max");
+        // input: 1000/1000 * 0.02 = 0.02
+        // output: 1000/1000 * 0.06 = 0.06
+        // total: 0.08
+        assert!((cost - 0.08).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_unknown_model() {
+        let provider = QwenProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "unknown-model");
+        // 应使用默认价格 (0.002, 0.006)
+        // input: 1000/1000 * 0.002 = 0.002
+        // output: 1000/1000 * 0.006 = 0.006
+        // total: 0.008
+        assert!((cost - 0.008).abs() < f64::EPSILON);
+    }
+
+    // === count_tokens 测试 ===
+
+    #[test]
+    fn test_count_tokens_english() {
+        let provider = QwenProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("Hello, world!", "qwen-turbo");
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_count_tokens_chinese() {
+        let provider = QwenProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("你好世界", "qwen-turbo");
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_count_tokens_empty() {
+        let provider = QwenProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("", "qwen-turbo");
+        assert_eq!(tokens, 0);
+    }
+
+    // === name 测试 ===
+
+    #[test]
+    fn test_provider_name() {
+        let provider = QwenProvider::new("test-key".to_string(), None);
+        assert_eq!(provider.name(), "Qwen");
+    }
+}

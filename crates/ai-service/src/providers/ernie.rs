@@ -281,3 +281,77 @@ impl AIProvider for ErnieProvider {
             + (completion_tokens as f64 / 1000.0) * output_price
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+
+    // === calculate_cost 测试 ===
+
+    #[test]
+    fn test_calculate_cost_ernie4_turbo() {
+        let provider = ErnieProvider::new("test-key".to_string(), "test-secret".to_string(), None);
+        let cost = provider.calculate_cost(1000, 500, "ernie-4.0-turbo-8k");
+        // input: 1000/1000 * 0.02 = 0.02
+        // output: 500/1000 * 0.06 = 0.03
+        // total: 0.05
+        assert!((cost - 0.05).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_ernie35() {
+        let provider = ErnieProvider::new("test-key".to_string(), "test-secret".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "ernie-3.5-8k");
+        // input: 1000/1000 * 0.008 = 0.008
+        // output: 1000/1000 * 0.008 = 0.008
+        // total: 0.016
+        assert!((cost - 0.016).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_unknown_model() {
+        let provider = ErnieProvider::new("test-key".to_string(), "test-secret".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "unknown-model");
+        // 应使用默认价格 (0.008, 0.008)
+        assert!((cost - 0.016).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_zero_tokens() {
+        let provider = ErnieProvider::new("test-key".to_string(), "test-secret".to_string(), None);
+        let cost = provider.calculate_cost(0, 0, "ernie-4.0-turbo-8k");
+        assert!((cost - 0.0).abs() < f64::EPSILON);
+    }
+
+    // === count_tokens 测试 ===
+
+    #[test]
+    fn test_count_tokens_english() {
+        let provider = ErnieProvider::new("test-key".to_string(), "test-secret".to_string(), None);
+        let tokens = provider.count_tokens("Hello, world!", "ernie-4.0-turbo-8k");
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_count_tokens_chinese() {
+        let provider = ErnieProvider::new("test-key".to_string(), "test-secret".to_string(), None);
+        let tokens = provider.count_tokens("你好世界", "ernie-4.0-turbo-8k");
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_count_tokens_empty() {
+        let provider = ErnieProvider::new("test-key".to_string(), "test-secret".to_string(), None);
+        let tokens = provider.count_tokens("", "ernie-4.0-turbo-8k");
+        assert_eq!(tokens, 0);
+    }
+
+    // === name 测试 ===
+
+    #[test]
+    fn test_provider_name() {
+        let provider = ErnieProvider::new("test-key".to_string(), "test-secret".to_string(), None);
+        assert_eq!(provider.name(), "Ernie");
+    }
+}

@@ -443,3 +443,436 @@ impl Default for OnlineStatusManager {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    // === UserStatus::from_str 测试 ===
+
+    #[test]
+    fn test_user_status_from_str_online() {
+        assert!(matches!(UserStatus::from_str("online"), UserStatus::Online));
+        assert!(matches!(UserStatus::from_str("Online"), UserStatus::Online));
+        assert!(matches!(UserStatus::from_str("ONLINE"), UserStatus::Online));
+        assert!(matches!(UserStatus::from_str(""), UserStatus::Online)); // 默认为 Online
+    }
+
+    #[test]
+    fn test_user_status_from_str_away() {
+        assert!(matches!(UserStatus::from_str("away"), UserStatus::Away));
+        assert!(matches!(UserStatus::from_str("Away"), UserStatus::Away));
+        assert!(matches!(UserStatus::from_str("AWAY"), UserStatus::Away));
+    }
+
+    #[test]
+    fn test_user_status_from_str_busy() {
+        assert!(matches!(UserStatus::from_str("busy"), UserStatus::Busy));
+        assert!(matches!(UserStatus::from_str("Busy"), UserStatus::Busy));
+        assert!(matches!(UserStatus::from_str("BUSY"), UserStatus::Busy));
+    }
+
+    #[test]
+    fn test_user_status_from_str_offline() {
+        assert!(matches!(UserStatus::from_str("offline"), UserStatus::Offline));
+        assert!(matches!(UserStatus::from_str("Offline"), UserStatus::Offline));
+        assert!(matches!(UserStatus::from_str("OFFLINE"), UserStatus::Offline));
+    }
+
+    #[test]
+    fn test_user_status_from_str_unknown_defaults_to_online() {
+        assert!(matches!(UserStatus::from_str("unknown"), UserStatus::Online));
+        assert!(matches!(UserStatus::from_str("dnd"), UserStatus::Online));
+    }
+
+    // === OnlineStatusManager 基础操作测试 ===
+
+    #[tokio::test]
+    async fn test_new_manager_is_empty() {
+        let manager = OnlineStatusManager::new();
+        assert_eq!(manager.online_count().await, 0);
+        assert!(manager.get_online_user_ids().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_set_online_and_check() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        manager.set_online(user_id, Some("test-device".to_string())).await;
+
+        assert!(manager.is_online(user_id).await);
+        assert_eq!(manager.online_count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn test_set_online_get_status() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        manager.set_online(user_id, Some("mobile".to_string())).await;
+
+        let status = manager.get_status(user_id).await;
+        assert!(status.is_some());
+        let info = status.unwrap();
+        assert_eq!(info.user_id, user_id);
+        assert!(matches!(info.status, UserStatus::Online));
+        assert_eq!(info.device_info, Some("mobile".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_set_offline() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        manager.set_online(user_id, None).await;
+        assert!(manager.is_online(user_id).await);
+
+        manager.set_offline(user_id).await;
+        assert!(!manager.is_online(user_id).await);
+        assert_eq!(manager.online_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_set_offline_without_being_online() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        // 设置一个从未上线的用户为离线
+        manager.set_offline(user_id).await;
+        assert!(!manager.is_online(user_id).await);
+
+        // 验证状态被正确记录
+        let status = manager.get_status(user_id).await;
+        assert!(status.is_some());
+        assert!(matches!(status.unwrap().status, UserStatus::Offline));
+    }
+
+    #[tokio::test]
+    async fn test_update_status_away() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        manager.set_online(user_id, None).await;
+        manager.update_status(user_id, UserStatus::Away).await;
+
+        // Away 不算在线
+        assert!(!manager.is_online(user_id).await);
+
+        let status = manager.get_status(user_id).await.unwrap();
+        assert!(matches!(status.status, UserStatus::Away));
+    }
+
+    #[tokio::test]
+    async fn test_update_status_busy() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        manager.set_online(user_id, None).await;
+        manager.update_status(user_id, UserStatus::Busy).await;
+
+        assert!(!manager.is_online(user_id).await);
+
+        let status = manager.get_status(user_id).await.unwrap();
+        assert!(matches!(status.status, UserStatus::Busy));
+    }
+
+    #[tokio::test]
+    async fn test_update_status_nonexistent_user() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        // 更新不存在的用户状态不应 panic
+        manager.update_status(user_id, UserStatus::Away).await;
+        assert!(!manager.is_online(user_id).await);
+    }
+
+    // === 多用户测试 ===
+
+    #[tokio::test]
+    async fn test_multiple_users_online() {
+        let manager = OnlineStatusManager::new();
+        let user1 = Uuid::new_v4();
+        let user2 = Uuid::new_v4();
+        let user3 = Uuid::new_v4();
+
+        manager.set_online(user1, None).await;
+        manager.set_online(user2, Some("desktop".to_string())).await;
+        manager.set_online(user3, None).await;
+
+        assert_eq!(manager.online_count().await, 3);
+
+        let ids = manager.get_online_user_ids().await;
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains(&user1));
+        assert!(ids.contains(&user2));
+        assert!(ids.contains(&user3));
+    }
+
+    #[tokio::test]
+    async fn test_partial_offline() {
+        let manager = OnlineStatusManager::new();
+        let user1 = Uuid::new_v4();
+        let user2 = Uuid::new_v4();
+
+        manager.set_online(user1, None).await;
+        manager.set_online(user2, None).await;
+        assert_eq!(manager.online_count().await, 2);
+
+        manager.set_offline(user1).await;
+        assert_eq!(manager.online_count().await, 1);
+        assert!(!manager.is_online(user1).await);
+        assert!(manager.is_online(user2).await);
+    }
+
+    // === get_online_users 测试 ===
+
+    #[tokio::test]
+    async fn test_get_online_users_filter() {
+        let manager = OnlineStatusManager::new();
+        let user1 = Uuid::new_v4();
+        let user2 = Uuid::new_v4();
+        let user3 = Uuid::new_v4();
+
+        manager.set_online(user1, None).await;
+        manager.set_online(user2, None).await;
+        manager.set_online(user3, None).await;
+        manager.update_status(user2, UserStatus::Away).await;
+
+        let online = manager.get_online_users().await;
+        // 只有 user1 和 user3 是 Online 状态
+        assert_eq!(online.len(), 2);
+        assert!(online.iter().any(|u| u.user_id == user1));
+        assert!(online.iter().any(|u| u.user_id == user3));
+        assert!(!online.iter().any(|u| u.user_id == user2));
+    }
+
+    // === batch 操作测试 ===
+
+    #[tokio::test]
+    async fn test_get_batch_statuses() {
+        let manager = OnlineStatusManager::new();
+        let user1 = Uuid::new_v4();
+        let user2 = Uuid::new_v4();
+        let user3 = Uuid::new_v4();
+
+        manager.set_online(user1, None).await;
+        manager.set_online(user2, None).await;
+        // user3 不在线
+
+        let statuses = manager.get_batch_statuses(&[user1, user2, user3]).await;
+        assert_eq!(statuses.len(), 2); // 只有 user1 和 user2
+        assert!(statuses.contains_key(&user1));
+        assert!(statuses.contains_key(&user2));
+        assert!(!statuses.contains_key(&user3));
+    }
+
+    #[tokio::test]
+    async fn test_get_batch_statuses_empty() {
+        let manager = OnlineStatusManager::new();
+        let statuses = manager.get_batch_statuses(&[]).await;
+        assert!(statuses.is_empty());
+    }
+
+    // === touch (心跳) 测试 ===
+
+    #[tokio::test]
+    async fn test_touch_updates_last_seen() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        manager.set_online(user_id, None).await;
+        let before = manager.get_status(user_id).await.unwrap().last_seen;
+
+        // 等待一小段时间确保时间戳变化
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        manager.touch(user_id).await;
+        let after = manager.get_status(user_id).await.unwrap().last_seen;
+        assert!(after >= before);
+    }
+
+    #[tokio::test]
+    async fn test_touch_nonexistent_user() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+        // 不应 panic
+        manager.touch(user_id).await;
+    }
+
+    // === cleanup_expired 测试 ===
+
+    #[tokio::test]
+    async fn test_cleanup_expired_removes_stale_users() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        // 直接插入一个过期的状态记录
+        {
+            let mut statuses = manager.statuses.write().await;
+            statuses.insert(user_id, UserStatusInfo {
+                user_id,
+                status: UserStatus::Online,
+                last_seen: Utc::now().timestamp() - 120, // 2分钟前
+                device_info: None,
+            });
+        }
+
+        assert!(manager.is_online(user_id).await);
+        manager.cleanup_expired().await;
+        assert!(!manager.is_online(user_id).await);
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_expired_keeps_active_users() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        manager.set_online(user_id, None).await;
+        manager.cleanup_expired().await;
+
+        // 刚设置的用户不应该被清理
+        assert!(manager.is_online(user_id).await);
+    }
+
+    // === check_idle_users 测试 ===
+
+    #[tokio::test]
+    async fn test_check_idle_users_switches_to_away() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        // 插入一个空闲超过阈值的在线用户
+        {
+            let mut statuses = manager.statuses.write().await;
+            statuses.insert(user_id, UserStatusInfo {
+                user_id,
+                status: UserStatus::Online,
+                last_seen: Utc::now().timestamp() - 400, // 超过 300 秒阈值
+                device_info: None,
+            });
+        }
+
+        manager.check_idle_users(300).await;
+
+        let status = manager.get_status(user_id).await.unwrap();
+        assert!(matches!(status.status, UserStatus::Away));
+    }
+
+    #[tokio::test]
+    async fn test_check_idle_users_keeps_active() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        manager.set_online(user_id, None).await;
+        manager.check_idle_users(300).await;
+
+        let status = manager.get_status(user_id).await.unwrap();
+        assert!(matches!(status.status, UserStatus::Online));
+    }
+
+    // === 状态变更通知测试 ===
+
+    #[tokio::test]
+    async fn test_status_change_notification() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        let counter = Arc::new(AtomicUsize::new(0));
+        let counter_clone = counter.clone();
+
+        manager.on_status_change(Arc::new(move |_event: StatusChangeEvent| {
+            counter_clone.fetch_add(1, Ordering::SeqCst);
+        })).await;
+
+        manager.set_online(user_id, None).await;
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+
+        manager.set_offline(user_id).await;
+        assert_eq!(counter.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn test_status_change_event_content() {
+        let manager = OnlineStatusManager::new();
+        let user_id = Uuid::new_v4();
+
+        let event = Arc::new(tokio::sync::Mutex::new(None::<StatusChangeEvent>));
+        let event_clone = event.clone();
+
+        manager.on_status_change(Arc::new(move |e: StatusChangeEvent| {
+            // 使用 try_lock 因为我们不在 async 上下文中
+            if let Ok(mut guard) = event_clone.try_lock() {
+                *guard = Some(e);
+            }
+        })).await;
+
+        manager.set_online(user_id, None).await;
+
+        let captured = event.lock().await;
+        assert!(captured.is_some());
+        let e = captured.as_ref().unwrap();
+        assert_eq!(e.user_id, user_id);
+        assert!(e.old_status.is_none()); // 首次上线没有旧状态
+        assert!(matches!(e.new_status, UserStatus::Online));
+    }
+
+    // === Default trait 测试 ===
+
+    #[test]
+    fn test_default_trait() {
+        let manager = OnlineStatusManager::default();
+        // Default 应该创建空管理器
+        assert!(manager.redis.is_none());
+    }
+
+    // === 大量用户测试 ===
+
+    #[tokio::test]
+    async fn test_many_users_performance() {
+        let manager = OnlineStatusManager::new();
+        let user_count = 100;
+
+        for _ in 0..user_count {
+            manager.set_online(Uuid::new_v4(), None).await;
+        }
+
+        assert_eq!(manager.online_count().await, user_count);
+        assert_eq!(manager.get_online_user_ids().await.len(), user_count);
+    }
+
+    // === UserStatusInfo 序列化测试 ===
+
+    #[test]
+    fn test_user_status_info_serialization() {
+        let info = UserStatusInfo {
+            user_id: Uuid::new_v4(),
+            status: UserStatus::Online,
+            last_seen: 1234567890,
+            device_info: Some("desktop".to_string()),
+        };
+
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("\"online\""));
+        assert!(json.contains("desktop"));
+
+        let deserialized: UserStatusInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.user_id, info.user_id);
+        assert_eq!(deserialized.last_seen, 1234567890);
+    }
+
+    #[test]
+    fn test_user_status_info_serialization_no_device() {
+        let info = UserStatusInfo {
+            user_id: Uuid::new_v4(),
+            status: UserStatus::Offline,
+            last_seen: 0,
+            device_info: None,
+        };
+
+        let json = serde_json::to_string(&info).unwrap();
+        let deserialized: UserStatusInfo = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.device_info.is_none());
+    }
+}

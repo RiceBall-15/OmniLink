@@ -167,6 +167,164 @@ impl AIProvider for AnthropicProvider {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::providers::{AIMessage, MessageRole};
+
+    // === convert_messages 测试 ===
+
+    #[test]
+    fn test_convert_messages_single_user() {
+        let messages = vec![AIMessage {
+            role: MessageRole::User,
+            content: "Hello!".to_string(),
+        }];
+
+        let result = AnthropicProvider::convert_messages(&messages);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].role, "user");
+        assert_eq!(result[0].content, "Hello!");
+    }
+
+    #[test]
+    fn test_convert_messages_all_roles() {
+        let messages = vec![
+            AIMessage { role: MessageRole::System, content: "System prompt".to_string() },
+            AIMessage { role: MessageRole::User, content: "User message".to_string() },
+            AIMessage { role: MessageRole::Assistant, content: "Assistant response".to_string() },
+        ];
+
+        let result = AnthropicProvider::convert_messages(&messages);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0].role, "system");
+        assert_eq!(result[1].role, "user");
+        assert_eq!(result[2].role, "assistant");
+    }
+
+    #[test]
+    fn test_convert_messages_empty() {
+        let messages: Vec<AIMessage> = vec![];
+        let result = AnthropicProvider::convert_messages(&messages);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_convert_messages_preserves_content() {
+        let messages = vec![
+            AIMessage { role: MessageRole::User, content: "你好世界".to_string() },
+            AIMessage { role: MessageRole::Assistant, content: "👋 你好！".to_string() },
+        ];
+
+        let result = AnthropicProvider::convert_messages(&messages);
+        assert_eq!(result[0].content, "你好世界");
+        assert_eq!(result[1].content, "👋 你好！");
+    }
+
+    // === calculate_cost 测试 ===
+
+    #[test]
+    fn test_calculate_cost_claude3_opus() {
+        let provider = AnthropicProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 500, "claude-3-opus");
+        // input: 1000/1000 * 0.015 = 0.015
+        // output: 500/1000 * 0.075 = 0.0375
+        // total: 0.0525
+        assert!((cost - 0.0525).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_claude3_sonnet() {
+        let provider = AnthropicProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "claude-3-sonnet");
+        // input: 1000/1000 * 0.003 = 0.003
+        // output: 1000/1000 * 0.015 = 0.015
+        // total: 0.018
+        assert!((cost - 0.018).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_claude3_haiku() {
+        let provider = AnthropicProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "claude-3-haiku");
+        // input: 1000/1000 * 0.00025 = 0.00025
+        // output: 1000/1000 * 0.00125 = 0.00125
+        // total: 0.0015
+        assert!((cost - 0.0015).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_unknown_model() {
+        let provider = AnthropicProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(1000, 1000, "unknown-model");
+        // 应使用默认价格 (0.003, 0.015)
+        assert!((cost - 0.018).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_cost_zero_tokens() {
+        let provider = AnthropicProvider::new("test-key".to_string(), None);
+        let cost = provider.calculate_cost(0, 0, "claude-3-opus");
+        assert!((cost - 0.0).abs() < f64::EPSILON);
+    }
+
+    // === count_tokens 测试 ===
+
+    #[test]
+    fn test_count_tokens_english() {
+        let provider = AnthropicProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("Hello, world!", "claude-3-opus");
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_count_tokens_chinese() {
+        let provider = AnthropicProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("你好世界", "claude-3-opus");
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_count_tokens_empty() {
+        let provider = AnthropicProvider::new("test-key".to_string(), None);
+        let tokens = provider.count_tokens("", "claude-3-opus");
+        assert_eq!(tokens, 0);
+    }
+
+    #[test]
+    fn test_count_tokens_longer_text() {
+        let provider = AnthropicProvider::new("test-key".to_string(), None);
+        let short = provider.count_tokens("Hello", "claude-3-opus");
+        let long = provider.count_tokens("Hello, this is a longer text for testing token counting", "claude-3-opus");
+        assert!(long > short);
+    }
+
+    // === name 测试 ===
+
+    #[test]
+    fn test_provider_name() {
+        let provider = AnthropicProvider::new("test-key".to_string(), None);
+        assert_eq!(provider.name(), "Anthropic");
+    }
+
+    // === new 测试 ===
+
+    #[test]
+    fn test_new_with_custom_base_url() {
+        let provider = AnthropicProvider::new(
+            "test-key".to_string(),
+            Some("https://custom-api.example.com".to_string()),
+        );
+        assert_eq!(provider.name(), "Anthropic");
+    }
+
+    #[test]
+    fn test_new_with_default_base_url() {
+        let provider = AnthropicProvider::new("test-key".to_string(), None);
+        assert_eq!(provider.name(), "Anthropic");
+    }
+}
+
 /// Anthropic请求格式
 #[derive(Debug, Serialize)]
 struct AnthropicRequest {

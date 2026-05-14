@@ -496,3 +496,565 @@ impl Default for WSConnectionManager {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{WSMessage, WSMessageType};
+
+    /// 创建测试用连接
+    fn create_test_connection(user_id: Uuid, addr: &str) -> (WSConnection, tokio::sync::mpsc::UnboundedReceiver<Message>) {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let conn = WSConnection {
+            connection_id: Uuid::new_v4(),
+            user_id,
+            conversation_id: None,
+            addr: addr.to_string(),
+            sender: tx,
+            connected_at: chrono::Utc::now().timestamp(),
+            last_active_at: chrono::Utc::now().timestamp(),
+        };
+        (conn, rx)
+    }
+
+    /// 创建带会话ID的测试用连接
+    fn create_test_connection_with_conversation(
+        user_id: Uuid,
+        conversation_id: Uuid,
+        addr: &str,
+    ) -> (WSConnection, tokio::sync::mpsc::UnboundedReceiver<Message>) {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let conn = WSConnection {
+            connection_id: Uuid::new_v4(),
+            user_id,
+            conversation_id: Some(conversation_id),
+            addr: addr.to_string(),
+            sender: tx,
+            connected_at: chrono::Utc::now().timestamp(),
+            last_active_at: chrono::Utc::now().timestamp(),
+        };
+        (conn, rx)
+    }
+
+    // === 基础操作测试 ===
+
+    #[tokio::test]
+    async fn test_new_manager_is_empty() {
+        let manager = WSConnectionManager::new();
+        assert_eq!(manager.connection_count().await, 0);
+        assert_eq!(manager.online_count().await, 0);
+        assert!(manager.get_online_users().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_add_connection() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+        let (conn, _rx) = create_test_connection(user_id, "127.0.0.1:8080");
+        let conn_id = conn.connection_id;
+
+        manager.add_connection(conn).await;
+
+        assert_eq!(manager.connection_count().await, 1);
+        assert_eq!(manager.online_count().await, 1);
+        assert!(manager.is_online(user_id).await);
+        assert!(manager.get_connection(conn_id).await.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_remove_connection() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+        let (conn, _rx) = create_test_connection(user_id, "127.0.0.1:8080");
+        let conn_id = conn.connection_id;
+
+        manager.add_connection(conn).await;
+        assert_eq!(manager.connection_count().await, 1);
+
+        let removed = manager.remove_connection(conn_id).await;
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().user_id, user_id);
+
+        assert_eq!(manager.connection_count().await, 0);
+        assert_eq!(manager.online_count().await, 0);
+        assert!(!manager.is_online(user_id).await);
+    }
+
+    #[tokio::test]
+    async fn test_remove_nonexistent_connection() {
+        let manager = WSConnectionManager::new();
+        let result = manager.remove_connection(Uuid::new_v4()).await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_connection() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+        let (conn, _rx) = create_test_connection(user_id, "127.0.0.1:8080");
+        let conn_id = conn.connection_id;
+
+        manager.add_connection(conn).await;
+
+        let fetched = manager.get_connection(conn_id).await;
+        assert!(fetched.is_some());
+        assert_eq!(fetched.unwrap().user_id, user_id);
+    }
+
+    #[tokio::test]
+    async fn test_get_nonexistent_connection() {
+        let manager = WSConnectionManager::new();
+        assert!(manager.get_connection(Uuid::new_v4()).await.is_none());
+    }
+
+    // === 多连接/多设备测试 ===
+
+    #[tokio::test]
+    async fn test_user_multiple_connections() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+
+        let (conn1, _rx1) = create_test_connection(user_id, "device-1");
+        let (conn2, _rx2) = create_test_connection(user_id, "device-2");
+        let conn1_id = conn1.connection_id;
+        let conn2_id = conn2.connection_id;
+
+        manager.add_connection(conn1).await;
+        manager.add_connection(conn2).await;
+
+        // 同一用户两个连接，但在线用户数为1
+        assert_eq!(manager.connection_count().await, 2);
+        assert_eq!(manager.online_count().await, 1);
+        assert!(manager.is_online(user_id).await);
+
+        let user_conns = manager.get_user_connections(user_id).await;
+        assert_eq!(user_conns.len(), 2);
+
+        // 移除一个连接后用户仍然在线
+        manager.remove_connection(conn1_id).await;
+        assert_eq!(manager.connection_count().await, 1);
+        assert_eq!(manager.online_count().await, 1);
+        assert!(manager.is_online(user_id).await);
+
+        // 移除最后一个连接后用户离线
+        manager.remove_connection(conn2_id).await;
+        assert_eq!(manager.connection_count().await, 0);
+        assert_eq!(manager.online_count().await, 0);
+        assert!(!manager.is_online(user_id).await);
+    }
+
+    #[tokio::test]
+    async fn test_multiple_users() {
+        let manager = WSConnectionManager::new();
+        let user1 = Uuid::new_v4();
+        let user2 = Uuid::new_v4();
+
+        let (conn1, _rx1) = create_test_connection(user1, "user1-device");
+        let (conn2, _rx2) = create_test_connection(user2, "user2-device");
+
+        manager.add_connection(conn1).await;
+        manager.add_connection(conn2).await;
+
+        assert_eq!(manager.online_count().await, 2);
+        assert!(manager.is_online(user1).await);
+        assert!(manager.is_online(user2).await);
+
+        let online_users = manager.get_online_users().await;
+        assert_eq!(online_users.len(), 2);
+        assert!(online_users.contains(&user1));
+        assert!(online_users.contains(&user2));
+    }
+
+    // === 会话管理测试 ===
+
+    #[tokio::test]
+    async fn test_set_conversation() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+        let conv_id = Uuid::new_v4();
+
+        let (conn, _rx) = create_test_connection(user_id, "127.0.0.1");
+        let conn_id = conn.connection_id;
+
+        manager.add_connection(conn).await;
+
+        let updated = manager.set_conversation(conn_id, conv_id).await;
+        assert!(updated.is_some());
+        assert_eq!(updated.unwrap().conversation_id, Some(conv_id));
+
+        assert_eq!(manager.conversation_online_count(conv_id).await, 1);
+    }
+
+    #[tokio::test]
+    async fn test_set_conversation_updates_old_conversation() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+        let conv1 = Uuid::new_v4();
+        let conv2 = Uuid::new_v4();
+
+        let (conn, _rx) = create_test_connection(user_id, "127.0.0.1");
+        let conn_id = conn.connection_id;
+
+        manager.add_connection(conn).await;
+
+        // 先加入 conv1
+        manager.set_conversation(conn_id, conv1).await;
+        assert_eq!(manager.conversation_online_count(conv1).await, 1);
+
+        // 切换到 conv2
+        manager.set_conversation(conn_id, conv2).await;
+        assert_eq!(manager.conversation_online_count(conv1).await, 0);
+        assert_eq!(manager.conversation_online_count(conv2).await, 1);
+    }
+
+    #[tokio::test]
+    async fn test_set_conversation_on_nonexistent_connection() {
+        let manager = WSConnectionManager::new();
+        let result = manager.set_conversation(Uuid::new_v4(), Uuid::new_v4()).await;
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_conversation_online_count_empty() {
+        let manager = WSConnectionManager::new();
+        assert_eq!(manager.conversation_online_count(Uuid::new_v4()).await, 0);
+    }
+
+    #[tokio::test]
+    async fn test_remove_connection_with_conversation() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+        let conv_id = Uuid::new_v4();
+
+        let (conn, _rx) = create_test_connection_with_conversation(user_id, conv_id, "127.0.0.1");
+        let conn_id = conn.connection_id;
+
+        manager.add_connection(conn).await;
+        assert_eq!(manager.conversation_online_count(conv_id).await, 1);
+
+        manager.remove_connection(conn_id).await;
+        assert_eq!(manager.conversation_online_count(conv_id).await, 0);
+    }
+
+    // === 消息发送测试 ===
+
+    #[tokio::test]
+    async fn test_send_to_user() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+
+        let (conn, mut rx) = create_test_connection(user_id, "127.0.0.1");
+        manager.add_connection(conn).await;
+
+        let msg = WSMessage {
+            message_type: WSMessageType::NewMessage,
+            conversation_id: Some(Uuid::new_v4()),
+            message_id: Some(Uuid::new_v4()),
+            sender_id: Some(Uuid::new_v4()),
+            content: Some("Hello!".to_string()),
+            timestamp: Some(1234567890),
+            data: None,
+        };
+
+        let sent = manager.send_to_user(user_id, msg).await;
+        assert_eq!(sent, 1);
+
+        // 验证消息已发送到通道
+        let received = rx.try_recv();
+        assert!(received.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_send_to_user_multiple_devices() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+
+        let (conn1, mut rx1) = create_test_connection(user_id, "device-1");
+        let (conn2, mut rx2) = create_test_connection(user_id, "device-2");
+
+        manager.add_connection(conn1).await;
+        manager.add_connection(conn2).await;
+
+        let msg = WSMessage {
+            message_type: WSMessageType::Ping,
+            conversation_id: None,
+            message_id: None,
+            sender_id: None,
+            content: None,
+            timestamp: Some(1234567890),
+            data: None,
+        };
+
+        let sent = manager.send_to_user(user_id, msg).await;
+        assert_eq!(sent, 2);
+
+        assert!(rx1.try_recv().is_ok());
+        assert!(rx2.try_recv().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_send_to_nonexistent_user() {
+        let manager = WSConnectionManager::new();
+
+        let msg = WSMessage {
+            message_type: WSMessageType::Ping,
+            conversation_id: None,
+            message_id: None,
+            sender_id: None,
+            content: None,
+            timestamp: None,
+            data: None,
+        };
+
+        let sent = manager.send_to_user(Uuid::new_v4(), msg).await;
+        assert_eq!(sent, 0);
+    }
+
+    #[tokio::test]
+    async fn test_send_to_connection() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+
+        let (conn, mut rx) = create_test_connection(user_id, "127.0.0.1");
+        let conn_id = conn.connection_id;
+
+        manager.add_connection(conn).await;
+
+        let msg = WSMessage {
+            message_type: WSMessageType::Pong,
+            conversation_id: None,
+            message_id: None,
+            sender_id: None,
+            content: None,
+            timestamp: Some(1234567890),
+            data: None,
+        };
+
+        let result = manager.send_to_connection(conn_id, msg).await;
+        assert!(result);
+        assert!(rx.try_recv().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_send_to_nonexistent_connection() {
+        let manager = WSConnectionManager::new();
+
+        let msg = WSMessage {
+            message_type: WSMessageType::Pong,
+            conversation_id: None,
+            message_id: None,
+            sender_id: None,
+            content: None,
+            timestamp: None,
+            data: None,
+        };
+
+        let result = manager.send_to_connection(Uuid::new_v4(), msg).await;
+        assert!(!result);
+    }
+
+    // === 广播测试 ===
+
+    #[tokio::test]
+    async fn test_broadcast() {
+        let manager = WSConnectionManager::new();
+
+        let (conn1, mut rx1) = create_test_connection(Uuid::new_v4(), "user1");
+        let (conn2, mut rx2) = create_test_connection(Uuid::new_v4(), "user2");
+        let (conn3, mut rx3) = create_test_connection(Uuid::new_v4(), "user3");
+
+        manager.add_connection(conn1).await;
+        manager.add_connection(conn2).await;
+        manager.add_connection(conn3).await;
+
+        let msg = WSMessage {
+            message_type: WSMessageType::StatusChange,
+            conversation_id: None,
+            message_id: None,
+            sender_id: None,
+            content: Some("server_maintenance".to_string()),
+            timestamp: Some(1234567890),
+            data: None,
+        };
+
+        let sent = manager.broadcast(msg).await;
+        assert_eq!(sent, 3);
+
+        assert!(rx1.try_recv().is_ok());
+        assert!(rx2.try_recv().is_ok());
+        assert!(rx3.try_recv().is_ok());
+    }
+
+    // === 会话消息发送测试 ===
+
+    #[tokio::test]
+    async fn test_send_to_conversation() {
+        let manager = WSConnectionManager::new();
+        let conv_id = Uuid::new_v4();
+
+        let (conn1, mut rx1) = create_test_connection_with_conversation(Uuid::new_v4(), conv_id, "user1");
+        let (conn2, mut rx2) = create_test_connection_with_conversation(Uuid::new_v4(), conv_id, "user2");
+
+        manager.add_connection(conn1).await;
+        manager.add_connection(conn2).await;
+
+        let msg = WSMessage {
+            message_type: WSMessageType::NewMessage,
+            conversation_id: Some(conv_id),
+            message_id: Some(Uuid::new_v4()),
+            sender_id: Some(Uuid::new_v4()),
+            content: Some("Hello everyone!".to_string()),
+            timestamp: Some(1234567890),
+            data: None,
+        };
+
+        let sent = manager.send_to_conversation(conv_id, msg).await;
+        assert_eq!(sent, 2);
+
+        assert!(rx1.try_recv().is_ok());
+        assert!(rx2.try_recv().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_send_to_conversation_except() {
+        let manager = WSConnectionManager::new();
+        let conv_id = Uuid::new_v4();
+        let sender_id = Uuid::new_v4();
+        let other_id = Uuid::new_v4();
+
+        let (conn1, mut rx1) = create_test_connection_with_conversation(sender_id, conv_id, "sender");
+        let (conn2, mut rx2) = create_test_connection_with_conversation(other_id, conv_id, "other");
+
+        manager.add_connection(conn1).await;
+        manager.add_connection(conn2).await;
+
+        let msg = WSMessage {
+            message_type: WSMessageType::NewMessage,
+            conversation_id: Some(conv_id),
+            message_id: Some(Uuid::new_v4()),
+            sender_id: Some(sender_id),
+            content: Some("Hello!".to_string()),
+            timestamp: Some(1234567890),
+            data: None,
+        };
+
+        let sent = manager.send_to_conversation_except(conv_id, sender_id, msg).await;
+        assert_eq!(sent, 1);
+
+        // 发送者不应收到消息
+        assert!(rx1.try_recv().is_err());
+        // 其他用户应收到消息
+        assert!(rx2.try_recv().is_ok());
+    }
+
+    // === 更新最后活跃时间测试 ===
+
+    #[tokio::test]
+    async fn test_update_last_active() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+
+        let (conn, _rx) = create_test_connection(user_id, "127.0.0.1");
+        let conn_id = conn.connection_id;
+        let original_active = conn.last_active_at;
+
+        manager.add_connection(conn).await;
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        manager.update_last_active(conn_id).await;
+
+        let updated = manager.get_connection(conn_id).await.unwrap();
+        assert!(updated.last_active_at >= original_active);
+    }
+
+    // === 不活跃连接检测测试 ===
+
+    #[tokio::test]
+    async fn test_get_inactive_connections() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+
+        let (mut conn, _rx) = create_test_connection(user_id, "127.0.0.1");
+        let conn_id = conn.connection_id;
+        // 设置为很久以前的活跃时间
+        conn.last_active_at = chrono::Utc::now().timestamp() - 600;
+
+        manager.add_connection(conn).await;
+
+        let inactive = manager.get_inactive_connections(300).await;
+        assert_eq!(inactive.len(), 1);
+        assert_eq!(inactive[0], conn_id);
+
+        // 短超时不应包含
+        let active = manager.get_inactive_connections(700).await;
+        assert!(active.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_stale_connections() {
+        let manager = WSConnectionManager::new();
+        let user_id = Uuid::new_v4();
+
+        let (mut conn, _rx) = create_test_connection(user_id, "127.0.0.1");
+        conn.last_active_at = chrono::Utc::now().timestamp() - 600;
+
+        manager.add_connection(conn).await;
+        assert_eq!(manager.connection_count().await, 1);
+
+        let cleaned = manager.cleanup_stale_connections(300).await;
+        assert_eq!(cleaned.len(), 1);
+        assert_eq!(manager.connection_count().await, 0);
+    }
+
+    // === 池状态测试 ===
+
+    #[tokio::test]
+    async fn test_pool_status() {
+        let manager = WSConnectionManager::new();
+        let conv_id = Uuid::new_v4();
+
+        let (conn1, _rx1) = create_test_connection_with_conversation(Uuid::new_v4(), conv_id, "user1");
+        let (conn2, _rx2) = create_test_connection(Uuid::new_v4(), "user2");
+
+        manager.add_connection(conn1).await;
+        manager.add_connection(conn2).await;
+
+        let (total_conns, online_users, active_convs) = manager.pool_status().await;
+        assert_eq!(total_conns, 2);
+        assert_eq!(online_users, 2);
+        assert_eq!(active_convs, 1);
+    }
+
+    // === Default trait 测试 ===
+
+    #[test]
+    fn test_default_trait() {
+        let _manager = WSConnectionManager::default();
+        // 应该创建空管理器（同步测试，不需要 async）
+    }
+
+    // === 获取所有连接ID测试 ===
+
+    #[tokio::test]
+    async fn test_get_all_connection_ids() {
+        let manager = WSConnectionManager::new();
+
+        let (conn1, _rx1) = create_test_connection(Uuid::new_v4(), "user1");
+        let (conn2, _rx2) = create_test_connection(Uuid::new_v4(), "user2");
+
+        manager.add_connection(conn1).await;
+        manager.add_connection(conn2).await;
+
+        let ids = manager.get_all_connection_ids().await;
+        assert_eq!(ids.len(), 2);
+    }
+
+    // === get_user_connections 空用户测试 ===
+
+    #[tokio::test]
+    async fn test_get_user_connections_empty() {
+        let manager = WSConnectionManager::new();
+        let conns = manager.get_user_connections(Uuid::new_v4()).await;
+        assert!(conns.is_empty());
+    }
+}
