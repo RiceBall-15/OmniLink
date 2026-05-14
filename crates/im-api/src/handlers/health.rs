@@ -4,7 +4,7 @@ use sqlx::PgPool;
 use std::time::Instant;
 
 /// 标准化健康检查响应
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct HealthCheckResponse {
     /// 服务状态: healthy, degraded, unhealthy
     pub status: String,
@@ -17,14 +17,14 @@ pub struct HealthCheckResponse {
 }
 
 /// 依赖服务状态
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct Dependencies {
     pub database: DependencyStatus,
     pub redis: DependencyStatus,
 }
 
 /// 单个依赖的状态
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct DependencyStatus {
     pub status: String,
     pub response_time_ms: u64,
@@ -33,6 +33,14 @@ pub struct DependencyStatus {
 }
 
 /// 标准化健康检查处理函数
+#[utoipa::path(
+    get,
+    path = "/api/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "服务健康", body = HealthCheckResponse),
+    )
+)]
 pub async fn health_check_with_deps(State(pool): State<PgPool>) -> Json<HealthCheckResponse> {
     let version = env!("CARGO_PKG_VERSION").to_string();
 

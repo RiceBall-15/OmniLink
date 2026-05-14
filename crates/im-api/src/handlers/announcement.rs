@@ -25,6 +25,14 @@ pub struct PaginationParams {
 }
 
 /// 创建系统公告（管理员）
+#[utoipa::path(
+    post,
+    path = "/api/announcements",
+    tag = "announcements",
+    responses(
+        (status = 201, description = "创建成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn create_announcement_handler(
     State(pool): State<PgPool>,
     auth: crate::middleware::auth::AuthUser,
@@ -73,6 +81,14 @@ pub async fn create_announcement_handler(
 }
 
 /// 获取公告列表（管理员视图）
+#[utoipa::path(
+    get,
+    path = "/api/announcements/all",
+    tag = "announcements",
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn get_all_announcements_handler(
     State(pool): State<PgPool>,
     _auth: crate::middleware::auth::AuthUser,
@@ -97,6 +113,14 @@ pub async fn get_all_announcements_handler(
 }
 
 /// 获取活跃公告列表（用户视图，含已读状态）
+#[utoipa::path(
+    get,
+    path = "/api/announcements",
+    tag = "announcements",
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn get_active_announcements_handler(
     State(pool): State<PgPool>,
     auth: crate::middleware::auth::AuthUser,
@@ -193,6 +217,15 @@ pub async fn get_announcement_handler(
 }
 
 /// 标记公告为已读
+#[utoipa::path(
+    post,
+    path = "/api/announcements/{id}/read",
+    tag = "announcements",
+    params(("id" = String, Path, description = "公告ID")),
+    responses(
+        (status = 200, description = "标记成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn mark_announcement_read_handler(
     State(pool): State<PgPool>,
     auth: crate::middleware::auth::AuthUser,

@@ -19,6 +19,14 @@ use crate::models::feedback::{
 };
 
 /// 提交反馈
+#[utoipa::path(
+    post,
+    path = "/api/feedbacks",
+    tag = "feedbacks",
+    responses(
+        (status = 201, description = "提交成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn submit_feedback_handler(
     State(pool): State<PgPool>,
     auth: crate::middleware::auth::AuthUser,
@@ -145,6 +153,14 @@ pub async fn get_feedback_handler(
 }
 
 /// 获取所有反馈（管理员）
+#[utoipa::path(
+    get,
+    path = "/api/feedbacks/all",
+    tag = "feedbacks",
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn get_all_feedbacks_handler(
     State(pool): State<PgPool>,
     auth: crate::middleware::auth::AuthUser,

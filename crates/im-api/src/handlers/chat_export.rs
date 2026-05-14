@@ -18,6 +18,14 @@ pub struct CreateExportJobRequest {
 }
 
 /// 创建导出任务
+#[utoipa::path(
+    post,
+    path = "/api/im/exports",
+    tag = "chat-export",
+    responses(
+        (status = 201, description = "创建成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn create_export_job_handler(
     State(pool): State<PgPool>,
     auth: crate::middleware::auth::AuthUser,
@@ -202,6 +210,15 @@ pub async fn get_export_job_handler(
 }
 
 /// 下载导出文件
+#[utoipa::path(
+    get,
+    path = "/api/im/exports/{id}/download",
+    tag = "chat-export",
+    params(("id" = String, Path, description = "导出任务ID")),
+    responses(
+        (status = 200, description = "下载成功"),
+    )
+)]
 pub async fn download_export_file_handler(
     State(pool): State<PgPool>,
     auth: crate::middleware::auth::AuthUser,

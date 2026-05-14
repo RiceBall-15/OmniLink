@@ -23,6 +23,14 @@ use crate::models::auth::ApiResponse;
 use common::crypto;
 
 /// 生成用户身份密钥对
+#[utoipa::path(
+    post,
+    path = "/api/im/encryption/keys/generate",
+    tag = "encryption",
+    responses(
+        (status = 200, description = "生成成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn generate_keys(
     State(_pool): State<PgPool>,
     Extension(user_id): Extension<Uuid>,
@@ -77,6 +85,14 @@ pub async fn get_session_key(
 }
 
 /// 加密消息
+#[utoipa::path(
+    post,
+    path = "/api/im/encryption/encrypt",
+    tag = "encryption",
+    responses(
+        (status = 200, description = "加密成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn encrypt_message(
     State(_pool): State<PgPool>,
     Extension(user_id): Extension<Uuid>,
@@ -133,6 +149,14 @@ pub async fn encrypt_message(
 }
 
 /// 解密消息
+#[utoipa::path(
+    post,
+    path = "/api/im/encryption/decrypt",
+    tag = "encryption",
+    responses(
+        (status = 200, description = "解密成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn decrypt_message(
     State(_pool): State<PgPool>,
     Extension(_user_id): Extension<Uuid>,
@@ -229,6 +253,14 @@ pub async fn get_encryption_info(
 }
 
 /// 密钥交换请求
+#[utoipa::path(
+    post,
+    path = "/api/im/encryption/key-exchange",
+    tag = "encryption",
+    responses(
+        (status = 200, description = "交换成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn key_exchange(
     State(_pool): State<PgPool>,
     Extension(_user_id): Extension<Uuid>,
@@ -357,6 +389,15 @@ pub async fn store_encrypted_message(
 }
 
 /// 获取会话的加密消息历史
+#[utoipa::path(
+    get,
+    path = "/api/im/encryption/messages/{conversation_id}",
+    tag = "encryption",
+    params(("conversation_id" = String, Path, description = "会话ID")),
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn get_encrypted_messages(
     State(pool): State<PgPool>,
     Extension(_user_id): Extension<Uuid>,

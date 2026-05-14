@@ -51,6 +51,14 @@ fn default_search_limit() -> i64 { 20 }
 /// 添加联系人
 ///
 /// POST /api/users/contacts
+#[utoipa::path(
+    post,
+    path = "/api/users/contacts",
+    tag = "contacts",
+    responses(
+        (status = 201, description = "添加成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn add_contact_handler(
     State(pool): State<PgPool>,
     AuthUser { user_id, .. }: AuthUser,
@@ -155,6 +163,14 @@ pub async fn remove_contact_handler(
 /// 获取联系人列表
 ///
 /// GET /api/users/contacts
+#[utoipa::path(
+    get,
+    path = "/api/users/contacts",
+    tag = "contacts",
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn get_contacts_handler(
     State(pool): State<PgPool>,
     AuthUser { user_id, .. }: AuthUser,
@@ -237,6 +253,15 @@ pub async fn update_contact_handler(
 /// 搜索用户
 ///
 /// GET /api/users/search?q=keyword
+#[utoipa::path(
+    get,
+    path = "/api/users/search",
+    tag = "contacts",
+    params(("q" = String, Query, description = "搜索关键词")),
+    responses(
+        (status = 200, description = "搜索成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn search_users_handler(
     State(pool): State<PgPool>,
     AuthUser { user_id, .. }: AuthUser,

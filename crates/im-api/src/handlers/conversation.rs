@@ -35,6 +35,20 @@ use crate::db::conversation::get_conversation_tags_batch;
 use crate::db::conversation::get_user_unread_counts_batch;
 
 /// 获取用户的会话列表
+#[utoipa::path(
+    get,
+    path = "/api/im/conversations",
+    tag = "conversations",
+    params(
+        ("sort_by" = Option<String>, Query, description = "排序字段: updated_at, created_at, name, unread_count"),
+        ("order" = Option<String>, Query, description = "排序方向: asc, desc"),
+        ("tag_id" = Option<String>, Query, description = "按标签ID过滤"),
+        ("include_archived" = Option<bool>, Query, description = "是否包含已归档会话"),
+    ),
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn get_conversations(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
@@ -131,6 +145,16 @@ pub async fn get_conversations(
 }
 
 /// 创建新会话
+#[utoipa::path(
+    post,
+    path = "/api/im/conversations",
+    tag = "conversations",
+    request_body = CreateConversationRequest,
+    responses(
+        (status = 201, description = "创建成功", body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "请求参数错误", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn create_conversation_handler(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
@@ -678,6 +702,16 @@ pub async fn update_group_announcement_handler(
 }
 
 /// 切换会话置顶状态
+#[utoipa::path(
+    put,
+    path = "/api/im/conversations/{conversation_id}/pin",
+    tag = "conversations",
+    params(("conversation_id" = String, Path, description = "会话ID")),
+    responses(
+        (status = 200, description = "切换成功", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "会话不存在", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn toggle_pin(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
@@ -739,6 +773,16 @@ pub async fn toggle_pin(
 }
 
 /// 切换会话免打扰状态
+#[utoipa::path(
+    put,
+    path = "/api/im/conversations/{conversation_id}/mute",
+    tag = "conversations",
+    params(("conversation_id" = String, Path, description = "会话ID")),
+    responses(
+        (status = 200, description = "切换成功", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "会话不存在", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn toggle_mute(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
@@ -800,6 +844,16 @@ pub async fn toggle_mute(
 }
 
 /// 切换会话归档状态
+#[utoipa::path(
+    put,
+    path = "/api/im/conversations/{conversation_id}/archive",
+    tag = "conversations",
+    params(("conversation_id" = String, Path, description = "会话ID")),
+    responses(
+        (status = 200, description = "切换成功", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "会话不存在", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn toggle_archive(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,
@@ -861,6 +915,18 @@ pub async fn toggle_archive(
 }
 
 /// 搜索会话
+#[utoipa::path(
+    get,
+    path = "/api/im/conversations/search",
+    tag = "conversations",
+    params(
+        ("q" = String, Query, description = "搜索关键词"),
+        ("include_archived" = Option<bool>, Query, description = "是否包含已归档会话"),
+    ),
+    responses(
+        (status = 200, description = "搜索成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn search(
     State(pool): State<PgPool>,
     Extension(user_id): Extension<String>,

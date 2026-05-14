@@ -6,7 +6,7 @@ use sqlx::FromRow;
 use crate::models::message::Message;
 
 /// 会话类型（与前端匹配）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::Type, utoipa::ToSchema)]
 #[sqlx(type_name = "varchar", rename_all = "lowercase")]
 pub enum ConversationType {
     #[serde(rename = "direct")]
@@ -90,7 +90,7 @@ impl std::str::FromStr for ConversationType {
 }
 
 /// 会话实体（与前端接口完全匹配）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Conversation {
     pub id: String,
     #[serde(rename = "type")]
@@ -160,7 +160,7 @@ impl ConversationEntity {
 }
 
 /// 创建会话请求
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateConversationRequest {
     #[serde(rename = "type")]
     pub type_: ConversationType,

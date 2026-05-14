@@ -35,6 +35,15 @@ fn default_limit() -> i64 { 20 }
 /// 手动重试失败消息
 ///
 /// POST /api/im/messages/:id/retry
+#[utoipa::path(
+    post,
+    path = "/api/im/messages/{id}/retry",
+    tag = "message-retry",
+    params(("id" = String, Path, description = "消息ID")),
+    responses(
+        (status = 200, description = "重试成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn retry_message_handler(
     State(pool): State<PgPool>,
     AuthUser { user_id, .. }: AuthUser,
@@ -122,6 +131,14 @@ pub async fn retry_message_handler(
 /// 获取用户失败消息列表
 ///
 /// GET /api/im/messages/failed
+#[utoipa::path(
+    get,
+    path = "/api/im/messages/failed",
+    tag = "message-retry",
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn get_failed_messages_handler(
     State(pool): State<PgPool>,
     AuthUser { user_id, .. }: AuthUser,

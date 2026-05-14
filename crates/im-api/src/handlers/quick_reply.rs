@@ -23,6 +23,14 @@ pub struct QuickReplyQuery {
 }
 
 /// 创建快捷回复
+#[utoipa::path(
+    post,
+    path = "/api/im/quick-replies",
+    tag = "quick-replies",
+    responses(
+        (status = 201, description = "创建成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn create_quick_reply_handler(
     State(pool): State<PgPool>,
     auth: crate::middleware::auth::AuthUser,
@@ -67,6 +75,14 @@ pub async fn create_quick_reply_handler(
 }
 
 /// 获取快捷回复列表
+#[utoipa::path(
+    get,
+    path = "/api/im/quick-replies",
+    tag = "quick-replies",
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
 pub async fn get_quick_replies_handler(
     State(pool): State<PgPool>,
     auth: crate::middleware::auth::AuthUser,
