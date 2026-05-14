@@ -34,6 +34,11 @@ const FileManagerPage = createRouteComponent(
   { preload: false }
 )
 
+const GroupManagerPage = createRouteComponent(
+  () => import('./pages/GroupManagerPage'),
+  { preload: false }
+)
+
 // 路由守卫组件
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
@@ -133,6 +138,16 @@ function App() {
           element={
             <ProtectedRoute>
               <FileManagerPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 群聊管理路由 */}
+        <Route
+          path="/groups"
+          element={
+            <ProtectedRoute>
+              <GroupManagerPage />
             </ProtectedRoute>
           }
         />
