@@ -425,3 +425,39 @@
 ---
 
 **总体进度**: 67个任务中已完成67个，完成率 100%
+
+### 阶段十五：生产就绪增强 (2026-05-14)
+
+#### 任务 68：图片缩略图生成 ✅
+- 在workspace Cargo.toml中添加 `image` crate 依赖（启用 jpeg, png, gif, webp 特性）
+- 在 file-service 中实现真实的图片缩略图生成逻辑
+- 缩略图参数：最大 200x200 像素，保持宽高比，JPEG 格式质量 80
+- 上传图片时自动生成缩略图并存储（原路径 + `.thumb` 后缀）
+- 实现 `get_thumbnail` 方法，优先返回缩略图，回退到原图
+- Git提交: `8c45547` - feat(file-service): implement image thumbnail generation
+
+#### 通用工具函数增强 ✅
+- 新增 `generate_short_id()` - 基于时间戳和随机数生成短ID
+- 新增 `sanitize_filename()` - 清理文件名中的不安全字符
+- 新增 `format_timestamp()` - 格式化时间戳为可读字符串
+- 新增 `is_blank()` - 检查字符串是否为空或仅包含空白
+- 新增 `truncate_utf8()` - UTF-8安全的字符串截断
+- 为所有新函数添加了全面的单元测试
+- Git提交: `354b8ae` - feat(common): add utility functions for production readiness
+
+#### 任务 69：错误处理增强 ⏳
+- 状态：待开始
+- 统一所有服务的错误类型定义
+- 添加错误上下文信息
+- 改进错误消息的用户友好性
+
+#### 任务 70：测试覆盖率提升 ⏳
+- 状态：待开始
+- 为 im-gateway 核心逻辑添加单元测试
+- 扩展 ai-service provider 测试
+- 增强 common crate 测试覆盖
+
+---
+
+**总体进度**: 69个任务中已完成68个，完成率 98.6%
+**最新提交**: `354b8ae` (2026-05-14 08:45)
