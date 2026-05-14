@@ -478,6 +478,9 @@ pub struct SearchMessagesQuery {
     pub conversation_id: Option<String>,
     pub start_date: Option<String>,
     pub end_date: Option<String>,
+    /// 按消息类型过滤（可选）：text, image, file, system, voice, video
+    #[serde(rename = "type")]
+    pub type_: Option<String>,
     #[serde(default = "default_page")]
     pub page: i64,
     #[serde(default = "default_limit")]
@@ -495,6 +498,9 @@ pub struct GlobalSearchMessagesQuery {
     pub start_date: Option<String>,
     /// 可选：结束时间（ISO 8601 格式）
     pub end_date: Option<String>,
+    /// 按消息类型过滤（可选）：text, image, file, system, voice, video
+    #[serde(rename = "type")]
+    pub type_: Option<String>,
     #[serde(default = "default_page")]
     pub page: i64,
     #[serde(default = "default_limit")]
@@ -630,6 +636,7 @@ pub async fn search_all_messages(
         crate::db::message::search_messages_in_conversation(
             &pool, conv_id, &query.q,
             query.start_date.as_deref(), query.end_date.as_deref(),
+            query.type_.as_deref(),
             query.page, query.limit,
         ).await
     } else {
@@ -637,6 +644,7 @@ pub async fn search_all_messages(
         crate::db::message::search_user_messages(
             &pool, &user_uuid, &query.q,
             query.start_date.as_deref(), query.end_date.as_deref(),
+            query.type_.as_deref(),
             query.page, query.limit,
         ).await
     };
@@ -734,6 +742,7 @@ pub async fn search_messages(
         &query.keyword,
         query.start_date.as_deref(),
         query.end_date.as_deref(),
+        query.type_.as_deref(),
         query.page,
         query.limit,
     )
