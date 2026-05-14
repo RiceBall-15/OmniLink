@@ -300,6 +300,14 @@ export function ChatPage() {
           </div>
           <div className="user-actions">
             <button
+              className="admin-button"
+              onClick={() => (window.location.href = '/admin')}
+              title="管理后台"
+              aria-label="管理后台"
+            >
+              📊
+            </button>
+            <button
               className="settings-button"
               onClick={() => (window.location.href = '/settings')}
               title="设置"

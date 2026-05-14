@@ -19,6 +19,11 @@ const SettingsPage = createRouteComponent(
   { preload: false }
 )
 
+const AdminDashboard = createRouteComponent(
+  () => import('./pages/AdminDashboard'),
+  { preload: false }
+)
+
 // 路由守卫组件
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
@@ -88,6 +93,16 @@ function App() {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 管理员路由 */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminDashboard />
             </ProtectedRoute>
           }
         />
