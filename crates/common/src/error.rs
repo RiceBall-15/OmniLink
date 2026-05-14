@@ -1,114 +1,173 @@
 use thiserror::Error;
+use std::fmt;
+
+/// 错误上下文信息
+///
+/// 用于追踪错误的来源和位置，方便调试
+#[derive(Debug, Clone)]
+pub struct ErrorContext {
+    /// 错误发生的文件
+    pub file: &'static str,
+    /// 错误发生的行号
+    pub line: u32,
+    /// 错误发生的函数
+    pub function: &'static str,
+    /// 附加的上下文信息
+    pub message: Option<String>,
+}
+
+impl fmt::Display for ErrorContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}:{}:{}]", self.file, self.line, self.function)?;
+        if let Some(msg) = &self.message {
+            write!(f, " {}", msg)?;
+        }
+        Ok(())
+    }
+}
+
+/// 创建错误上下文的宏
+///
+/// 用法：
+/// ```rust
+/// let err = AppError::NotFound("user".to_string()).with_context(error_context!("user lookup"));
+/// ```
+#[macro_export]
+macro_rules! error_context {
+    ($msg:expr) => {
+        $crate::error::ErrorContext {
+            file: file!(),
+            line: line!(),
+            function: module_path!(),
+            message: Some($msg.to_string()),
+        }
+    };
+    () => {
+        $crate::error::ErrorContext {
+            file: file!(),
+            line: line!(),
+            function: module_path!(),
+            message: None,
+        }
+    };
+}
 
 /// 应用错误类型
-/// 
+///
 /// 这个枚举定义了整个应用中可能遇到的所有错误类型
 /// 使用thiserror库实现自动的错误转换和格式化
 #[derive(Debug, Error)]
 pub enum AppError {
     /// 数据库相关错误
-    #[error("Database error: {0}")]
+    #[error("数据库错误: {0}")]
     Database(#[from] sqlx::Error),
 
     /// Redis相关错误
-    #[error("Redis error: {0}")]
+    #[error("缓存服务错误: {0}")]
     Redis(#[from] redis::RedisError),
 
     /// MongoDB相关错误
-    #[error("MongoDB error: {0}")]
+    #[error("数据库错误: {0}")]
     MongoDb(#[from] mongodb::error::Error),
 
     /// IO操作错误
-    #[error("IO error: {0}")]
+    #[error("系统IO错误: {0}")]
     Io(#[from] std::io::Error),
 
     /// 序列化/反序列化错误
-    #[error("Serialization error: {0}")]
+    #[error("数据格式错误: {0}")]
     Serialization(#[from] serde_json::Error),
 
     /// 认证错误 - 用户身份验证失败
-    #[error("Authentication error: {0}")]
+    #[error("认证失败: {0}")]
     Auth(String),
 
     /// 授权错误 - 权限不足
-    #[error("Authorization error: {0}")]
+    #[error("权限不足: {0}")]
     Authorization(String),
 
     /// 资源未找到错误
-    #[error("Not found: {0}")]
+    #[error("资源未找到: {0}")]
     NotFound(String),
 
     /// 数据验证错误
-    #[error("Validation error: {0}")]
+    #[error("数据验证失败: {0}")]
     Validation(String),
 
     /// 请求频率限制错误
-    #[error("Rate limited: {0}")]
+    #[error("请求过于频繁，请稍后再试")]
     RateLimited(String),
 
     /// 内部服务器错误
-    #[error("Internal server error: {0}")]
+    #[error("服务器内部错误: {0}")]
     Internal(String),
 
     /// 错误的请求
-    #[error("Bad request: {0}")]
+    #[error("请求参数错误: {0}")]
     BadRequest(String),
 
     /// HTTP客户端错误
-    #[error("HTTP client error: {0}")]
+    #[error("外部服务调用失败: {0}")]
     Http(String),
 
     /// WebSocket错误
-    #[error("WebSocket error: {0}")]
+    #[error("WebSocket连接错误: {0}")]
     WebSocket(String),
 
     /// 文件操作错误
-    #[error("File error: {0}")]
+    #[error("文件操作失败: {0}")]
     File(String),
 
     /// 配置错误
-    #[error("Configuration error: {0}")]
+    #[error("配置错误: {0}")]
     Config(String),
 
     /// Token过期错误
-    #[error("Token expired")]
+    #[error("登录已过期，请重新登录")]
     TokenExpired,
 
     /// Token无效错误
-    #[error("Invalid token: {0}")]
+    #[error("无效的认证令牌: {0}")]
     InvalidToken(String),
 
     /// 用户已存在错误
-    #[error("User already exists: {0}")]
+    #[error("用户已存在: {0}")]
     UserAlreadyExists(String),
 
     /// 设备未找到错误
-    #[error("Device not found: {0}")]
+    #[error("设备未找到: {0}")]
     DeviceNotFound(String),
 
     /// 消息未找到错误
-    #[error("Message not found: {0}")]
+    #[error("消息未找到: {0}")]
     MessageNotFound(String),
 
     /// 会话未找到错误
-    #[error("Conversation not found: {0}")]
+    #[error("会话未找到: {0}")]
     ConversationNotFound(String),
 
     /// 文件未找到错误
-    #[error("File not found: {0}")]
+    #[error("文件未找到: {0}")]
     FileNotFound(String),
 
     /// 配置未找到错误
-    #[error("Config not found: {0}")]
+    #[error("配置项未找到: {0}")]
     ConfigNotFound(String),
 
     /// 服务不可用错误
-    #[error("Service unavailable: {0}")]
+    #[error("服务暂时不可用: {0}")]
     ServiceUnavailable(String),
 
     /// 超时错误
-    #[error("Timeout: {0}")]
+    #[error("请求超时: {0}")]
     Timeout(String),
+
+    /// 带上下文的错误（包装其他错误并添加上下文信息）
+    #[error("{context}: {source}")]
+    WithContext {
+        source: Box<AppError>,
+        context: ErrorContext,
+    },
 }
 
 /// 错误码枚举
@@ -209,6 +268,36 @@ impl ErrorCode {
             ErrorCode::ConfigError => "配置错误",
         }
     }
+
+    /// 获取用户友好的错误消息
+    pub fn user_message(&self) -> &'static str {
+        match self {
+            ErrorCode::AuthFailed => "登录失败，请检查用户名和密码",
+            ErrorCode::TokenExpired => "登录已过期，请重新登录",
+            ErrorCode::InvalidToken => "认证令牌无效，请重新登录",
+            ErrorCode::InsufficientPermission => "您没有权限执行此操作",
+            ErrorCode::UserAlreadyExists => "该用户名已被注册",
+            ErrorCode::ResourceNotFound => "请求的资源不存在",
+            ErrorCode::UserNotFound => "用户不存在",
+            ErrorCode::MessageNotFound => "消息不存在或已被删除",
+            ErrorCode::ConversationNotFound => "会话不存在或已被删除",
+            ErrorCode::FileNotFound => "文件不存在或已被删除",
+            ErrorCode::ConfigNotFound => "配置项不存在",
+            ErrorCode::DeviceNotFound => "设备不存在",
+            ErrorCode::InvalidRequest => "请求参数无效，请检查输入",
+            ErrorCode::RequestTooLarge => "请求数据过大",
+            ErrorCode::RateLimited => "请求过于频繁，请稍后再试",
+            ErrorCode::ValidationFailed => "数据验证失败，请检查输入",
+            ErrorCode::InternalError => "服务器内部错误，请稍后再试",
+            ErrorCode::DatabaseError => "数据服务异常，请稍后再试",
+            ErrorCode::CacheError => "缓存服务异常，请稍后再试",
+            ErrorCode::ExternalServiceError => "外部服务异常，请稍后再试",
+            ErrorCode::ServiceUnavailable => "服务暂时不可用，请稍后再试",
+            ErrorCode::Timeout => "请求超时，请稍后再试",
+            ErrorCode::FileError => "文件操作失败，请稍后再试",
+            ErrorCode::ConfigError => "系统配置错误",
+        }
+    }
 }
 
 impl std::fmt::Display for ErrorCode {
@@ -247,6 +336,7 @@ impl AppError {
             AppError::ConfigNotFound(_) => ErrorCode::ConfigNotFound,
             AppError::ServiceUnavailable(_) => ErrorCode::ServiceUnavailable,
             AppError::Timeout(_) => ErrorCode::Timeout,
+            AppError::WithContext { source, .. } => source.error_code(),
         }
     }
 }
@@ -295,6 +385,80 @@ impl AppError {
             AppError::ConfigNotFound(_) => http::StatusCode::NOT_FOUND,
             AppError::ServiceUnavailable(_) => http::StatusCode::SERVICE_UNAVAILABLE,
             AppError::Timeout(_) => http::StatusCode::GATEWAY_TIMEOUT,
+            AppError::WithContext { source, .. } => source.status_code(),
+        }
+    }
+
+    /// 添加错误上下文
+    ///
+    /// 用于追踪错误的来源和位置
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use common::error::*;
+    ///
+    /// let err = AppError::NotFound("user".to_string())
+    ///     .with_context(error_context!("failed to find user"));
+    /// ```
+    pub fn with_context(self, context: ErrorContext) -> Self {
+        AppError::WithContext {
+            source: Box::new(self),
+            context,
+        }
+    }
+
+    /// 获取错误的根因（最内层的错误）
+    pub fn root_cause(&self) -> &AppError {
+        match self {
+            AppError::WithContext { source, .. } => source.root_cause(),
+            _ => self,
+        }
+    }
+
+    /// 获取完整的错误链信息
+    pub fn error_chain(&self) -> Vec<String> {
+        let mut chain = Vec::new();
+        self.collect_chain(&mut chain);
+        chain
+    }
+
+    fn collect_chain(&self, chain: &mut Vec<String>) {
+        chain.push(self.to_string());
+        if let AppError::WithContext { source, context } = self {
+            chain.push(format!("  caused by: {}", context));
+            source.collect_chain(chain);
+        }
+    }
+
+    /// 判断是否为客户端错误（4xx）
+    pub fn is_client_error(&self) -> bool {
+        let code = self.status_code().as_u16();
+        code >= 400 && code < 500
+    }
+
+    /// 判断是否为服务器错误（5xx）
+    pub fn is_server_error(&self) -> bool {
+        let code = self.status_code().as_u16();
+        code >= 500 && code < 600
+    }
+
+    /// 获取用户友好的错误消息
+    pub fn user_message(&self) -> String {
+        match self {
+            AppError::Auth(_) => "登录失败，请检查用户名和密码".to_string(),
+            AppError::TokenExpired => "登录已过期，请重新登录".to_string(),
+            AppError::InvalidToken(_) => "认证令牌无效，请重新登录".to_string(),
+            AppError::Authorization(_) => "您没有权限执行此操作".to_string(),
+            AppError::UserAlreadyExists(_) => "该用户名已被注册".to_string(),
+            AppError::NotFound(_) => "请求的资源不存在".to_string(),
+            AppError::Validation(msg) => format!("数据验证失败: {}", msg),
+            AppError::RateLimited(_) => "请求过于频繁，请稍后再试".to_string(),
+            AppError::BadRequest(msg) => format!("请求参数错误: {}", msg),
+            AppError::Timeout(_) => "请求超时，请稍后再试".to_string(),
+            AppError::ServiceUnavailable(_) => "服务暂时不可用，请稍后再试".to_string(),
+            AppError::WithContext { source, .. } => source.user_message(),
+            _ => "操作失败，请稍后再试".to_string(),
         }
     }
 }
@@ -304,13 +468,15 @@ impl axum::response::IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let status = self.status_code();
         let error_code = self.error_code();
+        let user_msg = self.user_message();
         let body = axum::Json(serde_json::json!({
             "success": false,
             "error": {
                 "code": error_code.as_i32(),
                 "code_str": error_code.to_string(),
                 "type": error_code.description(),
-                "message": self.to_string(),
+                "message": user_msg,
+                "user_message": error_code.user_message(),
             },
             "data": null,
             "timestamp": chrono::Utc::now().timestamp(),
@@ -326,16 +492,16 @@ mod tests {
     #[test]
     fn test_error_display_messages() {
         let err = AppError::Auth("invalid".to_string());
-        assert!(err.to_string().contains("Authentication error"));
+        assert!(err.to_string().contains("认证失败"));
 
         let err = AppError::NotFound("resource".to_string());
-        assert!(err.to_string().contains("Not found"));
+        assert!(err.to_string().contains("资源未找到"));
 
         let err = AppError::Validation("field".to_string());
-        assert!(err.to_string().contains("Validation error"));
+        assert!(err.to_string().contains("数据验证失败"));
 
         let err = AppError::TokenExpired;
-        assert!(err.to_string().contains("Token expired"));
+        assert!(err.to_string().contains("登录已过期"));
     }
 
     #[test]
@@ -425,6 +591,14 @@ mod tests {
     }
 
     #[test]
+    fn test_error_code_user_message() {
+        assert_eq!(ErrorCode::AuthFailed.user_message(), "登录失败，请检查用户名和密码");
+        assert_eq!(ErrorCode::TokenExpired.user_message(), "登录已过期，请重新登录");
+        assert_eq!(ErrorCode::ResourceNotFound.user_message(), "请求的资源不存在");
+        assert_eq!(ErrorCode::RateLimited.user_message(), "请求过于频繁，请稍后再试");
+    }
+
+    #[test]
     fn test_error_code_equality() {
         assert_eq!(ErrorCode::AuthFailed, ErrorCode::AuthFailed);
         assert_ne!(ErrorCode::AuthFailed, ErrorCode::TokenExpired);
@@ -438,5 +612,87 @@ mod tests {
 
         let deserialized: ErrorCode = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized, ErrorCode::AuthFailed);
+    }
+
+    #[test]
+    fn test_error_context() {
+        let ctx = ErrorContext {
+            file: "test.rs",
+            line: 42,
+            function: "test_func",
+            message: Some("test message".to_string()),
+        };
+        assert!(ctx.to_string().contains("test.rs:42:test_func"));
+        assert!(ctx.to_string().contains("test message"));
+    }
+
+    #[test]
+    fn test_error_with_context() {
+        let err = AppError::NotFound("user".to_string())
+            .with_context(ErrorContext {
+                file: "test.rs",
+                line: 42,
+                function: "test_func",
+                message: Some("user lookup failed".to_string()),
+            });
+        
+        assert!(err.to_string().contains("user lookup failed"));
+        assert!(err.to_string().contains("资源未找到"));
+    }
+
+    #[test]
+    fn test_error_root_cause() {
+        let inner = AppError::NotFound("user".to_string());
+        let err = inner.with_context(ErrorContext {
+            file: "test.rs",
+            line: 42,
+            function: "test_func",
+            message: Some("lookup failed".to_string()),
+        });
+        
+        let root = err.root_cause();
+        assert!(root.to_string().contains("资源未找到"));
+    }
+
+    #[test]
+    fn test_error_chain() {
+        let err = AppError::NotFound("user".to_string())
+            .with_context(ErrorContext {
+                file: "test.rs",
+                line: 42,
+                function: "test_func",
+                message: Some("lookup failed".to_string()),
+            });
+        
+        let chain = err.error_chain();
+        assert!(chain.len() >= 2);
+        assert!(chain[0].contains("资源未找到"));
+    }
+
+    #[test]
+    fn test_is_client_error() {
+        assert!(AppError::Auth("x".into()).is_client_error());
+        assert!(AppError::NotFound("x".into()).is_client_error());
+        assert!(AppError::Validation("x".into()).is_client_error());
+        assert!(!AppError::Internal("x".into()).is_client_error());
+    }
+
+    #[test]
+    fn test_is_server_error() {
+        assert!(AppError::Internal("x".into()).is_server_error());
+        assert!(AppError::ServiceUnavailable("x".into()).is_server_error());
+        assert!(!AppError::Auth("x".into()).is_server_error());
+    }
+
+    #[test]
+    fn test_user_message() {
+        let err = AppError::Auth("invalid".to_string());
+        assert_eq!(err.user_message(), "登录失败，请检查用户名和密码");
+
+        let err = AppError::TokenExpired;
+        assert_eq!(err.user_message(), "登录已过期，请重新登录");
+
+        let err = AppError::Validation("email".to_string());
+        assert_eq!(err.user_message(), "数据验证失败: email");
     }
 }
