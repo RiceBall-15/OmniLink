@@ -111,7 +111,7 @@ async fn export_conversation_messages(
     let message_count = messages.len() as i32;
 
     if message_count == 0 {
-        anyhow::anyhow!("会话中没有消息可导出");
+        anyhow::bail!("会话中没有消息可导出");
     }
 
     // 格式化消息
