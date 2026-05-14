@@ -29,6 +29,11 @@ const AIAssistantPage = createRouteComponent(
   { preload: false }
 )
 
+const FileManagerPage = createRouteComponent(
+  () => import('./pages/FileManagerPage'),
+  { preload: false }
+)
+
 // 路由守卫组件
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
@@ -118,6 +123,16 @@ function App() {
           element={
             <ProtectedRoute>
               <AIAssistantPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 文件管理路由 */}
+        <Route
+          path="/files"
+          element={
+            <ProtectedRoute>
+              <FileManagerPage />
             </ProtectedRoute>
           }
         />

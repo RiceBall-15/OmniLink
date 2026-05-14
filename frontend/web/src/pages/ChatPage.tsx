@@ -300,6 +300,14 @@ export function ChatPage() {
           </div>
           <div className="user-actions">
             <button
+              className="files-button"
+              onClick={() => (window.location.href = '/files')}
+              title="文件管理"
+              aria-label="文件管理"
+            >
+              📁
+            </button>
+            <button
               className="ai-button"
               onClick={() => (window.location.href = '/ai')}
               title="AI 助手"
