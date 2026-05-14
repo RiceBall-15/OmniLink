@@ -69,7 +69,7 @@
 
 ### 阶段三：文件服务
 
-#### 9. 文件下载和预览 ✅ (2026-05-13) — CDN集成为可选扩展
+#### 9. 文件下载和预览 ⏳ (2026-05-13) — CDN集成为可选扩展
 - [x] 文件下载 API（已在 Task 5 中实现）
 - [x] 图片缩略图获取
 - [x] 文件权限控制（用户所有权验证）
@@ -197,7 +197,7 @@
 - [x] 005_add_config_tables.sql - 配置表、配置历史、配置订阅
 - [x] 006_add_file_tables.sql - 文件表（支持图片/视频/音频/文档）
 
-#### 28. 健康检查标准化 ✅
+#### 28. 健康检查标准化 ⏳
 - [x] 统一所有服务的健康检查格式（HealthCheckResponse）
 - [x] 添加数据库连接检查（SQLx SELECT 1）
 - [x] 添加 Redis 连接检查（TCP 连接检测）
@@ -296,7 +296,7 @@
 
 ### 阶段十四：V2.0 核心后端功能 🔥
 
-#### 62. 消息阅后即焚 ✅ (2026-05-14)
+#### 62. 消息阅后即焚 ⏳ (2026-05-14)
 - [x] BurnAfterReading 模型（burn_after_reading, burn_after_seconds, burned_at 字段）
 - [x] 阅后即焚消息创建（SendMessageRequest 增加 burn_after_reading 字段）
 - [x] 消息已读后启动倒计时（mark_read 时计算 burned_at）
@@ -378,7 +378,7 @@
 - [x] 屏幕阅读器测试
 - [x] 高对比度模式
 
-#### 80. 前端测试覆盖 ✅
+#### 80. 前端测试覆盖 ⏳
 - [x] 组件单元测试（Button, Input, Modal, Toast, VirtualScroll, LazyImage）
 - [x] 服务层测试（API service, notificationService）
 - [x] 类型定义测试（message, user types, enums）
@@ -811,3 +811,44 @@
 **前端测试**: 175+ 测试通过
 **后端测试**: Rust 单元测试全部通过
 **代码统计**: 71,000+ 行代码
+
+---
+
+### 阶段十八：V2.1 功能扩展 🔥 (2026-05-15)
+
+#### 81. 管理员仪表板页面 ✅
+- [x] 创建 AdminDashboard 页面组件（726行，含完整UI）
+- [x] 实现用户管理面板（用户列表、搜索、状态管理）
+- [x] 实现系统监控面板（在线用户数、消息统计、服务状态 - Health Tab）
+- [x] 实现公告管理（创建、编辑、删除系统公告 - Announcements Tab）
+- [x] 实现反馈管理（查看、处理用户反馈 - Feedbacks Tab）
+- [x] 添加管理员路由守卫（内联角色检查 + ProtectedRoute）
+
+#### 82. 用户资料页面 ✅
+- [x] 创建 UserProfile 页面组件（577行，含完整UI和CSS）
+- [x] 实现头像上传和裁剪（canvas裁剪 + FileReader）
+- [x] 实现个人资料编辑（昵称、签名、bio）
+- [x] 实现联系人列表展示（Contacts Tab）
+- [x] 实现用户搜索功能（handleSearchUsers）
+
+#### 83. 文件管理页面 ✅
+- [x] 创建 FileManager 页面组件（642行，含完整UI和CSS）
+- [x] 实现文件列表展示（分页、类型过滤、网格/列表视图切换）
+- [x] 实现文件预览（图片、文档、视频 - FilePreviewDialog）
+- [x] 实现文件分享操作（ShareDialog）
+- [x] 实现存储空间统计展示（StorageStats组件 + StorageBar）
+
+#### 84. 群聊管理页面 ✅
+- [x] 创建 GroupManager 页面组件（650行，含完整UI和CSS）
+- [x] 实现群聊创建向导（CreateGroupDialog 三步式）
+- [x] 实现群成员管理界面（MemberPanel组件，支持添加/移除/角色管理）
+- [x] 实现群设置（编辑群名、描述、公告、置顶、免打扰、归档）
+- [x] 实现群聊搜索（搜索栏 + handleSearch）
+
+#### 85. 后端 API 集成测试 ✅
+- [x] 创建集成测试框架（tests/integration/ + Cargo.toml + run_tests.sh）
+- [x] 实现认证 API 测试（注册、登录、校验、重复注册、错误密码、获取用户信息、更新资料、健康检查）
+- [x] 实现消息 API 测试（发送、历史查询、编辑、撤回、搜索、未授权访问）
+- [x] 实现会话 API 测试（创建、列表、搜索、置顶、归档、群成员、未授权访问）
+- [x] 实现文件 API 测试（上传、列表、存储统计、下载、删除、健康检查、未授权访问）
+
