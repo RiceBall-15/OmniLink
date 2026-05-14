@@ -713,7 +713,7 @@
 - [x] 添加错误上下文信息 - ErrorContext 结构体 + error_context! 宏 + with_context() 方法
 - [x] 改进错误消息的用户友好性 - 所有错误消息改为中文，新增 user_message() 方法
 
-#### 70. 测试覆盖率提升
-- [ ] im-gateway 核心逻辑单元测试
-- [ ] ai-service provider 单元测试
-- [ ] common crate 扩展测试覆盖
+#### 70. 测试覆盖率提升 ✅ (2026-05-15)
+- [x] im-gateway 核心逻辑单元测试 ✅ (commit: cd84c2f)
+- [x] ai-service provider 单元测试 ✅ (commit: cd84c2f)
+- [x] common crate 扩展测试覆盖 ✅ (commit: bbfa262)

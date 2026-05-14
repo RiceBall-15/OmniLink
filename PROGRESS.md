@@ -445,17 +445,16 @@
 - 为所有新函数添加了全面的单元测试
 - Git提交: `354b8ae` - feat(common): add utility functions for production readiness
 
-#### 任务 69：错误处理增强 ⏳
-- 状态：待开始
-- 统一所有服务的错误类型定义
-- 添加错误上下文信息
-- 改进错误消息的用户友好性
+#### 任务 69：错误处理增强 ✅ (2026-05-15)
+- 统一所有服务的错误类型定义 - common/error.rs 已统一
+- 添加错误上下文信息 - ErrorContext 结构体 + error_context! 宏
+- 改进错误消息的用户友好性 - 中文消息 + user_message() 方法
 
-#### 任务 70：测试覆盖率提升 ⏳
-- 状态：待开始
-- 为 im-gateway 核心逻辑添加单元测试
-- 扩展 ai-service provider 测试
-- 增强 common crate 测试覆盖
+#### 任务 70：测试覆盖率提升 ✅ (2026-05-15)
+- im-gateway 核心逻辑单元测试（connection_manager, status_manager）commit: cd84c2f
+- ai-service provider 单元测试（openai, anthropic, ernie, google, qwen, zhipu）commit: cd84c2f
+- common crate 扩展测试覆盖：cache(+29), utils(+12), pool_monitor(+17), middleware(+7) commit: bbfa262
+- 总测试数：im-gateway ~15, ai-service ~20, common 125
 
 ---
 
