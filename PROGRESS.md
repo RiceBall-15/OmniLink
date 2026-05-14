@@ -248,7 +248,11 @@
 - **组件数量**: 6
 - **Hooks 数量**: 5
 - **代码行数**: ~8,000 行
-- **测试覆盖率**: 0% (待添加)
+- **测试覆盖率**: 175+ 测试通过 (Vitest + Testing Library)
+  - Button (12 tests), Input (14 tests), Modal (13 tests), Toast (16 tests)
+  - VirtualScroll (5 tests), LazyImage (5 tests)
+  - API service (15 tests), NotificationService (8 tests)
+  - 类型定义 (25 tests)
 
 ### 后端
 - **服务模块**: 8
