@@ -21,6 +21,7 @@ pub mod security;
 pub mod secrets;
 pub mod pool_monitor;
 pub mod audit;
+pub mod config;
 
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};
