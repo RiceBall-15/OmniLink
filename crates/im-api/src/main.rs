@@ -286,6 +286,17 @@ async fn main() -> anyhow::Result<()> {
         .with_state(pool)
         // 添加全局错误捕获中间件层（最外层，捕获所有未处理错误）
         .layer(axum::middleware::from_fn(error_capture_middleware))
+        // 添加结构化请求日志中间件层
+        .layer(tower_http::trace::TraceLayer::new_for_http()
+            .make_span_with(tower_http::trace::DefaultMakeSpan::new()
+                .level(tracing::Level::INFO)
+                .include_headers(false))
+            .on_request(tower_http::trace::DefaultOnRequest::new()
+                .level(tracing::Level::INFO))
+            .on_response(tower_http::trace::DefaultOnResponse::new()
+                .level(tracing::Level::INFO))
+            .on_failure(tower_http::trace::DefaultOnFailure::new()
+                .level(tracing::Level::ERROR)))
         // 添加请求耗时中间件层
         .layer(axum::middleware::from_fn(request_timing_middleware))
         // 添加请求追踪中间件层

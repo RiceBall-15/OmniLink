@@ -18,7 +18,7 @@ thiserror.workspace = true
 # API dependencies
 axum-extra = { version = "0.9", features = ["typed-header"] }
 tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "compression-gzip", "compression-br"] }
+tower-http = { version = "0.5", features = ["cors", "compression-gzip", "compression-br", "trace"] }
 jsonwebtoken.workspace = true
 validator = { version = "0.16", features = ["derive"] }
 
