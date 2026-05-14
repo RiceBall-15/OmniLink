@@ -39,6 +39,11 @@ const GroupManagerPage = createRouteComponent(
   { preload: false }
 )
 
+const NotificationSettingsPage = createRouteComponent(
+  () => import('./pages/NotificationSettingsPage'),
+  { preload: false }
+)
+
 // 路由守卫组件
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
@@ -148,6 +153,16 @@ function App() {
           element={
             <ProtectedRoute>
               <GroupManagerPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 通知设置路由 */}
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationSettingsPage />
             </ProtectedRoute>
           }
         />
