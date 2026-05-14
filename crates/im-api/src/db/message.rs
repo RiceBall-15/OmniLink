@@ -1182,3 +1182,42 @@ pub async fn get_expiring_messages(
 
     Ok(messages)
 }
+
+/// 获取会话的所有消息（用于导出，不分页）
+pub async fn get_all_messages_for_export(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+) -> Result<Vec<MessageEntity>> {
+    let messages = sqlx::query_as::<_, MessageEntity>(
+        r#"
+        SELECT * FROM messages
+        WHERE conversation_id = $1
+        ORDER BY created_at ASC
+        "#
+    )
+    .bind(conversation_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("获取导出消息列表失败: {}", e))?;
+
+    Ok(messages)
+}
+
+/// 统计会话中的消息总数
+pub async fn count_messages_in_conversation(
+    pool: &PgPool,
+    conversation_id: &Uuid,
+) -> Result<i64> {
+    let count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*) FROM messages
+        WHERE conversation_id = $1
+        "#
+    )
+    .bind(conversation_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("统计消息数量失败: {}", e))?;
+
+    Ok(count)
+}

@@ -26,6 +26,8 @@ use im_api::handlers::message_retry;
 use im_api::handlers::announcement;
 use im_api::handlers::quick_reply;
 use im_api::handlers::feedback;
+use im_api::handlers::chat_export;
+use im_api::handlers::export_worker;
 use uuid::Uuid;
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
@@ -269,6 +271,13 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/admin/feedbacks/:id", delete(feedback::delete_feedback_handler))
             .route("/api/admin/feedbacks/stats", get(feedback::get_feedback_stats_handler));
 
+        // 聊天记录导出 API
+        let app = app
+            .route("/api/im/conversations/:id/export", post(chat_export::create_export_job_handler))
+            .route("/api/im/exports/:id", get(chat_export::get_export_job_handler))
+            .route("/api/im/exports/:id/download", get(chat_export::download_export_file_handler))
+            .route("/api/im/exports", get(chat_export::list_user_export_jobs_handler));
+
     // 克隆连接池用于后台定时消息处理任务
     let bg_pool = pool.clone();
 
@@ -311,8 +320,12 @@ async fn main() -> anyhow::Result<()> {
         );
 
     // 启动定时消息后台处理任务
-    im_api::handlers::scheduled_task::start_scheduled_message_processor(bg_pool);
+    im_api::handlers::scheduled_task::start_scheduled_message_processor(bg_pool.clone());
     info!("定时消息后台处理任务已启动");
+
+    // 启动聊天记录导出后台处理任务
+    im_api::handlers::export_worker::start_export_worker(bg_pool);
+    info!("聊天记录导出后台处理任务已启动");
 
     let listener = TcpListener::bind("0.0.0.0:8002").await?;
     info!("IM API listening on http://0.0.0.0:8002");

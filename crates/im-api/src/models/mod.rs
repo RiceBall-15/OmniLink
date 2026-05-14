@@ -11,5 +11,6 @@ pub mod conversation;
 pub mod announcement;
 pub mod quick_reply;
 pub mod feedback;
+pub mod chat_export;
 
 pub use auth::{ApiResponse, ApiError};

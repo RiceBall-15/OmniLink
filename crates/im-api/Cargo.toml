@@ -47,3 +47,6 @@ dotenvy.workspace = true
 # API documentation
 utoipa.workspace = true
 utoipa-swagger-ui.workspace = true
+
+# CSV export support
+csv = "1"

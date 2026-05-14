@@ -323,30 +323,30 @@
 - [x] 按分类筛选
 - [x] 全局快捷回复（管理员设置）
 
-#### 66. 用户反馈系统 ⏳
-- [ ] UserFeedback 模型（user_id, type, content, status, priority）
-- [ ] 提交反馈 API（POST /api/feedback）
-- [ ] 获取反馈列表 API（GET /api/feedback，管理员）
-- [ ] 反馈状态更新 API（PATCH /api/feedback/:id）
-- [ ] 反馈分类（bug, feature, other）
+#### 66. 用户反馈系统 ✅
+- [x] UserFeedback 模型（user_id, type, content, status, priority）
+- [x] 提交反馈 API（POST /api/feedback）
+- [x] 获取反馈列表 API（GET /api/feedback，管理员）
+- [x] 反馈状态更新 API（PATCH /api/feedback/:id）
+- [x] 反馈分类（bug, feature, other）
 
-#### 67. 聊天记录导出 ⏳
-- [ ] ExportJob 模型（user_id, conversation_id, format, status, file_url）
-- [ ] 创建导出任务 API（POST /api/im/conversations/:id/export）
-- [ ] 导出格式支持（JSON, CSV, TXT）
-- [ ] 后台异步导出（export_task worker）
-- [ ] 导出文件下载 API
-- [ ] 导出进度查询 API
+#### 67. 聊天记录导出 ✅
+- [x] ExportJob 模型（user_id, conversation_id, format, status, file_path）
+- [x] 创建导出任务 API（POST /api/im/conversations/:id/export）
+- [x] 导出格式支持（JSON, CSV, TXT）
+- [x] 后台异步导出（export_worker）
+- [x] 导出文件下载 API
+- [x] 导出进度查询 API
 
 ## 📈 进度追踪
 
-**总任务数**: 66 (含阶段十四)
-**已完成**: 61
+**总任务数**: 67 (含阶段十四)
+**已完成**: 62
 **进行中**: 0
 **待开发**: 5
 **受阻**: 0
 
-**完成率**: 92%
+**完成率**: 93%
 
 ---
 
