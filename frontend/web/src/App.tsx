@@ -44,6 +44,11 @@ const NotificationSettingsPage = createRouteComponent(
   { preload: false }
 )
 
+const UserProfilePage = createRouteComponent(
+  () => import('./pages/UserProfilePage'),
+  { preload: false }
+)
+
 // 路由守卫组件
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
@@ -163,6 +168,16 @@ function App() {
           element={
             <ProtectedRoute>
               <NotificationSettingsPage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 用户资料路由 */}
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <UserProfilePage />
             </ProtectedRoute>
           }
         />
