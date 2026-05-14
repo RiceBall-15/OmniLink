@@ -101,7 +101,37 @@ pub struct MessageReaction {
     pub message_id: Uuid,
     pub user_id: Uuid,
     pub emoji: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// 消息投递回执（per-user delivery tracking for group messages）
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, utoipa::ToSchema)]
+pub struct DeliveryReceipt {
+    pub id: Uuid,
+    pub message_id: Uuid,
+    pub user_id: Uuid,
+    /// 投递状态: delivered, read
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// 创建投递回执请求
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct CreateDeliveryReceiptRequest {
+    pub message_id: Uuid,
+    pub user_id: Uuid,
+    pub status: String,
+}
+
+/// 投递回执统计
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct DeliveryReceiptStats {
+    pub message_id: Uuid,
+    pub total_recipients: i64,
+    pub delivered_count: i64,
+    pub read_count: i64,
+    pub pending_count: i64,
 }
 
 /// 添加表情回应请求
