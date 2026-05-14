@@ -11,6 +11,7 @@ use crate::db::message::{
     mark_scheduled_message_sent,
     mark_scheduled_message_failed,
     create_message,
+    cleanup_expired_burn_messages,
 };
 use crate::models::message::{CreateMessageParams, MessageType};
 
@@ -145,4 +146,28 @@ pub async fn get_scheduled_task_status(pool: &PgPool) -> serde_json::Value {
         "next_scheduled_at": next_pending,
         "check_interval_seconds": 30,
     })
+}
+
+/// 启动阅后即焚消息清理后台任务
+///
+/// 每 10 秒检查一次过期的阅后即焚消息，自动删除并记录清理数量
+pub fn start_burn_message_cleanup(pool: PgPool) {
+    tokio::spawn(async move {
+        info!("阅后即焚消息清理任务已启动（每10秒检查一次）");
+
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
+            match cleanup_expired_burn_messages(&pool).await {
+                Ok(count) => {
+                    if count > 0 {
+                        info!("已清理 {} 条过期的阅后即焚消息", count);
+                    }
+                }
+                Err(e) => {
+                    error!("清理阅后即焚消息出错: {}", e);
+                }
+            }
+        }
+    });
 }

@@ -38,6 +38,7 @@ pub enum WSMessageType {
     Read,         // "read" - 已读回执
     Edit,         // "edit" - 消息编辑
     Recall,       // "recall" - 消息撤回
+    Burn,         // "burn" - 阅后即焚消息已被焚毁
 
     // 心跳保活
     Ping,         // "ping" - 心跳探测

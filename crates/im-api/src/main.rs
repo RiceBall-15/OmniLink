@@ -331,6 +331,10 @@ async fn main() -> anyhow::Result<()> {
     im_api::handlers::scheduled_task::start_scheduled_message_processor(bg_pool.clone());
     info!("定时消息后台处理任务已启动");
 
+    // 启动阅后即焚消息清理后台任务
+    im_api::handlers::scheduled_task::start_burn_message_cleanup(bg_pool.clone());
+    info!("阅后即焚消息清理后台任务已启动");
+
     // 启动聊天记录导出后台处理任务
     im_api::handlers::export_worker::start_export_worker(bg_pool);
     info!("聊天记录导出后台处理任务已启动");

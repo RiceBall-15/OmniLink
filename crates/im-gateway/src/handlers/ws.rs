@@ -470,6 +470,30 @@ async fn handle_authenticated_message(
             }
         }
 
+        WSMessageType::Burn => {
+            // 处理阅后即焚消息焚毁通知 - 广播焚毁事件到会话
+            if let (Some(conversation_id), Some(message_id)) = (ws_msg.conversation_id, ws_msg.message_id) {
+                tracing::info!("Message {} burned in conversation {} (notified by user {})", message_id, conversation_id, user_id);
+                let burn_msg = WSMessage {
+                    message_type: WSMessageType::Burn,
+                    conversation_id: Some(conversation_id),
+                    message_id: Some(message_id),
+                    sender_id: Some(user_id),
+                    content: None,
+                    timestamp: Some(Utc::now().timestamp()),
+                    data: Some(serde_json::json!({
+                        "message_id": message_id,
+                        "conversation_id": conversation_id,
+                        "burned_at": Utc::now().to_rfc3339(),
+                    })),
+                };
+                // 通知会话中所有用户（包括发送者）消息已被焚毁
+                state.connection_manager.send_to_conversation(conversation_id, burn_msg).await;
+            } else {
+                tracing::warn!("Burn message missing conversation_id or message_id from user {}", user_id);
+            }
+        }
+
         WSMessageType::StatusChange => {
             // 处理状态变更请求 - 用户主动更改状态 (away, busy, 等)
             if let Some(data) = &ws_msg.data {
