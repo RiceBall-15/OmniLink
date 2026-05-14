@@ -46,7 +46,7 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for ExportStatus {
 }
 
 impl sqlx::Encode<'_, sqlx::Postgres> for ExportStatus {
-    fn encode_by_ref(&self, buf: &mut sqlx::postgres::PgArgumentBuffer) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+    fn encode_by_ref(&self, buf: &mut sqlx::postgres::PgArgumentBuffer) -> sqlx::encode::IsNull {
         let s = self.to_string();
         <String as sqlx::Encode<sqlx::Postgres>>::encode_by_ref(&s, buf)
     }
@@ -109,7 +109,7 @@ impl<'r> sqlx::Decode<'r, sqlx::Postgres> for ExportFormat {
 }
 
 impl sqlx::Encode<'_, sqlx::Postgres> for ExportFormat {
-    fn encode_by_ref(&self, buf: &mut sqlx::postgres::PgArgumentBuffer) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+    fn encode_by_ref(&self, buf: &mut sqlx::postgres::PgArgumentBuffer) -> sqlx::encode::IsNull {
         let s = self.to_string();
         <String as sqlx::Encode<sqlx::Postgres>>::encode_by_ref(&s, buf)
     }

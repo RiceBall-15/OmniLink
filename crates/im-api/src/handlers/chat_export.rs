@@ -24,12 +24,12 @@ pub async fn create_export_job_handler(
     Path(conversation_id): Path<String>,
     Json(req): Json<CreateExportJobRequest>,
 ) -> impl IntoResponse {
-    let user_id = match Uuid::parse_str(&auth.0) {
+    let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => {
             return (
                 StatusCode::UNAUTHORIZED,
-                Json(ApiResponse::<()> {
+                Json(ApiResponse::<serde_json::Value> {
                     success: false,
                     data: None,
                     error: Some(ApiError {
@@ -46,7 +46,7 @@ pub async fn create_export_job_handler(
         Err(_) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()> {
+                Json(ApiResponse::<serde_json::Value> {
                     success: false,
                     data: None,
                     error: Some(ApiError {
@@ -65,7 +65,7 @@ pub async fn create_export_job_handler(
         Some(_) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()> {
+                Json(ApiResponse::<serde_json::Value> {
                     success: false,
                     data: None,
                     error: Some(ApiError {
@@ -81,7 +81,7 @@ pub async fn create_export_job_handler(
     match db_export::create_export_job(&pool, user_id, conv_id, format).await {
         Ok(job) => (
             StatusCode::CREATED,
-            Json(ApiResponse {
+            Json(ApiResponse::<serde_json::Value> {
                 success: true,
                 data: Some(serde_json::json!({
                     "job_id": job.id.to_string(),
@@ -95,7 +95,7 @@ pub async fn create_export_job_handler(
         ),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()> {
+            Json(ApiResponse::<serde_json::Value> {
                 success: false,
                 data: None,
                 error: Some(ApiError {
@@ -113,12 +113,12 @@ pub async fn get_export_job_handler(
     auth: crate::middleware::auth::AuthUser,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let user_id = match Uuid::parse_str(&auth.0) {
+    let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => {
             return (
                 StatusCode::UNAUTHORIZED,
-                Json(ApiResponse::<()> {
+                Json(ApiResponse::<serde_json::Value> {
                     success: false,
                     data: None,
                     error: Some(ApiError {
@@ -135,7 +135,7 @@ pub async fn get_export_job_handler(
         Err(_) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()> {
+                Json(ApiResponse::<serde_json::Value> {
                     success: false,
                     data: None,
                     error: Some(ApiError {
@@ -169,7 +169,7 @@ pub async fn get_export_job_handler(
             }
             (
                 StatusCode::OK,
-                Json(ApiResponse {
+                Json(ApiResponse::<serde_json::Value> {
                     success: true,
                     data: Some(result),
                     error: None,
@@ -178,7 +178,7 @@ pub async fn get_export_job_handler(
         }
         Ok(None) => (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::<()> {
+            Json(ApiResponse::<serde_json::Value> {
                 success: false,
                 data: None,
                 error: Some(ApiError {
@@ -189,7 +189,7 @@ pub async fn get_export_job_handler(
         ),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()> {
+            Json(ApiResponse::<serde_json::Value> {
                 success: false,
                 data: None,
                 error: Some(ApiError {
@@ -207,12 +207,12 @@ pub async fn download_export_file_handler(
     auth: crate::middleware::auth::AuthUser,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let user_id = match Uuid::parse_str(&auth.0) {
+    let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => {
             return (
                 StatusCode::UNAUTHORIZED,
-                Json(ApiResponse::<()> {
+                Json(ApiResponse::<serde_json::Value> {
                     success: false,
                     data: None,
                     error: Some(ApiError {
@@ -230,7 +230,7 @@ pub async fn download_export_file_handler(
         Err(_) => {
             return (
                 StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()> {
+                Json(ApiResponse::<serde_json::Value> {
                     success: false,
                     data: None,
                     error: Some(ApiError {
@@ -248,7 +248,7 @@ pub async fn download_export_file_handler(
             if !job.is_completed() || job.file_path.is_none() {
                 return (
                     StatusCode::BAD_REQUEST,
-                    Json(ApiResponse::<()> {
+                    Json(ApiResponse::<serde_json::Value> {
                         success: false,
                         data: None,
                         error: Some(ApiError {
@@ -273,7 +273,7 @@ pub async fn download_export_file_handler(
                 }
                 Err(_) => (
                     StatusCode::NOT_FOUND,
-                    Json(ApiResponse::<()> {
+                    Json(ApiResponse::<serde_json::Value> {
                         success: false,
                         data: None,
                         error: Some(ApiError {
@@ -287,7 +287,7 @@ pub async fn download_export_file_handler(
         }
         Ok(None) => (
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::<()> {
+            Json(ApiResponse::<serde_json::Value> {
                 success: false,
                 data: None,
                 error: Some(ApiError {
@@ -299,7 +299,7 @@ pub async fn download_export_file_handler(
             .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()> {
+            Json(ApiResponse::<serde_json::Value> {
                 success: false,
                 data: None,
                 error: Some(ApiError {
@@ -318,12 +318,12 @@ pub async fn list_user_export_jobs_handler(
     auth: crate::middleware::auth::AuthUser,
     Query(params): Query<ListExportQuery>,
 ) -> impl IntoResponse {
-    let user_id = match Uuid::parse_str(&auth.0) {
+    let user_id = match Uuid::parse_str(&auth.user_id) {
         Ok(id) => id,
         Err(_) => {
             return (
                 StatusCode::UNAUTHORIZED,
-                Json(ApiResponse::<()> {
+                Json(ApiResponse::<serde_json::Value> {
                     success: false,
                     data: None,
                     error: Some(ApiError {
@@ -361,7 +361,7 @@ pub async fn list_user_export_jobs_handler(
 
             (
                 StatusCode::OK,
-                Json(ApiResponse {
+                Json(ApiResponse::<serde_json::Value> {
                     success: true,
                     data: Some(serde_json::json!({
                         "jobs": jobs_json,
@@ -374,7 +374,7 @@ pub async fn list_user_export_jobs_handler(
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()> {
+            Json(ApiResponse::<serde_json::Value> {
                 success: false,
                 data: None,
                 error: Some(ApiError {
