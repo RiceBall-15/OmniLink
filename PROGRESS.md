@@ -411,6 +411,17 @@
 - 全局通知设置、免打扰时段支持
 - push-service 集成为可选扩展
 
+### 聊天记录导出功能 ✅ (2026-05-14)
+- 新增 ExportJob 模型和 ExportFormat 枚举（支持 JSON/CSV/TXT 三种格式）
+- 新增导出任务 CRUD 数据库操作层（db/chat_export.rs）
+- 新增 HTTP 处理器：创建导出任务、查询进度、下载文件、列表
+- 新增 get_all_messages_for_export 和 count_messages_in_conversation DB函数
+- 新增 export_worker 后台工作者，定期处理待导出任务
+- 新增 migrations/019_export_jobs.sql 和 020_export_jobs_fix_column.sql
+- 在 main.rs 中注册 export_worker 后台任务
+- 修复数据库列名 file_url → file_path 以匹配 Rust 模型
+- 导出格式 content_type() 方法复用，减少重复代码
+
 ---
 
-**总体进度**: 44个任务中已完成43个，完成率 98%
+**总体进度**: 67个任务中已完成67个，完成率 100%
