@@ -1,0 +1,96 @@
+# Production Docker Compose for OmniLink
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+x-common-env: &common-env
+  DATABASE_URL: postgres://im_chat:${DB_PASSWORD:-changeme}@postgres:5432/im_chat
+  REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+  RUST_LOG: ${RUST_LOG:-info}
+  APP_ENV: production
+
+services:
+  # PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: omnilink-postgres
+    environment:
+      POSTGRES_USER: im_chat
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: im_chat
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U im_chat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: omnilink-redis
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-changeme}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+
+  # IM API Service
+  im-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: im-api
+    container_name: omnilink-im-api
+    environment:
+      <<: *common-env
+      SERVICE_PORT: "8002"
+    ports:
+      - "8002:8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  omnilink-network:
+    driver: bridge
