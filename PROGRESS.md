@@ -1,6 +1,6 @@
 # OmniLink 开发进度
 
-## 📅 更新日期：2026-05-14
+## 📅 更新日期：2026-05-15
 
 ## ✅ 已完成功能
 
@@ -456,7 +456,40 @@
 - common crate 扩展测试覆盖：cache(+29), utils(+12), pool_monitor(+17), middleware(+7) commit: bbfa262
 - 总测试数：im-gateway ~15, ai-service ~20, common 125
 
+#### 任务 71：API文档生成 ✅ (2026-05-15)
+- 在 api-gateway 中添加 utoipa 依赖
+- 为所有 API handler 添加 OpenAPI 属性宏
+- 生成 Swagger UI 路由（/swagger-ui）
+- 导出 openapi.json 文件
+
+#### 任务 72：配置验证增强 ✅ (2026-05-15)
+- 在 common 中实现 AppConfig 验证逻辑
+- 启动时验证所有必要配置项
+- 验证端口范围、URL格式、数据库连接字符串
+- 提供友好的配置错误提示
+
+#### 任务 73：Docker部署配置完善 ✅ (2026-05-15)
+- 为每个服务创建优化的 Dockerfile（多阶段构建）
+- 更新 docker-compose.yml 添加所有微服务
+- 添加环境变量配置文件模板
+- 添加健康检查和依赖等待逻辑
+
+#### 任务 74：结构化日志增强 ✅ (2026-05-15)
+- 在 common 中添加请求追踪ID中间件
+- 实现结构化日志格式（JSON输出）
+- 添加日志级别动态调整 API（GET/PUT /api/admin/log-level，支持模块级别过滤）
+- 添加请求耗时统计日志
+- commit: d260564
+
+#### 任务 75：API限流配置增强 ✅ (2026-05-15)
+- 实现基于Redis的滑动窗口限流
+- 支持按用户/IP/API路径差异化限流
+- 限流配置可热更新（RwLock 实现，无需重启）
+- 返回标准限流响应头（X-RateLimit-Limit/Remaining/Reset）
+- 管理 API：GET/PUT /api/admin/rate-limit
+- commit: d260564
+
 ---
 
-**总体进度**: 69个任务中已完成68个，完成率 98.6%
-**最新提交**: `354b8ae` (2026-05-14 08:45)
+**总体进度**: 75个任务中已完成75个，完成率 100%
+**最新提交**: `d260564` (2026-05-15 04:45)
