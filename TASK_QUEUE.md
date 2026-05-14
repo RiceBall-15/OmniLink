@@ -743,11 +743,11 @@
 #### 74. 结构化日志增强 ✅ (2026-05-15)
 - [x] 在 common 中添加请求追踪ID中间件
 - [x] 实现结构化日志格式（JSON输出）
-- [ ] 添加日志级别动态调整 API
+- [x] 添加日志级别动态调整 API（GET/PUT /api/admin/log-level，支持模块级别过滤）
 - [x] 添加请求耗时统计日志
 
-#### 75. API限流配置增强 🔄 (2026-05-15)
+#### 75. API限流配置增强 ✅ (2026-05-15)
 - [x] 实现基于Redis的滑动窗口限流
 - [x] 支持按用户/IP/API路径差异化限流
-- [ ] 限流配置可热更新
-- [ ] 返回标准限流响应头（X-RateLimit-*）
+- [x] 限流配置可热更新（GET/PUT /api/admin/rate-limit，RwLock热加载）
+- [x] 返回标准限流响应头（X-RateLimit-Limit/Remaining/Reset）

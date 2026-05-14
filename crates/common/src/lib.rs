@@ -9,6 +9,7 @@
 //! - `crypto`: 加密工具（ECDH 密钥交换、AES 加解密）
 //! - `middleware`: HTTP 认证中间件
 //! - `pool_monitor`: 连接池监控和健康检查
+//! - `log_level`: 动态日志级别调整
 
 pub mod error;
 pub mod models;
@@ -22,6 +23,7 @@ pub mod secrets;
 pub mod pool_monitor;
 pub mod audit;
 pub mod config;
+pub mod log_level;
 
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};

@@ -33,7 +33,7 @@ use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::security_headers::security_headers_middleware;
 use im_api::middleware::etag::etag_middleware;
-use im_api::middleware::rate_limit::{RateLimitConfig, RateLimitState, rate_limit_middleware};
+use im_api::middleware::rate_limit::{RateLimitConfig, RateLimitState, rate_limit_middleware, get_rate_limit_config, update_rate_limit_config};
 use im_api::middleware::request_id::request_id_middleware;
 use im_api::middleware::request_timing::request_timing_middleware;
 use im_api::models::auth::ApiResponse;
@@ -41,14 +41,8 @@ use im_api::openapi::ApiDoc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // 初始化结构化日志（JSON格式）
-    tracing_subscriber::fmt()
-        .json()
-        .with_target(true)
-        .with_thread_ids(true)
-        .with_file(true)
-        .with_line_number(true)
-        .init();
+    // 初始化可动态调整的结构化日志（JSON格式）
+    common::log_level::init_dynamic_logging("info");
 
     // 加载环境变量
     dotenvy::dotenv().ok();
@@ -238,7 +232,11 @@ async fn main() -> anyhow::Result<()> {
         // 全局通知设置 API
         .route("/api/im/notifications/settings", get(conversation::get_global_notification_settings))
         .route("/api/im/notifications/settings", put(conversation::update_global_notification_settings))
-        .route("/api/im/notifications/dnd-status", get(conversation::get_dnd_status));
+        .route("/api/im/notifications/dnd-status", get(conversation::get_dnd_status))
+        // 限流配置管理 API（热更新，无需重启）
+        .route("/api/admin/rate-limit", get(get_rate_limit_config).put(update_rate_limit_config))
+        // 日志级别动态调整 API
+        .route("/api/admin/log-level", get(get_log_level).put(update_log_level));
 
         // 消息线程/话题回复 API
         let app = app
@@ -284,6 +282,8 @@ async fn main() -> anyhow::Result<()> {
     let app = app
         // 添加数据库连接池到状态
         .with_state(pool)
+        // 添加限流状态到请求扩展（供管理 API 使用）
+        .layer(axum::Extension(rate_limit_state.clone()))
         // 添加全局错误捕获中间件层（最外层，捕获所有未处理错误）
         .layer(axum::middleware::from_fn(error_capture_middleware))
         // 添加结构化请求日志中间件层
@@ -349,6 +349,66 @@ async fn main() -> anyhow::Result<()> {
 #[allow(dead_code)]
 async fn health_check() -> &'static str {
     "IM API is healthy"
+}
+
+/// 获取当前日志级别
+async fn get_log_level() -> impl IntoResponse {
+    let level = common::log_level::get_log_level();
+    Json(serde_json::json!({
+        "code": 200,
+        "message": "获取成功",
+        "data": {
+            "current_level": level,
+            "available_levels": ["trace", "debug", "info", "warn", "error"],
+            "supports_module_filter": true,
+            "examples": [
+                "info",
+                "debug",
+                "im_api=debug,tower_http=info",
+                "im_api::handlers=trace,common=warn"
+            ]
+        }
+    }))
+}
+
+/// 动态调整日志级别
+async fn update_log_level(
+    Json(payload): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let level = match payload.get("level").and_then(|v| v.as_str()) {
+        Some(l) => l,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "code": 400,
+                    "message": "缺少 level 字段",
+                    "example": { "level": "debug" }
+                })),
+            );
+        }
+    };
+
+    match common::log_level::set_log_level(level) {
+        Ok(()) => {
+            info!(level = level, "日志级别已通过 API 更新");
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "code": 200,
+                    "message": format!("日志级别已更新为: {}", level),
+                    "data": { "level": level }
+                })),
+            )
+        }
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "code": 400,
+                "message": e
+            })),
+        ),
+    }
 }
 
 /// 获取当前用户信息（包装认证中间件）
