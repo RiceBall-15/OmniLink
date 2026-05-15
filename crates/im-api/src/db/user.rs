@@ -508,3 +508,38 @@ pub async fn get_user_status(
         last_active_at: row.get("last_active_at"),
     })
 }
+
+/// 批量查询用户在线状态
+pub async fn batch_get_user_status(
+    pool: &PgPool,
+    user_ids: &[String],
+) -> Result<Vec<UserStatusInfo>, String> {
+    if user_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let uuids: Vec<Uuid> = user_ids.iter()
+        .filter_map(|id| Uuid::parse_str(id).ok())
+        .collect();
+
+    if uuids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let rows = sqlx::query(
+        r#"SELECT id, COALESCE(online_status, 'offline') as online_status,
+                  status_message, last_active_at
+           FROM users WHERE id = ANY($1)"#
+    )
+    .bind(&uuids)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("批量查询用户状态失败: {}", e))?;
+
+    Ok(rows.into_iter().map(|row| UserStatusInfo {
+        user_id: row.get::<Uuid, _>("id").to_string(),
+        online_status: row.get("online_status"),
+        status_message: row.get("status_message"),
+        last_active_at: row.get("last_active_at"),
+    }).collect())
+}

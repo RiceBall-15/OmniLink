@@ -955,12 +955,12 @@
 - [x] 支持白名单（内部服务调用不受限制）
 - [x] 在 main.rs 中注册中间件
 
-#### 103. API Key 认证支持 🔥
-- [ ] 创建 api_keys 模型（key, name, permissions, rate_limit）
-- [ ] 实现 API Key 生成和管理 CRUD
-- [ ] 添加 ApiKeyAuth 中间件（支持 Bearer token 和 X-API-Key header）
-- [ ] 支持细粒度权限控制（read/write/admin）
-- [ ] 管理员 API：/api/admin/api-keys
+#### 103. API Key 认证支持 ✅ 🔥
+- [x] 创建 api_keys 模型（key, name, permissions, rate_limit）
+- [x] 实现 API Key 生成和管理 CRUD
+- [x] 添加 ApiKeyAuth 中间件（支持 Bearer token 和 X-API-Key header）
+- [x] 支持细粒度权限控制（read/write/admin）
+- [x] 管理员 API：/api/admin/api-keys
 
 #### 104. 用户在线状态服务增强
 - [ ] GET /api/users/presence — 批量查询用户在线状态

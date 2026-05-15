@@ -7,7 +7,7 @@
 //! - `PUT /api/user/me` - 更新用户资料
 
 use axum::{
-    extract::{Extension, State, Path},
+    extract::{Extension, State, Path, Query},
     http::StatusCode,
     Json,
 };
@@ -22,7 +22,7 @@ use crate::models::auth::{
 use crate::db::user::{
     create_user, find_user_by_email, find_user_by_id, update_user, verify_password, update_user_profile,
     block_user, unblock_user, get_blocked_users, is_user_blocked,
-    update_user_online_status, get_user_status,
+    update_user_online_status, get_user_status, batch_get_user_status,
 };
 use crate::middleware::auth::AuthUser;
 use crate::utils::jwt::generate_token;
@@ -500,5 +500,57 @@ pub async fn get_user_status_handler(
                 )
             }
         }
+    }
+}
+
+/// 批量查询用户在线状态
+///
+/// GET /api/users/presence?ids=id1,id2,id3
+pub async fn batch_get_presence_handler(
+    State(pool): State<PgPool>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let ids_str = match params.get("ids") {
+        Some(ids) => ids,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("MISSING_IDS", "缺少 ids 参数")),
+            );
+        }
+    };
+
+    let user_ids: Vec<String> = ids_str
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if user_ids.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("EMPTY_IDS", "ids 参数不能为空")),
+        );
+    }
+
+    if user_ids.len() > 100 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("TOO_MANY_IDS", "单次查询最多 100 个用户")),
+        );
+    }
+
+    match batch_get_user_status(&pool, &user_ids).await {
+        Ok(status_list) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "users": status_list,
+                "count": status_list.len()
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("BATCH_PRESENCE_FAILED", format!("批量查询失败: {}", e))),
+        ),
     }
 }

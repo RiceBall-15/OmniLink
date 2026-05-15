@@ -202,6 +202,7 @@ async fn main() -> anyhow::Result<()> {
         // 用户在线状态
         .route("/api/users/status", put(update_user_status_with_auth))
         .route("/api/users/:id/status", get(get_user_status_with_auth))
+        .route("/api/users/presence", get(batch_get_presence_with_auth))
 
         // 群组管理
         .route("/api/im/conversations/:id/members", get(get_group_members_with_auth).post(add_group_members_with_auth))
@@ -942,6 +943,14 @@ async fn get_user_status_with_auth(
     Path(user_id): Path<String>,
 ) -> impl IntoResponse {
     auth::get_user_status_handler(State(pool), Path(user_id)).await
+}
+
+/// 批量查询用户在线状态（包装认证中间件）
+async fn batch_get_presence_with_auth(
+    State(pool): State<PgPool>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    auth::batch_get_presence_handler(State(pool), Query(params)).await
 }
 
 /// 获取群组成员列表（包装认证中间件）
