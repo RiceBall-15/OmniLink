@@ -384,6 +384,9 @@ pub async fn get_dashboard(
             "system": {
                 "uptime_seconds": system.uptime_seconds,
                 "database_size": system.database_size,
+                "memory": system.memory,
+                "cpu": system.cpu,
+                "disk": system.disk,
             },
         }))),
     )

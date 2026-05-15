@@ -304,6 +304,133 @@ pub struct SystemStats {
     pub database_size: Option<String>,
     pub total_tables: i64,
     pub uptime_seconds: i64,
+    pub memory: MemoryInfo,
+    pub cpu: CpuInfo,
+    pub disk: DiskInfo,
+}
+
+/// 内存信息
+#[derive(Debug, serde::Serialize)]
+pub struct MemoryInfo {
+    pub total_mb: u64,
+    pub used_mb: u64,
+    pub available_mb: u64,
+    pub usage_percent: f64,
+}
+
+/// CPU 信息
+#[derive(Debug, serde::Serialize)]
+pub struct CpuInfo {
+    pub cores: u32,
+    pub load_avg_1m: f64,
+    pub load_avg_5m: f64,
+    pub load_avg_15m: f64,
+}
+
+/// 磁盘信息
+#[derive(Debug, serde::Serialize)]
+pub struct DiskInfo {
+    pub total_gb: f64,
+    pub used_gb: f64,
+    pub available_gb: f64,
+    pub usage_percent: f64,
+}
+
+/// 读取 /proc/meminfo 获取内存信息
+fn read_memory_info() -> MemoryInfo {
+    let content = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+    let mut total_kb: u64 = 0;
+    let mut available_kb: u64 = 0;
+
+    for line in content.lines() {
+        if line.starts_with("MemTotal:") {
+            total_kb = line.split_whitespace().nth(1)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+        } else if line.starts_with("MemAvailable:") {
+            available_kb = line.split_whitespace().nth(1)
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+        }
+    }
+
+    let total_mb = total_kb / 1024;
+    let available_mb = available_kb / 1024;
+    let used_mb = total_mb.saturating_sub(available_mb);
+    let usage_percent = if total_mb > 0 {
+        (used_mb as f64 / total_mb as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    MemoryInfo {
+        total_mb,
+        used_mb,
+        available_mb,
+        usage_percent: (usage_percent * 100.0).round() / 100.0,
+    }
+}
+
+/// 读取 /proc/loadavg 获取 CPU 负载信息
+fn read_cpu_info() -> CpuInfo {
+    let load_content = std::fs::read_to_string("/proc/loadavg").unwrap_or_default();
+    let parts: Vec<&str> = load_content.split_whitespace().collect();
+
+    let load_1m = parts.first().and_then(|s| s.parse().ok()).unwrap_or(0.0);
+    let load_5m = parts.get(1).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+    let load_15m = parts.get(2).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+
+    // 获取 CPU 核心数
+    let cores = std::thread::available_parallelism()
+        .map(|p| p.get() as u32)
+        .unwrap_or(1);
+
+    CpuInfo {
+        cores,
+        load_avg_1m: load_1m,
+        load_avg_5m: load_5m,
+        load_avg_15m: load_15m,
+    }
+}
+
+/// 读取磁盘使用信息
+fn read_disk_info() -> DiskInfo {
+    // 读取根分区使用情况
+    let output = std::process::Command::new("df")
+        .args(["-B1", "/"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .unwrap_or_default();
+
+    let mut total: u64 = 0;
+    let mut used: u64 = 0;
+    let mut available: u64 = 0;
+
+    for line in output.lines().skip(1) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 4 {
+            total = parts[1].parse().unwrap_or(0);
+            used = parts[2].parse().unwrap_or(0);
+            available = parts[3].parse().unwrap_or(0);
+        }
+    }
+
+    let total_gb = total as f64 / (1024.0 * 1024.0 * 1024.0);
+    let used_gb = used as f64 / (1024.0 * 1024.0 * 1024.0);
+    let available_gb = available as f64 / (1024.0 * 1024.0 * 1024.0);
+    let usage_percent = if total > 0 {
+        (used as f64 / total as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    DiskInfo {
+        total_gb: (total_gb * 100.0).round() / 100.0,
+        used_gb: (used_gb * 100.0).round() / 100.0,
+        available_gb: (available_gb * 100.0).round() / 100.0,
+        usage_percent: (usage_percent * 100.0).round() / 100.0,
+    }
 }
 
 /// 获取系统统计信息（不依赖数据库的静态信息）
@@ -317,5 +444,8 @@ pub fn get_system_stats() -> SystemStats {
         database_size: None, // 需要超级用户权限查询
         total_tables: 0,
         uptime_seconds: uptime,
+        memory: read_memory_info(),
+        cpu: read_cpu_info(),
+        disk: read_disk_info(),
     }
 }
