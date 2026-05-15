@@ -378,7 +378,7 @@
 - [x] 屏幕阅读器测试
 - [x] 高对比度模式
 
-#### 80. 前端测试覆盖 ⏳
+#### 80. 前端测试覆盖 ✅
 - [x] 组件单元测试（Button, Input, Modal, Toast, VirtualScroll, LazyImage）
 - [x] 服务层测试（API service, notificationService）
 - [x] 类型定义测试（message, user types, enums）
