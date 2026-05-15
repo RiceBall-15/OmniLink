@@ -5,6 +5,7 @@ use uuid::Uuid;
 use chrono::Utc;
 use redis::aio::ConnectionManager;
 use redis::AsyncCommands;
+use crate::presence_channel::PresenceChannel;
 
 /// 用户状态
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -49,7 +50,7 @@ pub struct StatusChangeEvent {
 pub type StatusChangeListener = Arc<dyn Fn(StatusChangeEvent) + Send + Sync + 'static>;
 
 /// 在线状态管理器
-/// 支持 Redis 持久化 + 内存缓存
+/// 支持 Redis 持久化 + 内存缓存 + 跨实例 Pub/Sub 同步
 #[derive(Clone)]
 pub struct OnlineStatusManager {
     /// 内存缓存（快速读取）
@@ -58,6 +59,8 @@ pub struct OnlineStatusManager {
     redis: Option<ConnectionManager>,
     /// 状态变更监听器
     listeners: Arc<RwLock<Vec<StatusChangeListener>>>,
+    /// 跨实例 Presence 通道（可选）
+    presence: Option<Arc<PresenceChannel>>,
 }
 
 impl OnlineStatusManager {
@@ -66,6 +69,7 @@ impl OnlineStatusManager {
             statuses: Arc::new(RwLock::new(HashMap::new())),
             redis: None,
             listeners: Arc::new(RwLock::new(Vec::new())),
+            presence: None,
         }
     }
 
@@ -75,6 +79,17 @@ impl OnlineStatusManager {
             statuses: Arc::new(RwLock::new(HashMap::new())),
             redis: Some(redis),
             listeners: Arc::new(RwLock::new(Vec::new())),
+            presence: None,
+        }
+    }
+
+    /// 创建带 Redis + 跨实例 Presence 的实例
+    pub fn with_presence(redis: ConnectionManager, presence: Arc<PresenceChannel>) -> Self {
+        Self {
+            statuses: Arc::new(RwLock::new(HashMap::new())),
+            redis: Some(redis),
+            listeners: Arc::new(RwLock::new(Vec::new())),
+            presence: Some(presence),
         }
     }
 
@@ -124,6 +139,11 @@ impl OnlineStatusManager {
         }
 
         tracing::info!("User {} is now online", user_id);
+
+        // 跨实例广播上线事件
+        if let Some(ref presence) = self.presence {
+            presence.publish_online(user_id, device_info).await;
+        }
 
         // 通知状态变更
         self.notify_change(StatusChangeEvent {
@@ -178,6 +198,11 @@ impl OnlineStatusManager {
         }
 
         tracing::info!("User {} is now offline", user_id);
+
+        // 跨实例广播下线事件
+        if let Some(ref presence) = self.presence {
+            presence.publish_offline(user_id).await;
+        }
 
         // 通知状态变更
         self.notify_change(StatusChangeEvent {
