@@ -909,9 +909,9 @@
 
 ## V2.3：企业级功能扩展（2026-05-16 启动）
 
-#### 96. 用户偏好设置 API ⏳ 🔥
-- [ ] 创建 user_preferences 模型和数据库迁移
-- [ ] 实现 GET/PUT /api/users/preferences 端点
+#### 96. 用户偏好设置 API ✅ 🔥
+- [x] 创建 user_preferences 模型和数据库迁移
+- [x] 实现 GET/PUT /api/users/preferences 端点
 - [ ] 支持 JSONB 存储灵活键值对偏好
 - [ ] 添加默认偏好模板
 

@@ -23,3 +23,4 @@ pub mod feedback;
 pub mod chat_export;
 pub mod export_worker;
 pub mod user_preferences;
+pub mod webhook;

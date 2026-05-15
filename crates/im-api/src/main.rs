@@ -28,6 +28,7 @@ use im_api::handlers::quick_reply;
 use im_api::handlers::feedback;
 use im_api::handlers::chat_export;
 use im_api::handlers::user_preferences;
+use im_api::handlers::webhook as webhook_handlers;
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::security_headers::security_headers_middleware;
@@ -287,6 +288,15 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/users/preferences", delete(user_preferences::delete_preference))
             .route("/api/users/preferences/batch", put(user_preferences::batch_set_preferences))
             .route("/api/users/preferences/category/:category", delete(user_preferences::delete_category));
+
+        // Webhook 管理 API
+        let app = app
+            .route("/api/webhooks", post(webhook_handlers::create_webhook))
+            .route("/api/webhooks", get(webhook_handlers::get_webhooks))
+            .route("/api/webhooks/:id", get(webhook_handlers::get_webhook))
+            .route("/api/webhooks/:id", put(webhook_handlers::update_webhook))
+            .route("/api/webhooks/:id", delete(webhook_handlers::delete_webhook))
+            .route("/api/webhooks/:id/deliveries", get(webhook_handlers::get_deliveries));
 
     // 克隆连接池用于后台定时消息处理任务
     let bg_pool = pool.clone();
