@@ -370,9 +370,13 @@ async fn main() -> anyhow::Result<()> {
         .layer(axum::middleware::from_fn(security_headers_middleware))
         // 添加 ETag 缓存验证中间件层
         .layer(axum::middleware::from_fn(etag_middleware))
-        // 添加CORS中间件层
+        // 添加CORS中间件层（优化安全策略）
         .layer(tower_http::cors::CorsLayer::new()
-            .allow_origin(tower_http::cors::Any)
+            .allow_origin([
+                "http://localhost:3000".parse::<axum::http::HeaderValue>().unwrap(),
+                "http://localhost:8080".parse::<axum::http::HeaderValue>().unwrap(),
+                "https://omnilink.example.com".parse::<axum::http::HeaderValue>().unwrap(),
+            ])
             .allow_headers([
                 axum::http::header::AUTHORIZATION,
                 axum::http::header::ACCEPT,

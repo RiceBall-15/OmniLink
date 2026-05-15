@@ -24,6 +24,7 @@ pub mod pool_monitor;
 pub mod audit;
 pub mod config;
 pub mod log_level;
+pub mod validation;
 
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};
