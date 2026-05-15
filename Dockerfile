@@ -4,7 +4,7 @@
 # ============================================
 # 阶段 1: 构建 Rust 后端
 # ============================================
-FROM rust:1.75-slim as backend-builder
+FROM rust:1.85-slim AS backend-builder
 
 WORKDIR /app
 
@@ -23,6 +23,7 @@ ENV CARGO_BUILD_JOBS=2
 # 复制 Cargo 配置和清单文件
 COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
+COPY .cargo/ .cargo/
 
 # 构建后端服务
 RUN cargo build --release --bin im-api && \
@@ -32,18 +33,18 @@ RUN cargo build --release --bin im-api && \
 # ============================================
 # 阶段 2: 构建前端
 # ============================================
-FROM node:20-alpine as frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
 # 复制 package.json 和 lock 文件
-COPY frontend/package.json frontend/package-lock.json ./
+COPY frontend/web/package.json frontend/web/package-lock.json ./
 
 # 安装依赖
 RUN npm ci
 
 # 复制源代码
-COPY frontend/ .
+COPY frontend/web/ .
 
 # 构建前端
 RUN npm run build

@@ -1,59 +1,45 @@
-# Git
-.git
-.gitignore
-
-# IDE
-.idea
-.vscode
+# OmniLink
 *.swp
 *.swo
-
-# OS
+*~
 .DS_Store
-Thumbs.db
 
-# Rust
+# Rust build artifacts
 target/
 **/*.rs.bk
 
-# Node
+# Node modules
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+frontend/web/node_modules/
 
-# Build artifacts
-build/
-dist/
-
-# Environment
+# Environment files
 .env
 .env.local
-.env.*.local
+.env.production
 
-# Documentation
-docs/
-*.md
-!README.md
+# IDE
+.idea/
+.vscode/
+*.iml
 
-# Tests
-tests/
-benchmarks/
-!tests/integration/
+# Build output
+frontend/web/build/
+frontend/web/dist/
 
-# CI/CD
-.github/
-.gitlab-ci.yml
-
-# Docker
-Dockerfile
-docker-compose.yml
-.dockerignore
+# Docker volumes (local dev)
+postgres_data/
+redis_data/
+minio_data/
 
 # Logs
-logs/
 *.log
+logs/
 
 # Temporary files
 tmp/
 temp/
+
+# Test coverage
+coverage/
+*.profraw
+*.profdata

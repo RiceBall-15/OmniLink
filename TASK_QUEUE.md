@@ -1030,12 +1030,12 @@
 - [ ] 添加覆盖率 badge
 - [ ] 设置最低覆盖率阈值
 
-#### 113. Cargo 依赖审计与更新 ⏳
-- [ ] 运行 cargo audit 检查安全漏洞
-- [ ] 更新过时依赖（cargo update）
-- [ ] 检查 breaking changes
+#### 113. Cargo 依赖审计与更新 ⚠️ (2026-05-16)
+- [ ] 运行 cargo audit 检查安全漏洞（cargo-audit 安装超时，服务器资源受限）
+- [x] 检查依赖更新状态（cargo update --dry-run，36个依赖在最新兼容版本）
+- [x] 确认 sqlx-postgres 0.7.4 future-incompat 警告（需升级到 0.8）
+- [ ] 更新过时依赖（需在资源更充足的环境执行）
 - [ ] 验证编译通过
-- [ ] 更新 Cargo.lock
 
 #### 114. API 限流 Redis 后端实现 ⏳
 - [ ] 将内存限流替换为 Redis 限流
@@ -1085,19 +1085,19 @@
 
 ### Phase 6: V2.6 功能完善与优化
 
-#### 120. Docker 容器化配置 ⏳
-- [ ] 创建 Dockerfile（多阶段构建）
-- [ ] 创建 docker-compose.yml（开发环境）
-- [ ] 添加健康检查配置
-- [ ] 创建 .dockerignore
-- [ ] 添加环境变量配置
+#### 120. Docker 容器化配置 ✅ (2026-05-16)
+- [x] 创建 Dockerfile（多阶段构建：Rust后端 + Node前端 + 运行时）
+- [x] 创建 docker-compose.yml（含 PostgreSQL、Redis、MinIO、Nginx）
+- [x] 添加健康检查配置（所有服务均有 healthcheck）
+- [x] 创建 .dockerignore（排除 node_modules、target、.env 等）
+- [x] 添加环境变量配置（支持 .env 文件覆盖默认值）
 
-#### 121. CI/CD 流水线配置 ⏳
-- [ ] GitHub Actions 测试流水线
-- [ ] 构建和部署流水线
-- [ ] 代码质量检查
-- [ ] 安全扫描集成
-- [ ] 自动化发布流程
+#### 121. CI/CD 流水线配置 ✅ (2026-05-16)
+- [x] GitHub Actions 测试流水线（.github/workflows/ci.yml）
+- [x] 构建和部署流水线（Docker Buildx + 缓存）
+- [x] 代码质量检查（cargo fmt、clippy、npm lint）
+- [x] 安全扫描集成（cargo audit、npm audit）
+- [x] 自动化发布流程（预留 deploy job，条件触发）
 
 #### 122. 监控与告警配置 ⏳
 - [ ] Prometheus 指标暴露
@@ -1106,16 +1106,17 @@
 - [ ] 日志聚合配置
 - [ ] 分布式追踪集成
 
-#### 123. 部署文档与运维手册 ⏳
-- [ ] 部署指南（单机/集群）
-- [ ] 运维手册
-- [ ] 故障排查指南
-- [ ] 性能调优指南
-- [ ] 备份恢复流程
+#### 123. 部署文档与运维手册 ✅ (2026-05-16)
+- [x] 部署指南（Docker Compose / 单机 / 集群三种方式）
+- [x] 运维手册（systemd 服务配置、Nginx 反向代理）
+- [x] 故障排查指南（常见问题表 + 日志查看方法）
+- [x] 性能调优指南（PostgreSQL、Redis、内核参数）
+- [x] 备份恢复流程（数据库 + MinIO 备份脚本）
 
-#### 124. 代码质量改进 ⏳
-- [ ] 修复所有编译警告
+#### 124. 代码质量改进 🔄 (2026-05-16)
+- [x] 修复 validation.rs 正则转义错误
+- [x] 修复 base64 弃用 API 调用
+- [x] 移除未使用的导入（Duration）
+- [x] 添加缺失的依赖（integration tests: base64）
 - [ ] 统一错误处理模式
 - [ ] 代码注释完善
-- [ ] 模块依赖优化
-- [ ] 性能热点优化
