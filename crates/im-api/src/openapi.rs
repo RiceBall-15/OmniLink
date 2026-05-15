@@ -22,12 +22,15 @@ use utoipa::OpenApi;
         crate::handlers::conversation::toggle_pin,
         crate::handlers::conversation::toggle_mute,
         crate::handlers::conversation::toggle_archive,
-        // 加密
-        crate::handlers::encryption::generate_keys,
-        crate::handlers::encryption::encrypt_message,
-        crate::handlers::encryption::decrypt_message,
-        crate::handlers::encryption::key_exchange,
-        crate::handlers::encryption::get_encrypted_messages,
+       // 加密
+       crate::handlers::encryption::generate_keys,
+       crate::handlers::encryption::encrypt_message,
+       crate::handlers::encryption::decrypt_message,
+       crate::handlers::encryption::key_exchange,
+       crate::handlers::encryption::get_encrypted_messages,
+        crate::handlers::encryption::register_public_key,
+        crate::handlers::encryption::get_user_public_key,
+        crate::handlers::encryption::batch_get_public_keys,
         // 健康检查
         crate::handlers::health::health_check_with_deps,
         // 联系人
