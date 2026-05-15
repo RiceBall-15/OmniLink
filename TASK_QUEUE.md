@@ -974,7 +974,7 @@
 - [x] 批量获取引用消息（get_quoted_messages_batch 避免 N+1 查询）
 - [x] 集成到 get_messages、send_message、search_messages 等 handler
 - [x] 支持嵌套引用展示（最多3层嵌套，深度限制递归）
-- [ ] 通知被引用消息的发送者
+- [x] 通知被引用消息的发送者（WebSocket QuoteReply 通知）
 
 #### 106. 文件上传服务完善 ✅
 - [x] MinIO 客户端配置和连接（已有 MinioStorage 完整实现，含 ensure_bucket、CRUD 操作）
