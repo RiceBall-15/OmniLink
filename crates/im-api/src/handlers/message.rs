@@ -2368,6 +2368,84 @@ pub async fn get_all_drafts_handler(
     }
 }
 
+/// 批量草稿同步请求
+#[derive(Debug, Deserialize)]
+pub struct BatchDraftSyncQuery {
+    /// 最后同步时间（ISO 8601格式）
+    #[serde(rename = "lastSyncAt")]
+    pub last_sync_at: Option<String>,
+}
+
+/// 批量草稿同步处理
+pub async fn batch_draft_sync_handler(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<crate::models::message::BatchDraftSyncRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_uuid = match auth.user_id.parse::<Uuid>() {
+        Ok(uuid) => uuid,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    let mut synced_drafts = Vec::new();
+    let mut errors = Vec::new();
+
+    for (index, draft_item) in req.drafts.iter().enumerate() {
+        let conv_uuid = match draft_item.conversation_id.parse::<Uuid>() {
+            Ok(uuid) => uuid,
+            Err(_) => {
+                errors.push(serde_json::json!({
+                    "index": index,
+                    "conversationId": draft_item.conversation_id,
+                    "error": "无效的会话ID"
+                }));
+                continue;
+            }
+        };
+
+        let reply_to_uuid = draft_item.reply_to.as_ref().and_then(|r| r.parse::<Uuid>().ok());
+        let metadata_val = draft_item.metadata.clone();
+
+        match save_draft(
+            &pool,
+            &user_uuid,
+            &conv_uuid,
+            &draft_item.content,
+            &draft_item.type_,
+            reply_to_uuid.as_ref(),
+            metadata_val.as_ref(),
+        )
+        .await
+        {
+            Ok(draft) => {
+                synced_drafts.push(draft.to_draft_info());
+            }
+            Err(e) => {
+                errors.push(serde_json::json!({
+                    "index": index,
+                    "conversationId": draft_item.conversation_id,
+                    "error": format!("保存草稿失败: {}", e)
+                }));
+            }
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(ApiResponse::success(serde_json::json!({
+            "syncedDrafts": synced_drafts,
+            "syncedCount": synced_drafts.len(),
+            "errors": errors,
+            "errorCount": errors.len(),
+        }))),
+    )
+}
+
 /// 创建定时消息
 pub async fn create_scheduled_message_handler(
     State(pool): State<PgPool>,

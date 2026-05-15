@@ -150,6 +150,7 @@ async fn main() -> anyhow::Result<()> {
         // 草稿消息
         .route("/api/im/conversations/:id/draft", put(save_draft_with_auth).get(get_draft_with_auth).delete(delete_draft_with_auth))
         .route("/api/im/drafts", get(get_all_drafts_with_auth))
+        .route("/api/im/drafts/sync", post(batch_draft_sync_with_auth))
 
         // 定时消息
         .route("/api/im/messages/scheduled", post(create_scheduled_message_with_auth).get(get_scheduled_messages_with_auth))
@@ -1303,6 +1304,15 @@ async fn get_all_drafts_with_auth(
     Query(query): Query<im_api::models::message::DraftQuery>,
 ) -> impl IntoResponse {
     message::get_all_drafts_handler(State(pool), auth, Query(query)).await
+}
+
+/// 批量草稿同步
+async fn batch_draft_sync_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<im_api::models::message::BatchDraftSyncRequest>,
+) -> impl IntoResponse {
+    message::batch_draft_sync_handler(State(pool), auth, Json(req)).await
 }
 
 /// 创建定时消息

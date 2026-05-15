@@ -226,6 +226,38 @@ pub struct SaveDraftRequest {
     pub metadata: Option<JsonValue>,
 }
 
+/// 批量草稿同步请求
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct BatchDraftSyncRequest {
+    /// 草稿列表
+    pub drafts: Vec<DraftSyncItem>,
+    /// 最后同步时间（用于增量同步）
+    #[serde(rename = "lastSyncAt", skip_serializing_if = "Option::is_none")]
+    pub last_sync_at: Option<String>,
+}
+
+/// 草稿同步项
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct DraftSyncItem {
+    /// 会话ID
+    #[serde(rename = "conversationId")]
+    pub conversation_id: String,
+    /// 草稿内容
+    pub content: String,
+    /// 消息类型
+    #[serde(rename = "type", default = "default_draft_type")]
+    pub type_: String,
+    /// 回复的消息ID
+    #[serde(rename = "replyTo", skip_serializing_if = "Option::is_none")]
+    pub reply_to: Option<String>,
+    /// 元数据
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<JsonValue>,
+    /// 客户端更新时间（用于冲突解决）
+    #[serde(rename = "clientUpdatedAt")]
+    pub client_updated_at: String,
+}
+
 fn default_draft_type() -> String { "text".to_string() }
 
 fn default_message_type() -> MessageType { MessageType::Text }
