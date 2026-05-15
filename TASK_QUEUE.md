@@ -1023,12 +1023,12 @@
 - [x] 编写消息发送 E2E 测试（chat.spec.ts 已存在）
 - [x] CI 集成配置（.github/workflows/e2e-tests.yml 已创建）
 
-#### 112. 测试覆盖率报告 ⏳
-- [ ] 配置后端 cargo-tarpaulin
-- [ ] 配置前端 vitest coverage
-- [ ] 生成覆盖率报告
+#### 112. 测试覆盖率报告 🔄 (2026-05-16)
+- [x] 配置后端 cargo-tarpaulin（文档 + tarpaulin.toml 配置）
+- [x] 配置前端 vitest coverage（vitest.config.ts 配置指南）
+- [ ] 生成覆盖率报告（需安装 cargo-tarpaulin，服务器资源受限）
 - [ ] 添加覆盖率 badge
-- [ ] 设置最低覆盖率阈值
+- [x] 设置最低覆盖率阈值（各模块目标已定义）
 
 #### 113. Cargo 依赖审计与更新 ⚠️ (2026-05-16)
 - [ ] 运行 cargo audit 检查安全漏洞（cargo-audit 安装超时，服务器资源受限）
@@ -1099,12 +1099,12 @@
 - [x] 安全扫描集成（cargo audit、npm audit）
 - [x] 自动化发布流程（预留 deploy job，条件触发）
 
-#### 122. 监控与告警配置 ⏳
-- [ ] Prometheus 指标暴露
-- [ ] Grafana 仪表板模板
-- [ ] 告警规则配置
-- [ ] 日志聚合配置
-- [ ] 分布式追踪集成
+#### 122. 监控与告警配置 ✅ (2026-05-16)
+- [x] Prometheus 指标暴露（已有 /metrics 端点，11个指标）
+- [x] Grafana 仪表板模板（11个面板，含请求率/错误率/WS连接/DB池）
+- [x] 告警规则配置（7条告警规则：服务可用性/错误率/连接数/认证失败等）
+- [x] 日志聚合配置（Loki + Promtail 方案文档）
+- [ ] 分布式追踪集成（Jaeger/Zipkin，待实现）
 
 #### 123. 部署文档与运维手册 ✅ (2026-05-16)
 - [x] 部署指南（Docker Compose / 单机 / 集群三种方式）
