@@ -34,6 +34,18 @@ use crate::db::message::{get_last_message, get_last_messages_batch};
 use crate::db::conversation::get_conversation_tags_batch;
 use crate::db::conversation::get_user_unread_counts_batch;
 
+
+/// 安全序列化为 JSON Value，避免 unwrap 导致 panic
+fn to_json_value<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
+    serde_json::to_value(value).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("SERIALIZATION_FAILED", format!("数据序列化失败: {}", e))),
+        )
+    })
+}
+
+
 /// 获取用户的会话列表
 #[utoipa::path(
     get,
@@ -122,7 +134,10 @@ pub async fn get_conversations(
                     })
                     .unwrap_or_default();
 
-                let mut conv_json = serde_json::to_value(&conversation).unwrap();
+                let mut conv_json = match to_json_value(&conversation) {
+                Ok(v) => v,
+                Err(e) => return e,
+            };
                 conv_json["tags"] = serde_json::json!(tags);
                 conversations.push(conv_json);
             }
@@ -206,13 +221,24 @@ pub async fn create_conversation_handler(
 
     // 对于直接会话，检查是否已存在
     if req.type_ == ConversationType::Direct && participant_ids.len() == 2 {
-        let other_user_id = participant_ids.iter().find(|&&id| id != user_uuid).unwrap();
+        let other_user_id = match participant_ids.iter().find(|&&id| id != user_uuid) {
+            Some(id) => id,
+            None => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::error("INVALID_PARTICIPANTS", "直接会话需要两个不同的参与者")),
+                );
+            }
+        };
         match crate::db::conversation::find_or_create_direct_conversation(&pool, &user_uuid, other_user_id).await {
             Ok(existing_conv) => {
                 let conversation = existing_conv.to_conversation();
                 return (
                     StatusCode::OK,
-                    Json(ApiResponse::success(serde_json::to_value(conversation).unwrap())),
+                    match to_json_value(&conversation) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
                 );
             }
             Err(e) => {
@@ -268,7 +294,10 @@ pub async fn create_conversation_handler(
             let conversation = conv_entity.to_conversation();
             (
                 StatusCode::CREATED,
-                Json(ApiResponse::success(serde_json::to_value(conversation).unwrap())),
+                match to_json_value(&conversation) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => (
@@ -762,7 +791,10 @@ pub async fn toggle_pin(
             let conversation = conv.to_conversation();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(conversation).unwrap())),
+                match to_json_value(&conversation) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => (
@@ -833,7 +865,10 @@ pub async fn toggle_mute(
             let conversation = conv.to_conversation();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(conversation).unwrap())),
+                match to_json_value(&conversation) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => (
@@ -904,7 +939,10 @@ pub async fn toggle_archive(
             let conversation = conv.to_conversation();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(conversation).unwrap())),
+                match to_json_value(&conversation) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => (
@@ -1482,7 +1520,10 @@ pub async fn get_notification_settings(
             let response = NotificationPreferenceResponse::from(pref);
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(response).unwrap())),
+                match to_json_value(&response) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Ok(None) => {
@@ -1633,7 +1674,10 @@ pub async fn get_global_notification_settings(
             let response = GlobalNotificationResponse::from(settings);
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(response).unwrap())),
+                match to_json_value(&response) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Ok(None) => {

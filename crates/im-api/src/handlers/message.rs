@@ -24,6 +24,18 @@ use crate::models::message::{Message, SendMessageRequest, EditMessageRequest, Cr
 use crate::db::message::{create_message, get_messages_by_conversation, get_message_by_id, update_message_content, recall_message, mark_conversation_as_read, can_edit_message, can_recall_message, get_quoted_messages_batch};
 use crate::middleware::auth::AuthUser;
 
+
+/// 安全序列化为 JSON Value，避免 unwrap 导致 panic
+fn to_json_value<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
+    serde_json::to_value(value).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("SERIALIZATION_FAILED", format!("数据序列化失败: {}", e))),
+        )
+    })
+}
+
+
 /// 获取会话的消息列表（分页）
 #[derive(Debug, Deserialize)]
 pub struct GetMessagesQuery {
@@ -120,7 +132,10 @@ pub async fn get_messages(
                 .collect();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(message_list).unwrap())),
+                match to_json_value(&message_list) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => (
@@ -253,7 +268,10 @@ pub async fn send_message(
 
             (
                 StatusCode::CREATED,
-                Json(ApiResponse::success(serde_json::to_value(message).unwrap())),
+                match to_json_value(&message) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => (
@@ -347,7 +365,10 @@ pub async fn edit_message(
             let message = updated.to_message();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(message).unwrap())),
+                match to_json_value(&message) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => (
@@ -431,7 +452,10 @@ pub async fn recall_message_handler(
             let message = recalled.to_message();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(message).unwrap())),
+                match to_json_value(&message) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => (
@@ -2240,7 +2264,10 @@ pub async fn save_draft_handler(
             let info = draft.to_draft_info();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(info).unwrap())),
+                match to_json_value(&info) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => (
@@ -2281,7 +2308,10 @@ pub async fn get_draft_handler(
             let info = draft.to_draft_info();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(info).unwrap())),
+                match to_json_value(&info) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Ok(None) => (

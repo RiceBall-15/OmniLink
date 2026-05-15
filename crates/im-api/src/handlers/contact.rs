@@ -26,6 +26,18 @@ use crate::db::contact::{
 };
 use crate::middleware::auth::AuthUser;
 
+/// 安全序列化为 JSON Value
+fn to_json_value<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
+    serde_json::to_value(value).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("SERIALIZATION_FAILED", format!("数据序列化失败: {}", e))),
+        )
+    })
+}
+
+
+
 /// 联系人查询参数
 #[derive(Debug, Deserialize)]
 pub struct ContactQuery {
@@ -87,7 +99,10 @@ pub async fn add_contact_handler(
     match add_contact(&pool, &user_uuid, &contact_uuid, request.nickname).await {
         Ok(contact) => (
             StatusCode::CREATED,
-            Json(ApiResponse::success(serde_json::to_value(contact.to_contact()).unwrap())),
+            match to_json_value(&contact.to_contact()) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
         ),
         Err(e) => {
             let msg = e.to_string();
@@ -194,13 +209,19 @@ pub async fn get_contacts_handler(
             let total = count_contacts(&pool, &user_uuid).await.unwrap_or(0);
             let contact_list: Vec<Contact> = contacts.iter().map(|c| c.to_contact()).collect();
 
-            (
-                StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(ContactListResponse {
-                    contacts: contact_list,
-                    total,
-                }).unwrap())),
-            )
+            match serde_json::to_value(ContactListResponse {
+                contacts: contact_list,
+                total,
+            }) {
+                Ok(v) => (
+                    StatusCode::OK,
+                    Json(ApiResponse::success(v)),
+                ),
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiResponse::error("SERIALIZATION_FAILED", format!("数据序列化失败: {}", e))),
+                ),
+            }
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -241,7 +262,10 @@ pub async fn update_contact_handler(
     match update_contact_nickname(&pool, &user_uuid, &contact_uuid, &request.nickname).await {
         Ok(contact) => (
             StatusCode::OK,
-            Json(ApiResponse::success(serde_json::to_value(contact.to_contact()).unwrap())),
+            match to_json_value(&contact.to_contact()) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
         ),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -345,7 +369,10 @@ pub async fn get_contact_handler(
     match get_contact_by_id(&pool, &user_uuid, &contact_uuid).await {
         Ok(Some(contact)) => (
             StatusCode::OK,
-            Json(ApiResponse::success(serde_json::to_value(contact.to_contact()).unwrap())),
+            match to_json_value(&contact.to_contact()) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
         ),
         Ok(None) => (
             StatusCode::NOT_FOUND,

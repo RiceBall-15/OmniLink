@@ -8,7 +8,7 @@ use axum::{
     http::StatusCode,
 };
 use tokio::net::TcpListener;
-use tracing::info;
+use tracing::{info, warn};
 use sqlx::PgPool;
 use uuid::Uuid;
 use utoipa::OpenApi;

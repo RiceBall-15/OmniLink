@@ -130,7 +130,10 @@ mod tests {
             },
         };
 
-        let json = serde_json::to_value(&response).unwrap();
+        let json = match serde_json::to_value(&response) {
+            Ok(v) => v,
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": format!("Serialization failed: {}", e)}))),
+        };
         assert_eq!(json["status"], "healthy");
         assert_eq!(json["version"], "0.1.0");
         assert!(json["dependencies"]["database"]["response_time_ms"].is_number());

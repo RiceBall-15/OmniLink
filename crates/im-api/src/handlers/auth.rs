@@ -27,6 +27,18 @@ use crate::db::user::{
 use crate::middleware::auth::AuthUser;
 use crate::utils::jwt::generate_token;
 
+/// 安全序列化为 JSON Value，避免 unwrap 导致 panic
+fn to_json_value<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
+    serde_json::to_value(value).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("SERIALIZATION_FAILED", format!("数据序列化失败: {}", e))),
+        )
+    })
+}
+
+
+
 /// 用户注册
 #[utoipa::path(
     post,
@@ -48,7 +60,7 @@ pub async fn register(
             .field_errors()
             .iter()
             .flat_map(|(field, errors)| {
-                errors.iter().map(move |e| format!("{}: {}", field, e.message.as_ref().unwrap()))
+                errors.iter().map(move |e| format!("{}: {}", field, e.message.as_ref().map(|m| m.as_ref()).unwrap_or("")))
             })
             .collect::<Vec<_>>()
             .join("; ");
@@ -78,7 +90,10 @@ pub async fn register(
             let user = user_entity.to_user();
             (
                 StatusCode::CREATED,
-                Json(ApiResponse::success(serde_json::to_value(user).unwrap())),
+                match to_json_value(&user) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => {
@@ -119,7 +134,7 @@ pub async fn login(
             .field_errors()
             .iter()
             .flat_map(|(field, errors)| {
-                errors.iter().map(move |e| format!("{}: {}", field, e.message.as_ref().unwrap()))
+                errors.iter().map(move |e| format!("{}: {}", field, e.message.as_ref().map(|m| m.as_ref()).unwrap_or("")))
             })
             .collect::<Vec<_>>()
             .join("; ");
@@ -193,7 +208,10 @@ pub async fn get_me(
             let user = user_entity.to_user();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(user).unwrap())),
+                match to_json_value(&user) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Ok(None) => (
@@ -219,7 +237,7 @@ pub async fn update_me(
             .field_errors()
             .iter()
             .flat_map(|(field, errors)| {
-                errors.iter().map(move |e| format!("{}: {}", field, e.message.as_ref().unwrap()))
+                errors.iter().map(move |e| format!("{}: {}", field, e.message.as_ref().map(|m| m.as_ref()).unwrap_or("")))
             })
             .collect::<Vec<_>>()
             .join("; ");
@@ -245,7 +263,10 @@ pub async fn update_me(
             let user = user_entity.to_user();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(user).unwrap())),
+                match to_json_value(&user) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => {
@@ -276,7 +297,7 @@ pub async fn update_profile(
             .field_errors()
             .iter()
             .flat_map(|(field, errors)| {
-                errors.iter().map(move |e| format!("{}: {}", field, e.message.as_ref().unwrap()))
+                errors.iter().map(move |e| format!("{}: {}", field, e.message.as_ref().map(|m| m.as_ref()).unwrap_or("")))
             })
             .collect::<Vec<_>>()
             .join("; ");
@@ -292,7 +313,10 @@ pub async fn update_profile(
             let user = user_entity.to_user();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(user).unwrap())),
+                match to_json_value(&user) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => (
@@ -313,7 +337,10 @@ pub async fn get_user_profile(
             let user = user_entity.to_user();
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(user).unwrap())),
+                match to_json_value(&user) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Ok(None) => (
@@ -401,7 +428,10 @@ pub async fn get_blocked_list_handler(
             let response = BlockListResponse { blocks, total };
             (
                 StatusCode::OK,
-                Json(ApiResponse::success(serde_json::to_value(response).unwrap())),
+                match to_json_value(&response) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
             )
         }
         Err(e) => (
@@ -444,7 +474,10 @@ pub async fn check_block_status_handler(
 
     (
         StatusCode::OK,
-        Json(ApiResponse::success(serde_json::to_value(response).unwrap())),
+        match to_json_value(&response) {
+                    Ok(v) => Json(ApiResponse::success(v)),
+                    Err(e) => return e,
+                },
     )
 }
 
@@ -485,7 +518,10 @@ pub async fn get_user_status_handler(
     match get_user_status(&pool, &target_user_id).await {
         Ok(status_info) => (
             StatusCode::OK,
-            Json(ApiResponse::success(serde_json::to_value(status_info).unwrap())),
+            match to_json_value(&status_info) {
+                Ok(v) => Json(ApiResponse::success(v)),
+                Err(e) => return e,
+            },
         ),
         Err(e) => {
             if e.contains("不存在") {
