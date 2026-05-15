@@ -1016,7 +1016,7 @@
 - [x] 验证压缩配置选项
 - [ ] 性能基准测试
 
-#### 111. 前端 E2E 测试框架搭建 🔄
+#### 111. 前端 E2E 测试框架搭建 ✅ (2026-05-16)
 - [x] 安装 Playwright 或 Cypress（Playwright 已安装，含浏览器）
 - [x] 配置测试环境（playwright.config.ts 已配置）
 - [x] 编写登录流程 E2E 测试（auth.spec.ts 已存在）
@@ -1113,10 +1113,10 @@
 - [x] 性能调优指南（PostgreSQL、Redis、内核参数）
 - [x] 备份恢复流程（数据库 + MinIO 备份脚本）
 
-#### 124. 代码质量改进 🔄 (2026-05-16)
+#### 124. 代码质量改进 ✅ (2026-05-16)
 - [x] 修复 validation.rs 正则转义错误
 - [x] 修复 base64 弃用 API 调用
 - [x] 移除未使用的导入（Duration）
 - [x] 添加缺失的依赖（integration tests: base64）
-- [ ] 统一错误处理模式
-- [ ] 代码注释完善
+- [x] 统一错误处理模式（替换30+个unwrap调用为安全错误处理）
+- [x] 代码注释完善（添加to_json_value helper文档注释）
