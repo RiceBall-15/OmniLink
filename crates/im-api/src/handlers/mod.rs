@@ -27,3 +27,4 @@ pub mod webhook;
 pub mod data_retention;
 pub mod admin;
 pub mod user_activity;
+pub mod api_key;

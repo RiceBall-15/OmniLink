@@ -30,6 +30,7 @@ use im_api::handlers::chat_export;
 use im_api::handlers::user_preferences;
 use im_api::handlers::webhook as webhook_handlers;
 use im_api::handlers::data_retention;
+use im_api::handlers::api_key as api_key_handlers;
 use im_api::handlers::admin as admin_handlers;
 use im_api::handlers::user_activity as activity_handlers;
 use im_api::middleware::auth::AuthUser;
@@ -310,7 +311,10 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/admin/retention/:id", get(data_retention::get_policy))
             .route("/api/admin/retention/:id", put(data_retention::update_policy))
             .route("/api/admin/retention/:id", delete(data_retention::delete_policy))
-            .route("/api/admin/retention/cleanup", post(data_retention::run_cleanup));
+            .route("/api/admin/retention/cleanup", post(data_retention::run_cleanup))
+            .route("/api/admin/api-keys", post(api_key_handlers::create_api_key))
+            .route("/api/admin/api-keys", get(api_key_handlers::get_api_keys))
+            .route("/api/admin/api-keys/:id", delete(api_key_handlers::deactivate_api_key));
 
         // 管理员用户管理 API (Task 99)
         let app = app
