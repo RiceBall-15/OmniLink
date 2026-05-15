@@ -1616,17 +1616,35 @@ pub async fn get_pinned_messages(
 
     match pinned {
         Ok(entities) => {
+            if entities.is_empty() {
+                return (
+                    StatusCode::OK,
+                    Json(ApiResponse::success(serde_json::json!({
+                        "pinnedMessages": [],
+                        "total": 0,
+                    }))),
+                );
+            }
+
+            // 批量获取消息详情（避免 N+1 查询）
+            let message_ids: Vec<Uuid> = entities.iter().map(|e| e.message_id).collect();
+            let messages = sqlx::query_as::<_, crate::models::message::MessageEntity>(
+                "SELECT * FROM messages WHERE id = ANY($1)"
+            )
+            .bind(&message_ids)
+            .fetch_all(&pool)
+            .await;
+
+            // 构建消息 ID 到消息实体的映射
+            let msg_map: std::collections::HashMap<Uuid, crate::models::message::MessageEntity> =
+                match messages {
+                    Ok(msgs) => msgs.into_iter().map(|m| (m.id, m)).collect(),
+                    Err(_) => std::collections::HashMap::new(),
+                };
+
             let mut items: Vec<serde_json::Value> = Vec::new();
             for entity in &entities {
-                // 获取消息详情
-                let msg = sqlx::query_as::<_, crate::models::message::MessageEntity>(
-                    "SELECT * FROM messages WHERE id = $1"
-                )
-                .bind(&entity.message_id)
-                .fetch_optional(&pool)
-                .await;
-
-                if let Ok(Some(msg_entity)) = msg {
+                if let Some(msg_entity) = msg_map.get(&entity.message_id) {
                     items.push(serde_json::json!({
                         "id": entity.id.to_string(),
                         "message": msg_entity.to_message(),
