@@ -1343,6 +1343,12 @@ async fn create_global_quick_reply_with_auth(
 async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     info!("Initializing database tables...");
 
+    // 启用 pg_trgm 扩展（用于文本搜索相似度计算）
+    sqlx::query("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+        .execute(pool)
+        .await?;
+    info!("pg_trgm extension enabled");
+
     // 创建用户表
     sqlx::query(
         r#"
@@ -1698,5 +1704,37 @@ async fn init_database(pool: &PgPool) -> anyhow::Result<()> {
     .await?;
 
     info!("Quick replies table initialized successfully");
+
+    // 创建会话用户状态表（未读计数优化）
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS conversation_user_state (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL,
+            last_read_at TIMESTAMPTZ DEFAULT NOW(),
+            unread_count INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE(conversation_id, user_id)
+        );
+
+        -- 单字段索引
+        CREATE INDEX IF NOT EXISTS idx_conversation_user_state_user ON conversation_user_state(user_id);
+        CREATE INDEX IF NOT EXISTS idx_conversation_user_state_conv ON conversation_user_state(conversation_id);
+
+        -- 复合索引：优化批量未读计数查询 (user_id, conversation_id)
+        CREATE INDEX IF NOT EXISTS idx_conversation_user_state_user_conv
+            ON conversation_user_state(user_id, conversation_id);
+
+        -- 复合索引：优化未读消息会话列表查询 (user_id, unread_count)
+        CREATE INDEX IF NOT EXISTS idx_conversation_user_state_user_unread
+            ON conversation_user_state(user_id, unread_count) WHERE unread_count > 0;
+        "#
+    )
+    .execute(pool)
+    .await?;
+
+    info!("Conversation user state table initialized successfully");
     Ok(())
 }

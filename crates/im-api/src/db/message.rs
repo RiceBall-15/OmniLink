@@ -320,7 +320,14 @@ pub async fn search_messages_in_conversation(
         param_count += 1;
     }
 
-    query.push_str(&format!(" ORDER BY created_at DESC LIMIT ${} OFFSET ${}", param_count, param_count + 1));
+    // 优化排序：相关性评分（similarity）70% + 时间衰减 30%
+    // similarity() 需要 pg_trgm 扩展，如果不可用则降级为时间排序
+    query.push_str(&format!(
+        " ORDER BY (COALESCE(similarity(content, $2), 0) * 0.7 + \
+         (1.0 / (1.0 + EXTRACT(EPOCH FROM (NOW() - created_at)) / 2592000.0)) * 0.3) DESC, \
+         created_at DESC LIMIT ${} OFFSET ${}",
+        param_count, param_count + 1
+    ));
 
     let mut sql_query = sqlx::query_as::<_, MessageEntity>(&query)
         .bind(conversation_id)
@@ -395,7 +402,12 @@ pub async fn search_user_messages(
         param_count += 1;
     }
 
-    query.push_str(&format!(" ORDER BY m.created_at DESC LIMIT ${} OFFSET ${}", param_count, param_count + 1));
+    query.push_str(&format!(
+        " ORDER BY (COALESCE(similarity(m.content, $2), 0) * 0.7 + \
+         (1.0 / (1.0 + EXTRACT(EPOCH FROM (NOW() - m.created_at)) / 2592000.0)) * 0.3) DESC, \
+         m.created_at DESC LIMIT ${} OFFSET ${}",
+        param_count, param_count + 1
+    ));
 
     let mut sql_query = sqlx::query_as::<_, MessageEntity>(&query)
         .bind(user_id)
