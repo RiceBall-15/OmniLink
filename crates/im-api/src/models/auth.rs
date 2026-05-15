@@ -132,6 +132,245 @@ pub struct ApiError {
     pub message: String,
 }
 
+/// 标准化错误码枚举
+///
+/// 定义所有 API 错误的统一错误码，格式为 `EXXXX`：
+/// - E1xxx: 认证/授权错误
+/// - E2xxx: 资源错误
+/// - E3xxx: 验证/请求错误
+/// - E4xxx: 业务逻辑错误
+/// - E5xxx: 服务器内部错误
+#[derive(Debug, Clone, Copy)]
+pub enum ErrorCode {
+    // === 认证/授权错误 (E1xxx) ===
+    /// 未提供认证 token
+    Unauthorized,
+    /// token 已过期
+    TokenExpired,
+    /// token 无效
+    InvalidToken,
+    /// 无权限访问
+    Forbidden,
+
+    // === 资源错误 (E2xxx) ===
+    /// 资源不存在
+    NotFound,
+    /// 资源已存在（冲突）
+    Conflict,
+    /// 资源已被删除
+    Gone,
+
+    // === 验证/请求错误 (E3xxx) ===
+    /// 请求参数验证失败
+    ValidationFailed,
+    /// 请求体 JSON 解析失败
+    InvalidJson,
+    /// 请求方法不允许
+    MethodNotAllowed,
+    /// 请求过于频繁
+    RateLimited,
+    /// 请求体过大
+    PayloadTooLarge,
+
+    // === 业务逻辑错误 (E4xxx) ===
+    /// 用户名已存在
+    UsernameTaken,
+    /// 邮箱已注册
+    EmailTaken,
+    /// 密码错误
+    WrongPassword,
+    /// 账号已禁用
+    AccountDisabled,
+    /// 消息发送失败
+    MessageSendFailed,
+    /// 消息不可编辑
+    MessageNotEditable,
+    /// 消息不可撤回
+    MessageNotRecallable,
+    /// 会话不存在
+    ConversationNotFound,
+    /// 文件上传失败
+    FileUploadFailed,
+    /// 文件类型不支持
+    UnsupportedFileType,
+    /// 操作频率限制
+    OperationRateLimited,
+
+    // === 服务器内部错误 (E5xxx) ===
+    /// 内部服务器错误
+    InternalError,
+    /// 数据库错误
+    DatabaseError,
+    /// 外部服务错误
+    ExternalServiceError,
+    /// 配置错误
+    ConfigurationError,
+}
+
+impl ErrorCode {
+    /// 获取错误码字符串
+    pub fn code_str(&self) -> &'static str {
+        match self {
+            // 认证/授权错误
+            ErrorCode::Unauthorized => "E1001",
+            ErrorCode::TokenExpired => "E1002",
+            ErrorCode::InvalidToken => "E1003",
+            ErrorCode::Forbidden => "E1004",
+
+            // 资源错误
+            ErrorCode::NotFound => "E2001",
+            ErrorCode::Conflict => "E2002",
+            ErrorCode::Gone => "E2003",
+
+            // 验证/请求错误
+            ErrorCode::ValidationFailed => "E3001",
+            ErrorCode::InvalidJson => "E3002",
+            ErrorCode::MethodNotAllowed => "E3003",
+            ErrorCode::RateLimited => "E3004",
+            ErrorCode::PayloadTooLarge => "E3005",
+
+            // 业务逻辑错误
+            ErrorCode::UsernameTaken => "E4001",
+            ErrorCode::EmailTaken => "E4002",
+            ErrorCode::WrongPassword => "E4003",
+            ErrorCode::AccountDisabled => "E4004",
+            ErrorCode::MessageSendFailed => "E4005",
+            ErrorCode::MessageNotEditable => "E4006",
+            ErrorCode::MessageNotRecallable => "E4007",
+            ErrorCode::ConversationNotFound => "E4008",
+            ErrorCode::FileUploadFailed => "E4009",
+            ErrorCode::UnsupportedFileType => "E4010",
+            ErrorCode::OperationRateLimited => "E4011",
+
+            // 服务器内部错误
+            ErrorCode::InternalError => "E5001",
+            ErrorCode::DatabaseError => "E5002",
+            ErrorCode::ExternalServiceError => "E5003",
+            ErrorCode::ConfigurationError => "E5004",
+        }
+    }
+
+    /// 获取错误类型
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            ErrorCode::Unauthorized
+            | ErrorCode::TokenExpired
+            | ErrorCode::InvalidToken
+            | ErrorCode::Forbidden => "auth",
+
+            ErrorCode::NotFound
+            | ErrorCode::Conflict
+            | ErrorCode::Gone => "resource",
+
+            ErrorCode::ValidationFailed
+            | ErrorCode::InvalidJson
+            | ErrorCode::MethodNotAllowed
+            | ErrorCode::RateLimited
+            | ErrorCode::PayloadTooLarge => "validation",
+
+            ErrorCode::UsernameTaken
+            | ErrorCode::EmailTaken
+            | ErrorCode::WrongPassword
+            | ErrorCode::AccountDisabled
+            | ErrorCode::MessageSendFailed
+            | ErrorCode::MessageNotEditable
+            | ErrorCode::MessageNotRecallable
+            | ErrorCode::ConversationNotFound
+            | ErrorCode::FileUploadFailed
+            | ErrorCode::UnsupportedFileType
+            | ErrorCode::OperationRateLimited => "business",
+
+            ErrorCode::InternalError
+            | ErrorCode::DatabaseError
+            | ErrorCode::ExternalServiceError
+            | ErrorCode::ConfigurationError => "internal",
+        }
+    }
+
+    /// 获取默认错误消息（中文）
+    pub fn default_message(&self) -> &'static str {
+        match self {
+            ErrorCode::Unauthorized => "未提供认证凭据",
+            ErrorCode::TokenExpired => "认证 token 已过期",
+            ErrorCode::InvalidToken => "无效的认证 token",
+            ErrorCode::Forbidden => "无权限访问该资源",
+            ErrorCode::NotFound => "请求的资源不存在",
+            ErrorCode::Conflict => "资源已存在",
+            ErrorCode::Gone => "资源已被删除",
+            ErrorCode::ValidationFailed => "请求参数验证失败",
+            ErrorCode::InvalidJson => "请求体 JSON 格式错误",
+            ErrorCode::MethodNotAllowed => "不支持的请求方法",
+            ErrorCode::RateLimited => "请求过于频繁，请稍后重试",
+            ErrorCode::PayloadTooLarge => "请求体过大",
+            ErrorCode::UsernameTaken => "用户名已被占用",
+            ErrorCode::EmailTaken => "邮箱已注册",
+            ErrorCode::WrongPassword => "密码错误",
+            ErrorCode::AccountDisabled => "账号已被禁用",
+            ErrorCode::MessageSendFailed => "消息发送失败",
+            ErrorCode::MessageNotEditable => "该消息不可编辑",
+            ErrorCode::MessageNotRecallable => "该消息不可撤回",
+            ErrorCode::ConversationNotFound => "会话不存在",
+            ErrorCode::FileUploadFailed => "文件上传失败",
+            ErrorCode::UnsupportedFileType => "不支持的文件类型",
+            ErrorCode::OperationRateLimited => "操作过于频繁，请稍后重试",
+            ErrorCode::InternalError => "内部服务器错误",
+            ErrorCode::DatabaseError => "数据库操作失败",
+            ErrorCode::ExternalServiceError => "外部服务调用失败",
+            ErrorCode::ConfigurationError => "服务器配置错误",
+        }
+    }
+
+    /// 获取对应的 HTTP 状态码
+    pub fn status_code(&self) -> axum::http::StatusCode {
+        use axum::http::StatusCode;
+        match self {
+            ErrorCode::Unauthorized
+            | ErrorCode::TokenExpired
+            | ErrorCode::InvalidToken => StatusCode::UNAUTHORIZED,
+            ErrorCode::Forbidden => StatusCode::FORBIDDEN,
+            ErrorCode::NotFound
+            | ErrorCode::ConversationNotFound => StatusCode::NOT_FOUND,
+            ErrorCode::Conflict
+            | ErrorCode::UsernameTaken
+            | ErrorCode::EmailTaken => StatusCode::CONFLICT,
+            ErrorCode::Gone => StatusCode::GONE,
+            ErrorCode::ValidationFailed
+            | ErrorCode::InvalidJson
+            | ErrorCode::WrongPassword
+            | ErrorCode::MessageNotEditable
+            | ErrorCode::MessageNotRecallable
+            | ErrorCode::UnsupportedFileType => StatusCode::BAD_REQUEST,
+            ErrorCode::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
+            ErrorCode::RateLimited
+            | ErrorCode::OperationRateLimited => StatusCode::TOO_MANY_REQUESTS,
+            ErrorCode::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+            ErrorCode::AccountDisabled => StatusCode::FORBIDDEN,
+            ErrorCode::MessageSendFailed
+            | ErrorCode::FileUploadFailed
+            | ErrorCode::InternalError
+            | ErrorCode::DatabaseError
+            | ErrorCode::ExternalServiceError
+            | ErrorCode::ConfigurationError => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    /// 创建 ApiError 实例（使用默认消息）
+    pub fn to_api_error(&self) -> ApiError {
+        ApiError {
+            code: self.code_str().to_string(),
+            message: self.default_message().to_string(),
+        }
+    }
+
+    /// 创建 ApiError 实例（使用自定义消息）
+    pub fn to_api_error_with_message(&self, message: impl Into<String>) -> ApiError {
+        ApiError {
+            code: self.code_str().to_string(),
+            message: message.into(),
+        }
+    }
+}
+
 impl<T> ApiResponse<T> {
     /// 成功响应
     pub fn success(data: T) -> Self {
@@ -151,6 +390,27 @@ impl<T> ApiResponse<T> {
                 code: code.into(),
                 message: message.into(),
             }),
+        }
+    }
+
+    /// 使用标准化错误码创建错误响应
+    pub fn error_with_code(error_code: ErrorCode) -> Self {
+        ApiResponse {
+            success: false,
+            data: None,
+            error: Some(error_code.to_api_error()),
+        }
+    }
+
+    /// 使用标准化错误码和自定义消息创建错误响应
+    pub fn error_with_code_and_message(
+        error_code: ErrorCode,
+        message: impl Into<String>,
+    ) -> Self {
+        ApiResponse {
+            success: false,
+            data: None,
+            error: Some(error_code.to_api_error_with_message(message)),
         }
     }
 }

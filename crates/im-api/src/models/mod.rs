@@ -13,4 +13,4 @@ pub mod quick_reply;
 pub mod feedback;
 pub mod chat_export;
 
-pub use auth::{ApiResponse, ApiError};
+pub use auth::{ApiResponse, ApiError, ErrorCode};
