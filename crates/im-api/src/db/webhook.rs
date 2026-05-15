@@ -76,7 +76,7 @@ pub async fn update_webhook(
     webhook_id: Uuid,
     user_id: Uuid,
     url: Option<&str>,
-    secret: Option<&str>,
+    _secret: Option<&str>,
     events: Option<&[String]>,
     _description: Option<&str>,
     is_active: Option<bool>,
