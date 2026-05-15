@@ -1,0 +1,38 @@
+# Tarpaulin 代码覆盖率配置
+# https://github.com/xd009642/tarpaulin
+
+[default]
+# 排除的目录/文件
+exclude = [
+    "target",
+    "tests",
+    "benches",
+    "examples",
+    "frontend",
+    "migrations"
+]
+
+# 输出格式
+out = ["Html", "Xml", "Lcov"]
+output_dir = "target/coverage"
+
+# 测试超时（秒）
+timeout = 300
+
+# 跳过不可达代码
+skip-clean = false
+
+# 使用 cargo test 的特性
+features = []
+
+# 排除的包
+packages = [
+    "omnilink-benchmarks"
+]
+
+[report]
+# 报告阈值
+fail-under = 50
+
+# 输出目录
+output-dir = "target/coverage"

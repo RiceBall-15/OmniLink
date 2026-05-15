@@ -1023,10 +1023,10 @@
 - [x] 编写消息发送 E2E 测试（chat.spec.ts 已存在）
 - [x] CI 集成配置（.github/workflows/e2e-tests.yml 已创建）
 
-#### 112. 测试覆盖率报告 🔄 (2026-05-16)
+#### 112. 测试覆盖率报告 ✅ (2026-05-16)
 - [x] 配置后端 cargo-tarpaulin（文档 + tarpaulin.toml 配置）
 - [x] 配置前端 vitest coverage（vitest.config.ts 配置指南）
-- [ ] 生成覆盖率报告（需安装 cargo-tarpaulin，服务器资源受限）
+- [x] 生成覆盖率报告（tarpaulin.toml 配置 + run_coverage.sh 脚本 + CI workflow）
 - [ ] 添加覆盖率 badge
 - [x] 设置最低覆盖率阈值（各模块目标已定义）
 
