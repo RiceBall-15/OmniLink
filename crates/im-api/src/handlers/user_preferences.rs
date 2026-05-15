@@ -12,8 +12,8 @@ use crate::db::user_preferences;
 use crate::middleware::auth::AuthUser;
 use crate::models::auth::ApiResponse;
 use crate::models::user_preferences::{
-    AllPreferencesResponse, BatchSetPreferenceRequest, PreferenceQuery, SetPreferenceRequest,
-    UserPreference,
+    AllPreferencesResponse, BatchSetPreferenceRequest, DefaultTemplatesResponse, PreferenceQuery,
+    SetPreferenceRequest, UserPreference, get_default_templates,
 };
 
 /// 获取当前用户的所有偏好设置
@@ -304,4 +304,80 @@ pub async fn delete_category(
             "category": category
         }))),
     ))
+}
+
+/// 获取系统默认偏好模板列表
+#[utoipa::path(
+    get,
+    path = "/api/preferences/templates",
+    tag = "偏好设置",
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<DefaultTemplatesResponse>),
+    ),
+    security(("bearer" = []))
+)]
+pub async fn get_templates() -> (StatusCode, Json<ApiResponse<DefaultTemplatesResponse>>) {
+    let templates = get_default_templates();
+    let total = templates.len();
+    (
+        StatusCode::OK,
+        Json(ApiResponse::success(DefaultTemplatesResponse {
+            templates,
+            total_count: total,
+        })),
+    )
+}
+
+/// 应用默认偏好模板（仅设置用户尚未设置的偏好）
+#[utoipa::path(
+    post,
+    path = "/api/preferences/templates/apply",
+    tag = "偏好设置",
+    responses(
+        (status = 200, description = "应用成功", body = ApiResponse<serde_json::Value>),
+    ),
+    security(("bearer" = []))
+)]
+pub async fn apply_templates(
+    auth: AuthUser,
+    State(pool): State<PgPool>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let user_id = auth.user_id;
+    let templates = get_default_templates();
+
+    // 获取用户现有偏好
+    let existing = user_preferences::get_user_preferences(&pool, user_id)
+        .await
+        .unwrap_or_default();
+    let existing_keys: std::collections::HashSet<(String, String)> = existing
+        .iter()
+        .map(|p| (p.category.clone(), p.key.clone()))
+        .collect();
+
+    // 只设置用户尚未设置的偏好
+    let mut applied = 0;
+    for tmpl in &templates {
+        if !existing_keys.contains(&(tmpl.category.clone(), tmpl.key.clone())) {
+            let req = SetPreferenceRequest {
+                category: tmpl.category.clone(),
+                key: tmpl.key.clone(),
+                value: tmpl.default_value.clone(),
+            };
+            if user_preferences::set_preference(&pool, user_id, &req)
+                .await
+                .is_ok()
+            {
+                applied += 1;
+            }
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(ApiResponse::success(serde_json::json!({
+            "applied_count": applied,
+            "skipped_count": templates.len() - applied,
+            "message": format!("已应用 {} 个默认偏好设置，跳过 {} 个已有设置", applied, templates.len() - applied)
+        }))),
+    )
 }

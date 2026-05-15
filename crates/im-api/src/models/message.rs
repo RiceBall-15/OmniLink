@@ -811,6 +811,9 @@ mod tests {
             read_at: None,
             reply_to: None,
             metadata: None,
+            burn_after_reading: false,
+            burn_after_seconds: None,
+            burned_at: None,
         };
 
         let json = serde_json::to_string(&msg).unwrap();

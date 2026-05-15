@@ -290,7 +290,9 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/users/preferences", put(user_preferences::set_preference))
             .route("/api/users/preferences", delete(user_preferences::delete_preference))
             .route("/api/users/preferences/batch", put(user_preferences::batch_set_preferences))
-            .route("/api/users/preferences/category/:category", delete(user_preferences::delete_category));
+            .route("/api/users/preferences/category/:category", delete(user_preferences::delete_category))
+            .route("/api/users/preferences/templates", get(user_preferences::get_templates))
+            .route("/api/users/preferences/templates/apply", post(user_preferences::apply_templates));
 
         // Webhook 管理 API
         let app = app
