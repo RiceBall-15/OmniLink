@@ -973,7 +973,7 @@
 - [x] 返回被引用消息的摘要信息（QuotedMessageInfo 结构体，包含发送者、内容、类型、时间等）
 - [x] 批量获取引用消息（get_quoted_messages_batch 避免 N+1 查询）
 - [x] 集成到 get_messages、send_message、search_messages 等 handler
-- [ ] 支持嵌套引用展示
+- [x] 支持嵌套引用展示（最多3层嵌套，深度限制递归）
 - [ ] 通知被引用消息的发送者
 
 #### 106. 文件上传服务完善 ✅
@@ -988,5 +988,13 @@
 - [x] 用户增长趋势（日维度，支持 trend_days 参数 7-365 天）
 - [x] 消息量统计趋势（日维度，支持趋势天数配置）
 - [x] 活跃会话数（7天内活跃会话数）
-- [ ] 系统资源使用率
+- [x] 系统资源使用率（内存、CPU、磁盘使用情况）
+
+#### 108. 消息草稿同步 ✅ (2026-05-16)
+- [x] 草稿保存 API（已有 PUT /api/im/conversations/:id/draft）
+- [x] 草稿获取 API（已有 GET /api/im/conversations/:id/draft）
+- [x] 草稿删除 API（已有 DELETE /api/im/conversations/:id/draft）
+- [x] 批量草稿同步 API（新增 POST /api/im/drafts/sync）
+- [x] 增量同步支持（lastSyncAt 参数）
+- [x] 错误处理和部分成功支持
 
