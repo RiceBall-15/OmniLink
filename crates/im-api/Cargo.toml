@@ -50,3 +50,11 @@ utoipa-swagger-ui.workspace = true
 
 # CSV export support
 csv = "1"
+
+# File watching for config hot-reload
+notify = "6"
+notify-debouncer-mini = "0.4"
+
+# Config file parsing
+toml = "0.8"
+serde_yaml = "0.9"
