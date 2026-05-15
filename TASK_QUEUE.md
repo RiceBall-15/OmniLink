@@ -968,17 +968,20 @@
 - [x] 自定义在线状态消息（忙碌/离开/勿扰等）
 - [ ] Redis pub/sub 跨实例状态同步
 
-#### 105. 消息引用/回复增强 ⏳
-- [ ] 确保 reply_to_message_id 字段完整实现
-- [ ] 返回被引用消息的摘要信息
+#### 105. 消息引用/回复增强 ✅
+- [x] 确保 reply_to_message_id 字段完整实现
+- [x] 返回被引用消息的摘要信息（QuotedMessageInfo 结构体，包含发送者、内容、类型、时间等）
+- [x] 批量获取引用消息（get_quoted_messages_batch 避免 N+1 查询）
+- [x] 集成到 get_messages、send_message、search_messages 等 handler
 - [ ] 支持嵌套引用展示
 - [ ] 通知被引用消息的发送者
 
-#### 106. 文件上传服务完善 ⏳
-- [ ] MinIO 客户端配置和连接
-- [ ] 文件预签名 URL 生成
-- [ ] 图片缩略图自动生成
-- [ ] 文件上传进度回调
+#### 106. 文件上传服务完善 ✅
+- [x] MinIO 客户端配置和连接（已有 MinioStorage 完整实现，含 ensure_bucket、CRUD 操作）
+- [x] 文件预签名 URL 生成（新增 presign.rs，实现 AWS Signature V4，支持 GET/PUT 预签名）
+- [x] 图片缩略图自动生成（已有 _process_media 实现，使用 image crate 生成 200x200 缩略图）
+- [x] 文件上传进度回调（新增 progress.rs 进度追踪器 + 7 个进度 API 端点）
+- [x] 新增 5 个 API 端点：presign/upload、presign/{id}/download、upload-progress CRUD
 
 #### 107. 管理员仪表盘数据 API ⏳
 - [ ] GET /api/admin/dashboard — 系统概览数据

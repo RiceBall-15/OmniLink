@@ -24,3 +24,9 @@ async-trait = "0.1"
 reqwest = { workspace = true }
 tempfile = "3"  # 用于测试
 image = { workspace = true }
+# 预签名 URL 生成
+hex = "0.4"
+urlencoding = "2"
+hmac = "0.12"
+sha2 = "0.10"
+parking_lot = "0.12"

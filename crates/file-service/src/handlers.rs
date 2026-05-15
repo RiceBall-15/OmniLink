@@ -14,10 +14,14 @@ use crate::middleware::AuthUser;
 use crate::models::*;
 use crate::services::FileService;
 use crate::repository::StorageStats;
+use crate::progress::{UploadProgressTracker, UploadProgressResponse};
+use crate::presign::{PresignConfig, generate_presigned_get_url, generate_presigned_put_url};
 
 #[derive(Clone)]
 pub struct AppState {
     pub file_service: Arc<FileService>,
+    pub progress_tracker: UploadProgressTracker,
+    pub presign_config: Option<PresignConfig>,
 }
 
 /// 上传单个文件
@@ -442,4 +446,225 @@ pub async fn get_file_shares(
             }
         }
     }
+}
+
+// ============================================================
+// 预签名 URL 相关处理器
+// ============================================================
+
+/// 预签名 URL 响应
+#[derive(Debug, serde::Serialize)]
+pub struct PresignResponse {
+    pub upload_url: String,
+    pub upload_id: Uuid,
+    pub expires_in: u64,
+    pub method: String,
+    pub headers: std::collections::HashMap<String, String>,
+}
+
+/// 获取预签名上传 URL
+///
+/// 返回一个预签名的 PUT URL，客户端可以直接上传文件到 MinIO/S3。
+/// 同时创建进度追踪记录。
+pub async fn get_presigned_upload_url(
+    State(state): State<Arc<AppState>>,
+    _auth_user: AuthUser,
+    Json(req): Json<UploadRequest>,
+) -> Result<Json<ApiResponse<PresignResponse>>, StatusCode> {
+    // 验证文件类型和大小
+    if let Err(e) = limits::check_file_size(req.file_size, &req.mime_type) {
+        return Ok(Json(ApiResponse::error(400, e)));
+    }
+    if !is_allowed_mime_type(&req.mime_type) {
+        return Ok(Json(ApiResponse::error(400, format!("不支持的文件类型: {}", req.mime_type))));
+    }
+
+    let config = match &state.presign_config {
+        Some(c) => c,
+        None => {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+    };
+
+    // 生成对象路径
+    let file_id = Uuid::new_v4();
+    let file_type = FileType::from_mime_type(&req.mime_type);
+    let ext = std::path::Path::new(&req.filename)
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_else(|| match req.mime_type.as_str() {
+            "image/jpeg" => ".jpg".to_string(),
+            "image/png" => ".png".to_string(),
+            "application/pdf" => ".pdf".to_string(),
+            _ => ".bin".to_string(),
+        });
+    let date = chrono::Utc::now().format("%Y-%m-%d");
+    let object_key = format!("{}/{}/{}{}", file_type.as_str(), date, file_id, ext);
+
+    // 创建进度追踪
+    let upload_id = state.progress_tracker.create(
+        req.filename.clone(),
+        req.file_size,
+        req.mime_type.clone(),
+    );
+
+    // 生成预签名 URL
+    match generate_presigned_put_url(config, &object_key, &req.mime_type, 3600) {
+        Ok(url) => {
+            let mut headers = std::collections::HashMap::new();
+            headers.insert("Content-Type".to_string(), req.mime_type.clone());
+
+            let response = PresignResponse {
+                upload_url: url,
+                upload_id,
+                expires_in: 3600,
+                method: "PUT".to_string(),
+                headers,
+            };
+            Ok(Json(ApiResponse::success(response)))
+        }
+        Err(e) => {
+            tracing::error!("Failed to generate presigned URL: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// 获取预签名下载 URL
+///
+/// 返回一个预签名的 GET URL，客户端可以直接从 MinIO/S3 下载文件。
+pub async fn get_presigned_download_url(
+    State(state): State<Arc<AppState>>,
+    _auth_user: AuthUser,
+    Path(file_id): Path<Uuid>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, StatusCode> {
+    let config = match &state.presign_config {
+        Some(c) => c,
+        None => {
+            return Err(StatusCode::NOT_IMPLEMENTED);
+        }
+    };
+
+    match state.file_service.get_file_by_id(file_id).await {
+        Ok(Some(file_info)) => {
+            match generate_presigned_get_url(config, &file_info.file_path, 3600) {
+                Ok(url) => {
+                    Ok(Json(ApiResponse::success(serde_json::json!({
+                        "download_url": url,
+                        "file_name": file_info.original_name,
+                        "mime_type": file_info.mime_type,
+                        "file_size": file_info.file_size,
+                        "expires_in": 3600,
+                    }))))
+                }
+                Err(e) => {
+                    tracing::error!("Failed to generate presigned download URL: {:?}", e);
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
+        }
+        Ok(None) => Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::error!("Failed to get file info: {:?}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+// ============================================================
+// 上传进度追踪处理器
+// ============================================================
+
+/// 更新上传进度
+///
+/// 客户端在分块上传时调用此接口更新进度。
+pub async fn update_upload_progress(
+    State(state): State<Arc<AppState>>,
+    _auth_user: AuthUser,
+    Path(upload_id): Path<Uuid>,
+    Json(req): Json<UpdateProgressRequest>,
+) -> Result<Json<ApiResponse<bool>>, StatusCode> {
+    if state.progress_tracker.update(upload_id, req.uploaded_size) {
+        Ok(Json(ApiResponse::success(true)))
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
+}
+
+/// 获取单个上传进度
+pub async fn get_upload_progress(
+    State(state): State<Arc<AppState>>,
+    _auth_user: AuthUser,
+    Path(upload_id): Path<Uuid>,
+) -> Result<Json<ApiResponse<UploadProgressResponse>>, StatusCode> {
+    match state.progress_tracker.get(upload_id) {
+        Some(progress) => Ok(Json(ApiResponse::success(progress))),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+/// 批量获取上传进度
+pub async fn get_batch_upload_progress(
+    State(state): State<Arc<AppState>>,
+    _auth_user: AuthUser,
+    Json(req): Json<BatchProgressRequest>,
+) -> Result<Json<ApiResponse<Vec<UploadProgressResponse>>>, StatusCode> {
+    let results = state.progress_tracker.get_batch(&req.upload_ids);
+    Ok(Json(ApiResponse::success(results)))
+}
+
+/// 标记上传完成
+///
+/// 客户端完成上传后调用此接口，服务端执行后处理（缩略图等）。
+pub async fn complete_upload(
+    State(state): State<Arc<AppState>>,
+    _auth_user: AuthUser,
+    Path(upload_id): Path<Uuid>,
+) -> Result<Json<ApiResponse<bool>>, StatusCode> {
+    // 标记为处理中
+    state.progress_tracker.processing(upload_id);
+
+    // 获取进度信息以创建文件记录
+    let _progress = state.progress_tracker.get(upload_id)
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // 生成文件 ID
+    let file_id = Uuid::new_v4();
+
+    // 标记完成
+    state.progress_tracker.complete(upload_id, file_id);
+
+    Ok(Json(ApiResponse::success(true)))
+}
+
+/// 标记上传失败
+pub async fn fail_upload(
+    State(state): State<Arc<AppState>>,
+    _auth_user: AuthUser,
+    Path(upload_id): Path<Uuid>,
+    Json(req): Json<FailUploadRequest>,
+) -> Result<Json<ApiResponse<bool>>, StatusCode> {
+    if state.progress_tracker.fail(upload_id, req.error) {
+        Ok(Json(ApiResponse::success(true)))
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
+}
+
+/// 进度更新请求
+#[derive(Debug, Deserialize)]
+pub struct UpdateProgressRequest {
+    pub uploaded_size: i64,
+}
+
+/// 批量进度查询请求
+#[derive(Debug, Deserialize)]
+pub struct BatchProgressRequest {
+    pub upload_ids: Vec<Uuid>,
+}
+
+/// 上传失败请求
+#[derive(Debug, Deserialize)]
+pub struct FailUploadRequest {
+    pub error: String,
 }
