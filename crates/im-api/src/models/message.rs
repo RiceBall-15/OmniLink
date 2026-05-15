@@ -387,6 +387,9 @@ pub struct QuotedMessageInfo {
     /// 媒体元数据（可选，用于 Voice/Video/Image/File 消息）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<MediaMetadata>,
+    /// 嵌套引用（支持多层引用展示，最多3层）
+    #[serde(rename = "quotedMessage", skip_serializing_if = "Option::is_none")]
+    pub quoted_message: Option<Box<QuotedMessageInfo>>,
 }
 
 /// 发送消息请求

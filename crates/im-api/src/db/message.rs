@@ -1384,7 +1384,21 @@ pub async fn get_quoted_message_info(
     pool: &PgPool,
     quoted_message_id: &Uuid,
 ) -> Result<Option<QuotedMessageInfo>> {
-    let row = sqlx::query_as::<_, (Uuid, Uuid, String, String, String, chrono::NaiveDateTime, bool, Option<i32>, Option<serde_json::Value>)>(
+    get_quoted_message_info_with_depth(pool, quoted_message_id, 0).await
+}
+
+/// 获取引用消息信息（支持嵌套引用，最多3层）
+async fn get_quoted_message_info_with_depth(
+    pool: &PgPool,
+    quoted_message_id: &Uuid,
+    depth: u32,
+) -> Result<Option<QuotedMessageInfo>> {
+    // 限制嵌套深度为3层
+    if depth >= 3 {
+        return Ok(None);
+    }
+
+    let row = sqlx::query_as::<_, (Uuid, Uuid, String, String, String, chrono::NaiveDateTime, bool, Option<i32>, Option<serde_json::Value>, Option<Uuid>)>(
         r#"
         SELECT 
             m.id as message_id,
@@ -1395,7 +1409,8 @@ pub async fn get_quoted_message_info(
             m.created_at,
             COALESCE(m.burn_after_reading, false) as burn_after_reading,
             m.burn_after_seconds,
-            m.metadata
+            m.metadata,
+            m.reply_to
         FROM messages m
         LEFT JOIN users u ON m.sender_id = u.id
         WHERE m.id = $1 AND m.deleted_at IS NULL
@@ -1407,7 +1422,7 @@ pub async fn get_quoted_message_info(
     .map_err(|e| anyhow::anyhow!("查询引用消息失败: {}", e))?;
 
     match row {
-        Some((message_id, sender_id, sender_name, content, message_type, created_at, burn_after_reading, burn_after_seconds, metadata)) => {
+        Some((message_id, sender_id, sender_name, content, message_type, created_at, burn_after_reading, burn_after_seconds, metadata, reply_to)) => {
             let type_ = match message_type.as_str() {
                 "text" => MessageType::Text,
                 "image" => MessageType::Image,
@@ -1425,6 +1440,17 @@ pub async fn get_quoted_message_info(
                 serde_json::from_value::<crate::models::message::MediaMetadata>(m).ok()
             });
 
+            // 递归获取嵌套引用（最多3层）
+            let nested_quote = if let Some(nested_id) = reply_to {
+                Box::pin(get_quoted_message_info_with_depth(pool, &nested_id, depth + 1))
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(Box::new)
+            } else {
+                None
+            };
+
             Ok(Some(QuotedMessageInfo {
                 message_id: message_id.to_string(),
                 sender_id: sender_id.to_string(),
@@ -1435,6 +1461,7 @@ pub async fn get_quoted_message_info(
                 burn_after_reading,
                 burn_after_seconds,
                 metadata: media_metadata,
+                quoted_message: nested_quote,
             }))
         }
         None => Ok(None),
@@ -1450,7 +1477,7 @@ pub async fn get_quoted_messages_batch(
         return Ok(HashMap::new());
     }
 
-    let rows = sqlx::query_as::<_, (Uuid, Uuid, String, String, String, chrono::NaiveDateTime, bool, Option<i32>, Option<serde_json::Value>)>(
+    let rows = sqlx::query_as::<_, (Uuid, Uuid, String, String, String, chrono::NaiveDateTime, bool, Option<i32>, Option<serde_json::Value>, Option<Uuid>)>(
         r#"
         SELECT 
             m.id as message_id,
@@ -1461,7 +1488,8 @@ pub async fn get_quoted_messages_batch(
             m.created_at,
             COALESCE(m.burn_after_reading, false) as burn_after_reading,
             m.burn_after_seconds,
-            m.metadata
+            m.metadata,
+            m.reply_to
         FROM messages m
         LEFT JOIN users u ON m.sender_id = u.id
         WHERE m.id = ANY($1) AND m.deleted_at IS NULL
@@ -1473,7 +1501,7 @@ pub async fn get_quoted_messages_batch(
     .map_err(|e| anyhow::anyhow!("批量查询引用消息失败: {}", e))?;
 
     let mut result = HashMap::new();
-    for (message_id, sender_id, sender_name, content, message_type, created_at, burn_after_reading, burn_after_seconds, metadata) in rows {
+    for (message_id, sender_id, sender_name, content, message_type, created_at, burn_after_reading, burn_after_seconds, metadata, reply_to) in rows {
         let type_ = match message_type.as_str() {
             "text" => MessageType::Text,
             "image" => MessageType::Image,
@@ -1491,6 +1519,17 @@ pub async fn get_quoted_messages_batch(
             serde_json::from_value::<crate::models::message::MediaMetadata>(m).ok()
         });
 
+        // 递归获取嵌套引用（最多2层，批量查询限制更严格）
+        let nested_quote = if let Some(nested_id) = reply_to {
+            get_quoted_message_info_with_depth(pool, &nested_id, 1)
+                .await
+                .ok()
+                .flatten()
+                .map(Box::new)
+        } else {
+            None
+        };
+
         result.insert(message_id, QuotedMessageInfo {
             message_id: message_id.to_string(),
             sender_id: sender_id.to_string(),
@@ -1501,6 +1540,7 @@ pub async fn get_quoted_messages_batch(
             burn_after_reading,
             burn_after_seconds,
             metadata: media_metadata,
+            quoted_message: nested_quote,
         });
     }
 
