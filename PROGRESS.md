@@ -602,3 +602,61 @@
 
 **总体进度**: 101个任务中已完成101个，完成率 100%
 **最新提交**: `52c9b1f` (2026-05-16 01:15)
+
+---
+
+### V2.5 安全与质量增强 (2026-05-16)
+
+#### 任务 115：消息加密端到端支持 ✅ (2026-05-16)
+- ✅ 创建数据库迁移（027_user_public_keys.sql）
+  - user_public_keys 表：存储用户公钥
+  - key_exchange_log 表：密钥交换审计日志
+- ✅ 实现公钥注册 API（register_public_key）
+- ✅ 实现公钥查询 API（get_user_public_key, batch_get_public_keys）
+- ✅ 添加密钥轮换支持（key_version 字段）
+- ✅ 更新路由和 OpenAPI 配置
+
+**提交**: `56ae86b` - feat(encryption): add E2E public key registration and management APIs
+
+#### 任务 116：性能基准测试套件 ✅ (2026-05-16)
+- ✅ 消息吞吐量基准测试（5个场景）
+- ✅ WebSocket 并发连接基准测试（5个场景）
+- ✅ 数据库查询性能基准测试（6个场景）
+- ✅ 负载测试脚本（Python asyncio）
+- ✅ 基准测试运行脚本和报告模板
+
+**提交**: `c337658` - feat(benchmarks): add comprehensive performance benchmark suite
+
+#### 任务 117：集成测试框架完善 ✅ (2026-05-16)
+- ✅ 测试环境配置（config.rs）
+- ✅ 测试数据工厂（TestFactory）
+- ✅ API 端点集成测试套件（24个测试用例）
+- ✅ WebSocket 集成测试套件（10个测试用例）
+- ✅ 测试运行脚本（支持分类运行）
+
+**提交**: `b24a204` - test(integration): enhance integration test framework
+
+#### 任务 118：API 文档自动生成 ✅ (2026-05-16)
+- ✅ 更新 OpenAPI 配置（添加新的加密端点）
+- ✅ 创建完整 API 文档（docs/api/README.md）
+- ✅ 文档包含所有端点说明和示例
+- ✅ 添加 WebSocket API 文档
+- ✅ 包含错误码和速率限制说明
+
+**提交**: `7fc676f` - docs(api): add comprehensive API documentation
+
+#### 任务 119：安全加固与审计 ✅ (2026-05-16)
+- ✅ 优化 CORS 配置（限制允许的源）
+- ✅ 实现输入验证工具（validation.rs）
+  - SQL 注入模式检测
+  - XSS 攻击模式检测
+  - 用户名、邮箱、密码格式验证
+  - 输入清理函数
+- ✅ 创建安全审计文档（docs/security/SECURITY_AUDIT.md）
+
+**提交**: `3b9117d` - feat(security): add security hardening and input validation
+
+---
+
+**V2.5 完成任务数**: 5/5 (100%)
+**最新提交**: `3b9117d` (2026-05-16 06:49)
