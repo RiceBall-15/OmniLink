@@ -38,7 +38,7 @@ impl std::str::FromStr for ApiKeyPermission {
 }
 
 /// API Key 实体（数据库映射）
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
 pub struct ApiKeyEntity {
     pub id: Uuid,
     pub key_prefix: String,      // 前8字符，用于显示

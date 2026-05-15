@@ -21,7 +21,7 @@ use chrono::{DateTime, Utc};
 
 use crate::models::auth::ApiResponse;
 use crate::models::message::{Message, SendMessageRequest, EditMessageRequest, CreateMessageParams, AddReactionRequest, ReactionSummary, MessageEntity};
-use crate::db::message::{create_message, get_messages_by_conversation, get_message_by_id, update_message_content, recall_message, mark_conversation_as_read, can_edit_message, can_recall_message};
+use crate::db::message::{create_message, get_messages_by_conversation, get_message_by_id, update_message_content, recall_message, mark_conversation_as_read, can_edit_message, can_recall_message, get_quoted_messages_batch};
 use crate::middleware::auth::AuthUser;
 
 /// 获取会话的消息列表（分页）
@@ -101,7 +101,23 @@ pub async fn get_messages(
     // 获取消息列表
     match get_messages_by_conversation(&pool, &conv_uuid, query.page, query.limit).await {
         Ok(messages) => {
-            let message_list: Vec<Message> = messages.iter().map(|m| m.to_message()).collect();
+            // 批量获取引用消息信息
+            let quoted_ids: Vec<Uuid> = messages.iter()
+                .filter_map(|m| m.reply_to)
+                .collect();
+            
+            let quoted_map = if quoted_ids.is_empty() {
+                std::collections::HashMap::new()
+            } else {
+                get_quoted_messages_batch(&pool, &quoted_ids).await.unwrap_or_default()
+            };
+            
+            let message_list: Vec<Message> = messages.iter()
+                .map(|m| {
+                    let quoted = m.reply_to.and_then(|id| quoted_map.get(&id).cloned());
+                    m.to_message_with_quotes(quoted)
+                })
+                .collect();
             (
                 StatusCode::OK,
                 Json(ApiResponse::success(serde_json::to_value(message_list).unwrap())),
@@ -211,7 +227,17 @@ pub async fn send_message(
     // 创建消息
     match create_message(&pool, params).await {
         Ok(message_entity) => {
-            let message = message_entity.to_message();
+            // 如果有引用消息，获取引用信息
+            let quoted_info = if let Some(quoted_id) = message_entity.reply_to {
+                crate::db::message::get_quoted_message_info(&pool, &quoted_id)
+                    .await
+                    .ok()
+                    .flatten()
+            } else {
+                None
+            };
+            
+            let message = message_entity.to_message_with_quotes(quoted_info);
 
             // 更新会话的更新时间
             let _ = sqlx::query(
@@ -662,8 +688,18 @@ pub async fn search_all_messages(
     match messages {
         Ok(msg_entities) => {
             let total = msg_entities.len() as i64;
+            // 批量获取引用消息信息
+            let quoted_ids: Vec<Uuid> = msg_entities.iter()
+                .filter_map(|m| m.reply_to)
+                .collect();
+            let quoted_map = if quoted_ids.is_empty() {
+                std::collections::HashMap::new()
+            } else {
+                get_quoted_messages_batch(&pool, &quoted_ids).await.unwrap_or_default()
+            };
             let results: Vec<SearchResultItem> = msg_entities.iter().map(|m| {
-                let message = m.to_message();
+                let quoted = m.reply_to.and_then(|id| quoted_map.get(&id).cloned());
+                let message = m.to_message_with_quotes(quoted);
                 let highlighted = highlight_keyword(&m.content, &query.q, 40);
                 SearchResultItem {
                     message,
@@ -760,7 +796,23 @@ pub async fn search_messages(
     .await
     {
         Ok(messages) => {
-            let message_list: Vec<Message> = messages.iter().map(|m| m.to_message()).collect();
+            // 批量获取引用消息信息
+            let quoted_ids: Vec<Uuid> = messages.iter()
+                .filter_map(|m| m.reply_to)
+                .collect();
+            
+            let quoted_map = if quoted_ids.is_empty() {
+                std::collections::HashMap::new()
+            } else {
+                get_quoted_messages_batch(&pool, &quoted_ids).await.unwrap_or_default()
+            };
+            
+            let message_list: Vec<Message> = messages.iter()
+                .map(|m| {
+                    let quoted = m.reply_to.and_then(|id| quoted_map.get(&id).cloned());
+                    m.to_message_with_quotes(quoted)
+                })
+                .collect();
             (
                 StatusCode::OK,
                 Json(ApiResponse::success(serde_json::json!({

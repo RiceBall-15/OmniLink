@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use sqlx::{PgPool, types::JsonValue};
 use uuid::Uuid;
 use chrono::{Utc, DateTime, Duration};
@@ -8,6 +9,7 @@ use crate::models::message::{
     MessageBookmark, BookmarkInfo,
     DraftMessage, ScheduledMessage,
     DeliveryReceipt, DeliveryReceiptStats,
+    QuotedMessageInfo, MessageType,
 };
 
 /// 创建消息
@@ -472,7 +474,6 @@ pub struct MessageStats {
     pub last_message_at: Option<chrono::NaiveDateTime>,
 }
 
-use std::collections::HashMap;
 
 /// 批量获取多个会话的最后一条消息（避免 N+1 查询）
 pub async fn get_last_messages_batch(
@@ -1376,4 +1377,132 @@ pub async fn get_delivery_receipts_batch(
     .map_err(|e| anyhow::anyhow!("批量查询投递回执失败: {}", e))?;
 
     Ok(receipts)
+}
+
+/// 获取引用消息信息
+pub async fn get_quoted_message_info(
+    pool: &PgPool,
+    quoted_message_id: &Uuid,
+) -> Result<Option<QuotedMessageInfo>> {
+    let row = sqlx::query_as::<_, (Uuid, Uuid, String, String, String, chrono::NaiveDateTime, bool, Option<i32>, Option<serde_json::Value>)>(
+        r#"
+        SELECT 
+            m.id as message_id,
+            m.sender_id,
+            COALESCE(u.nickname, u.username) as sender_name,
+            m.content,
+            m.type as message_type,
+            m.created_at,
+            COALESCE(m.burn_after_reading, false) as burn_after_reading,
+            m.burn_after_seconds,
+            m.metadata
+        FROM messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+        WHERE m.id = $1 AND m.deleted_at IS NULL
+        "#
+    )
+    .bind(quoted_message_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("查询引用消息失败: {}", e))?;
+
+    match row {
+        Some((message_id, sender_id, sender_name, content, message_type, created_at, burn_after_reading, burn_after_seconds, metadata)) => {
+            let type_ = match message_type.as_str() {
+                "text" => MessageType::Text,
+                "image" => MessageType::Image,
+                "video" => MessageType::Video,
+                "audio" => MessageType::Voice,
+                "file" => MessageType::File,
+                "location" => MessageType::Text,
+                "contact" => MessageType::Text,
+                "system" => MessageType::System,
+                "recall" => MessageType::System,
+                _ => MessageType::Text,
+            };
+
+            let media_metadata = metadata.and_then(|m| {
+                serde_json::from_value::<crate::models::message::MediaMetadata>(m).ok()
+            });
+
+            Ok(Some(QuotedMessageInfo {
+                message_id: message_id.to_string(),
+                sender_id: sender_id.to_string(),
+                sender_name: Some(sender_name),
+                content,
+                type_,
+                created_at: created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+                burn_after_reading,
+                burn_after_seconds,
+                metadata: media_metadata,
+            }))
+        }
+        None => Ok(None),
+    }
+}
+
+/// 批量获取引用消息信息
+pub async fn get_quoted_messages_batch(
+    pool: &PgPool,
+    quoted_message_ids: &[Uuid],
+) -> Result<HashMap<Uuid, QuotedMessageInfo>> {
+    if quoted_message_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let rows = sqlx::query_as::<_, (Uuid, Uuid, String, String, String, chrono::NaiveDateTime, bool, Option<i32>, Option<serde_json::Value>)>(
+        r#"
+        SELECT 
+            m.id as message_id,
+            m.sender_id,
+            COALESCE(u.nickname, u.username) as sender_name,
+            m.content,
+            m.type as message_type,
+            m.created_at,
+            COALESCE(m.burn_after_reading, false) as burn_after_reading,
+            m.burn_after_seconds,
+            m.metadata
+        FROM messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+        WHERE m.id = ANY($1) AND m.deleted_at IS NULL
+        "#
+    )
+    .bind(quoted_message_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("批量查询引用消息失败: {}", e))?;
+
+    let mut result = HashMap::new();
+    for (message_id, sender_id, sender_name, content, message_type, created_at, burn_after_reading, burn_after_seconds, metadata) in rows {
+        let type_ = match message_type.as_str() {
+            "text" => MessageType::Text,
+            "image" => MessageType::Image,
+            "video" => MessageType::Video,
+            "audio" => MessageType::Voice,
+            "file" => MessageType::File,
+            "location" => MessageType::Text,
+            "contact" => MessageType::Text,
+            "system" => MessageType::System,
+            "recall" => MessageType::System,
+            _ => MessageType::Text,
+        };
+
+        let media_metadata = metadata.and_then(|m| {
+            serde_json::from_value::<crate::models::message::MediaMetadata>(m).ok()
+        });
+
+        result.insert(message_id, QuotedMessageInfo {
+            message_id: message_id.to_string(),
+            sender_id: sender_id.to_string(),
+            sender_name: Some(sender_name),
+            content,
+            type_,
+            created_at: created_at.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+            burn_after_reading,
+            burn_after_seconds,
+            metadata: media_metadata,
+        });
+    }
+
+    Ok(result)
 }

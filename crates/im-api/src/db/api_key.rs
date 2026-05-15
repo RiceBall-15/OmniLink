@@ -17,22 +17,21 @@ pub async fn create_api_key(
         chrono::DateTime::parse_from_rfc3339(s).ok().map(|dt| dt.with_timezone(&Utc))
     });
 
-    let row = sqlx::query_as!(
-        ApiKeyEntity,
+    let row = sqlx::query_as::<_, ApiKeyEntity>(
         r#"
         INSERT INTO api_keys (key_prefix, key_hash, name, permissions, rate_limit, owner_id, expires_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, key_prefix, key_hash, name, permissions, rate_limit as "rate_limit: Option<i32>",
+        RETURNING id, key_prefix, key_hash, name, permissions, rate_limit,
                   owner_id, is_active, last_used_at, expires_at, created_at, updated_at
         "#,
-        key_prefix,
-        key_hash,
-        req.name,
-        permissions,
-        req.rate_limit,
-        owner_id,
-        expires_at,
     )
+    .bind(key_prefix)
+    .bind(key_hash)
+    .bind(&req.name)
+    .bind(permissions)
+    .bind(req.rate_limit)
+    .bind(owner_id)
+    .bind(expires_at)
     .fetch_one(pool)
     .await?;
 
@@ -44,18 +43,17 @@ pub async fn get_api_keys_by_owner(
     pool: &PgPool,
     owner_id: Uuid,
 ) -> Result<Vec<ApiKeyEntity>, sqlx::Error> {
-    let rows = sqlx::query_as!(
-        ApiKeyEntity,
+    let rows = sqlx::query_as::<_, ApiKeyEntity>(
         r#"
         SELECT id, key_prefix, key_hash, name, permissions,
-               rate_limit as "rate_limit: Option<i32>", owner_id, is_active,
+               rate_limit, owner_id, is_active,
                last_used_at, expires_at, created_at, updated_at
         FROM api_keys
         WHERE owner_id = $1
         ORDER BY created_at DESC
         "#,
-        owner_id,
     )
+    .bind(owner_id)
     .fetch_all(pool)
     .await?;
 
@@ -67,17 +65,16 @@ pub async fn find_api_key_by_hash(
     pool: &PgPool,
     key_hash: &str,
 ) -> Result<Option<ApiKeyEntity>, sqlx::Error> {
-    let row = sqlx::query_as!(
-        ApiKeyEntity,
+    let row = sqlx::query_as::<_, ApiKeyEntity>(
         r#"
         SELECT id, key_prefix, key_hash, name, permissions,
-               rate_limit as "rate_limit: Option<i32>", owner_id, is_active,
+               rate_limit, owner_id, is_active,
                last_used_at, expires_at, created_at, updated_at
         FROM api_keys
         WHERE key_hash = $1 AND is_active = true
         "#,
-        key_hash,
     )
+    .bind(key_hash)
     .fetch_optional(pool)
     .await?;
 
@@ -93,17 +90,16 @@ pub async fn validate_api_key(
     let (_, key_prefix, _) = generate_api_key_from_raw(raw_key);
 
     // 先通过 prefix 查找候选 key
-    let candidates = sqlx::query_as!(
-        ApiKeyEntity,
+    let candidates = sqlx::query_as::<_, ApiKeyEntity>(
         r#"
         SELECT id, key_prefix, key_hash, name, permissions,
-               rate_limit as "rate_limit: Option<i32>", owner_id, is_active,
+               rate_limit, owner_id, is_active,
                last_used_at, expires_at, created_at, updated_at
         FROM api_keys
         WHERE key_prefix = $1 AND is_active = true
         "#,
-        key_prefix,
     )
+    .bind(key_prefix)
     .fetch_all(pool)
     .await?;
 
@@ -128,10 +124,10 @@ pub async fn update_last_used(
     pool: &PgPool,
     key_id: Uuid,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(
+    sqlx::query(
         "UPDATE api_keys SET last_used_at = NOW() WHERE id = $1",
-        key_id,
     )
+    .bind(key_id)
     .execute(pool)
     .await?;
 
@@ -144,11 +140,11 @@ pub async fn deactivate_api_key(
     key_id: Uuid,
     owner_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query!(
+    let result = sqlx::query(
         "UPDATE api_keys SET is_active = false WHERE id = $1 AND owner_id = $2",
-        key_id,
-        owner_id,
     )
+    .bind(key_id)
+    .bind(owner_id)
     .execute(pool)
     .await?;
 
@@ -161,11 +157,11 @@ pub async fn delete_api_key(
     key_id: Uuid,
     owner_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query!(
+    let result = sqlx::query(
         "DELETE FROM api_keys WHERE id = $1 AND owner_id = $2",
-        key_id,
-        owner_id,
     )
+    .bind(key_id)
+    .bind(owner_id)
     .execute(pool)
     .await?;
 

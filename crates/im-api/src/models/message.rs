@@ -305,6 +305,9 @@ pub struct Message {
     /// 消息被焚毁时间，None 表示未焚毁
     #[serde(rename = "burnedAt", skip_serializing_if = "Option::is_none")]
     pub burned_at: Option<String>,
+    /// 引用消息摘要信息（当 reply_to 不为空时返回）
+    #[serde(rename = "quotedMessage", skip_serializing_if = "Option::is_none")]
+    pub quoted_message: Option<QuotedMessageInfo>,
 }
 
 /// 数据库中的消息实体
@@ -330,6 +333,11 @@ pub struct MessageEntity {
 impl MessageEntity {
     /// 转换为 API 响应的 Message 格式
     pub fn to_message(&self) -> Message {
+        self.to_message_with_quotes(None)
+    }
+
+    /// 转换为 API 响应的 Message 格式（带引用消息信息）
+    pub fn to_message_with_quotes(&self, quoted_message: Option<QuotedMessageInfo>) -> Message {
         Message {
             id: self.id.to_string(),
             conversation_id: self.conversation_id.to_string(),
@@ -345,8 +353,40 @@ impl MessageEntity {
             burn_after_reading: self.burn_after_reading,
             burn_after_seconds: self.burn_after_seconds,
             burned_at: self.burned_at.map(|t| t.to_rfc3339()),
+            quoted_message,
         }
     }
+}
+
+/// 引用消息摘要信息（嵌入在消息响应中）
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct QuotedMessageInfo {
+    #[serde(rename = "messageId")]
+    pub message_id: String,
+    /// 发送者ID
+    #[serde(rename = "senderId")]
+    pub sender_id: String,
+    /// 发送者名称（可选，需要JOIN查询）
+    #[serde(rename = "senderName", skip_serializing_if = "Option::is_none")]
+    pub sender_name: Option<String>,
+    /// 消息内容（截断预览，最多100字符）
+    pub content: String,
+    /// 消息类型
+    #[serde(rename = "type")]
+    pub type_: MessageType,
+    /// 创建时间
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    /// 是否为阅后即焚（可选）
+    /// 阅后即焚（可选）
+    #[serde(rename = "burnAfterReading", default)]
+    pub burn_after_reading: bool,
+    /// 阅读后焚毁时间（秒），默认30秒
+    #[serde(rename = "burnAfterSeconds", skip_serializing_if = "Option::is_none")]
+    pub burn_after_seconds: Option<i32>,
+    /// 媒体元数据（可选，用于 Voice/Video/Image/File 消息）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<MediaMetadata>,
 }
 
 /// 发送消息请求

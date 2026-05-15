@@ -342,11 +342,17 @@ pub async fn apply_templates(
     auth: AuthUser,
     State(pool): State<PgPool>,
 ) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
-    let user_id = auth.user_id;
+    let user_id = match Uuid::parse_str(&auth.user_id) {
+        Ok(id) => id,
+        Err(_) => return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+        ),
+    };
     let templates = get_default_templates();
 
     // 获取用户现有偏好
-    let existing = user_preferences::get_user_preferences(&pool, user_id)
+    let existing = user_preferences::get_all_preferences(&pool, user_id)
         .await
         .unwrap_or_default();
     let existing_keys: std::collections::HashSet<(String, String)> = existing
@@ -363,7 +369,7 @@ pub async fn apply_templates(
                 key: tmpl.key.clone(),
                 value: tmpl.default_value.clone(),
             };
-            if user_preferences::set_preference(&pool, user_id, &req)
+            if user_preferences::set_preference(&pool, user_id, &req.category, &req.key, &req.value)
                 .await
                 .is_ok()
             {

@@ -1,11 +1,12 @@
 use axum::{extract::State, http::StatusCode, Json};
-use crate::auth::AuthUser;
+use crate::middleware::auth::AuthUser;
 use crate::db::api_key as api_key_db;
 use crate::models::api_key::{
     ApiKeyInfo, CreateApiKeyRequest, CreateApiKeyResponse,
 };
-use crate::response::ApiResponse;
+use crate::models::auth::ApiResponse;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 /// 创建新的 API Key
 #[utoipa::path(
@@ -23,11 +24,18 @@ pub async fn create_api_key(
     auth_user: AuthUser,
     Json(req): Json<CreateApiKeyRequest>,
 ) -> Result<(StatusCode, Json<ApiResponse<CreateApiKeyResponse>>), (StatusCode, Json<ApiResponse<()>>)> {
+    let owner_id = Uuid::parse_str(&auth_user.user_id).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+        )
+    })?;
+
     // 验证名称非空
     if req.name.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
-            Json(ApiResponse::error("Name cannot be empty".to_string())),
+            Json(ApiResponse::error("INVALID_INPUT", "Name cannot be empty")),
         ));
     }
 
@@ -38,18 +46,18 @@ pub async fn create_api_key(
             _ => {
                 return Err((
                     StatusCode::BAD_REQUEST,
-                    Json(ApiResponse::error("Invalid permission: must be 'read', 'read_write', or 'admin'".to_string())),
+                    Json(ApiResponse::error("INVALID_INPUT", "Invalid permission: must be 'read', 'read_write', or 'admin'")),
                 ));
             }
         }
     }
 
-    let (entity, raw_key) = api_key_db::create_api_key(&pool, auth_user.user_id, &req)
+    let (entity, raw_key) = api_key_db::create_api_key(&pool, owner_id, &req)
         .await
         .map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::error(format!("Failed to create API key: {}", e))),
+                Json(ApiResponse::error("DATABASE_ERROR", format!("Failed to create API key: {}", e))),
             )
         })?;
 
@@ -80,12 +88,19 @@ pub async fn get_api_keys(
     State(pool): State<PgPool>,
     auth_user: AuthUser,
 ) -> Result<Json<ApiResponse<Vec<ApiKeyInfo>>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let keys = api_key_db::get_api_keys_by_owner(&pool, auth_user.user_id)
+    let owner_id = Uuid::parse_str(&auth_user.user_id).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+        )
+    })?;
+
+    let keys = api_key_db::get_api_keys_by_owner(&pool, owner_id)
         .await
         .map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::error(format!("Failed to fetch API keys: {}", e))),
+                Json(ApiResponse::error("DATABASE_ERROR", format!("Failed to fetch API keys: {}", e))),
             )
         })?;
 
@@ -125,12 +140,19 @@ pub async fn deactivate_api_key(
     auth_user: AuthUser,
     axum::extract::Path(key_id): axum::extract::Path<uuid::Uuid>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, (StatusCode, Json<ApiResponse<()>>)> {
-    let success = api_key_db::deactivate_api_key(&pool, key_id, auth_user.user_id)
+    let owner_id = Uuid::parse_str(&auth_user.user_id).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("INVALID_USER_ID", "无效的用户ID")),
+        )
+    })?;
+
+    let success = api_key_db::deactivate_api_key(&pool, key_id, owner_id)
         .await
         .map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiResponse::error(format!("Failed to deactivate API key: {}", e))),
+                Json(ApiResponse::error("DATABASE_ERROR", format!("Failed to deactivate API key: {}", e))),
             )
         })?;
 
@@ -142,7 +164,7 @@ pub async fn deactivate_api_key(
     } else {
         Err((
             StatusCode::NOT_FOUND,
-            Json(ApiResponse::error("API key not found".to_string())),
+            Json(ApiResponse::error("NOT_FOUND", "API key not found")),
         ))
     }
 }
