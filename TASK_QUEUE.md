@@ -983,10 +983,10 @@
 - [x] 文件上传进度回调（新增 progress.rs 进度追踪器 + 7 个进度 API 端点）
 - [x] 新增 5 个 API 端点：presign/upload、presign/{id}/download、upload-progress CRUD
 
-#### 107. 管理员仪表盘数据 API ⏳
-- [ ] GET /api/admin/dashboard — 系统概览数据
-- [ ] 用户增长趋势（日/周/月）
-- [ ] 消息量统计趋势
-- [ ] 活跃会话数
+#### 107. 管理员仪表盘数据 API ✅
+- [x] GET /api/admin/dashboard — 系统概览数据（用户总数、在线用户、消息总量、会话数、文件数）
+- [x] 用户增长趋势（日维度，支持 trend_days 参数 7-365 天）
+- [x] 消息量统计趋势（日维度，支持趋势天数配置）
+- [x] 活跃会话数（7天内活跃会话数）
 - [ ] 系统资源使用率
 

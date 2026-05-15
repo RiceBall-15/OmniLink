@@ -299,3 +299,92 @@ pub async fn get_user_activity(
         }))),
     )
 }
+
+// ============================================================
+// 仪表盘数据 API
+// ============================================================
+
+/// 仪表盘查询参数
+#[derive(Debug, serde::Deserialize)]
+pub struct DashboardQuery {
+    /// 趋势数据天数（默认 30）
+    pub trend_days: Option<i64>,
+}
+
+/// 获取管理员仪表盘数据
+///
+/// 返回系统概览、用户增长趋势、消息量趋势等数据。
+/// `GET /api/admin/dashboard?trend_days=30`
+pub async fn get_dashboard(
+    State(pool): State<PgPool>,
+    _auth: AuthUser,
+    Query(query): Query<DashboardQuery>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    let trend_days = query.trend_days.unwrap_or(30).min(365).max(7);
+
+    // 获取概览数据
+    let overview = match admin::get_dashboard_overview(&pool).await {
+        Ok(o) => o,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::error("DB_ERROR", format!("获取仪表盘数据失败: {}", e))),
+            );
+        }
+    };
+
+    // 获取用户增长趋势
+    let user_growth = match admin::get_user_growth_trend(&pool, trend_days).await {
+        Ok(trend) => trend
+            .into_iter()
+            .map(|e| serde_json::json!({"date": e.date.to_string(), "count": e.count}))
+            .collect::<Vec<_>>(),
+        Err(e) => {
+            tracing::warn!("获取用户增长趋势失败: {}", e);
+            vec![]
+        }
+    };
+
+    // 获取消息量趋势
+    let message_trend = match admin::get_message_trend(&pool, trend_days).await {
+        Ok(trend) => trend
+            .into_iter()
+            .map(|e| serde_json::json!({"date": e.date.to_string(), "count": e.count}))
+            .collect::<Vec<_>>(),
+        Err(e) => {
+            tracing::warn!("获取消息量趋势失败: {}", e);
+            vec![]
+        }
+    };
+
+    // 系统统计
+    let system = admin::get_system_stats();
+
+    (
+        StatusCode::OK,
+        Json(ApiResponse::success(serde_json::json!({
+            "overview": {
+                "total_users": overview.total_users,
+                "active_users_today": overview.active_users_today,
+                "active_users_week": overview.active_users_week,
+                "total_messages": overview.total_messages,
+                "messages_today": overview.messages_today,
+                "messages_this_week": overview.messages_this_week,
+                "total_conversations": overview.total_conversations,
+                "active_conversations": overview.active_conversations,
+                "total_files": overview.total_files,
+                "files_today": overview.files_today,
+                "online_users": overview.online_users,
+            },
+            "trends": {
+                "user_growth": user_growth,
+                "message_volume": message_trend,
+                "period_days": trend_days,
+            },
+            "system": {
+                "uptime_seconds": system.uptime_seconds,
+                "database_size": system.database_size,
+            },
+        }))),
+    )
+}

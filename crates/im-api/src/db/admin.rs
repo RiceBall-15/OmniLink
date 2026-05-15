@@ -200,3 +200,122 @@ pub async fn ensure_user_columns(pool: &PgPool) -> Result<(), String> {
 
     Ok(())
 }
+
+// ============================================================
+// 仪表盘数据查询
+// ============================================================
+
+/// 仪表盘概览数据
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+pub struct DashboardOverview {
+    pub total_users: i64,
+    pub active_users_today: i64,
+    pub active_users_week: i64,
+    pub total_messages: i64,
+    pub messages_today: i64,
+    pub messages_this_week: i64,
+    pub total_conversations: i64,
+    pub active_conversations: i64,
+    pub total_files: i64,
+    pub files_today: i64,
+    pub online_users: i64,
+}
+
+/// 获取仪表盘概览数据
+pub async fn get_dashboard_overview(pool: &PgPool) -> Result<DashboardOverview, String> {
+    let overview = sqlx::query_as::<_, DashboardOverview>(
+        r#"SELECT
+            (SELECT COUNT(*) FROM users) as total_users,
+            (SELECT COUNT(DISTINCT sender_id) FROM messages WHERE created_at >= NOW() - INTERVAL '1 day') as active_users_today,
+            (SELECT COUNT(DISTINCT sender_id) FROM messages WHERE created_at >= NOW() - INTERVAL '7 days') as active_users_week,
+            (SELECT COUNT(*) FROM messages) as total_messages,
+            (SELECT COUNT(*) FROM messages WHERE created_at >= NOW() - INTERVAL '1 day') as messages_today,
+            (SELECT COUNT(*) FROM messages WHERE created_at >= NOW() - INTERVAL '7 days') as messages_this_week,
+            (SELECT COUNT(*) FROM conversations) as total_conversations,
+            (SELECT COUNT(*) FROM conversations WHERE updated_at >= NOW() - INTERVAL '7 days') as active_conversations,
+            (SELECT COUNT(*) FROM files) as total_files,
+            (SELECT COUNT(*) FROM files WHERE created_at >= NOW() - INTERVAL '1 day') as files_today,
+            (SELECT COUNT(*) FROM users WHERE online_status = 'online') as online_users"#
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(|e| format!("查询仪表盘概览失败: {}", e))?;
+
+    Ok(overview)
+}
+
+/// 用户增长趋势条目
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+pub struct GrowthTrendEntry {
+    pub date: chrono::NaiveDate,
+    pub count: i64,
+}
+
+/// 获取用户增长趋势
+pub async fn get_user_growth_trend(
+    pool: &PgPool,
+    days: i64,
+) -> Result<Vec<GrowthTrendEntry>, String> {
+    let rows = sqlx::query_as::<_, GrowthTrendEntry>(
+        r#"SELECT DATE(created_at) as date, COUNT(*) as count
+           FROM users
+           WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+           GROUP BY DATE(created_at)
+           ORDER BY date ASC"#
+    )
+    .bind(days)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("查询用户增长趋势失败: {}", e))?;
+
+    Ok(rows)
+}
+
+/// 消息量趋势条目
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+pub struct MessageTrendEntry {
+    pub date: chrono::NaiveDate,
+    pub count: i64,
+}
+
+/// 获取消息量趋势
+pub async fn get_message_trend(
+    pool: &PgPool,
+    days: i64,
+) -> Result<Vec<MessageTrendEntry>, String> {
+    let rows = sqlx::query_as::<_, MessageTrendEntry>(
+        r#"SELECT DATE(created_at) as date, COUNT(*) as count
+           FROM messages
+           WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+           GROUP BY DATE(created_at)
+           ORDER BY date ASC"#
+    )
+    .bind(days)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| format!("查询消息量趋势失败: {}", e))?;
+
+    Ok(rows)
+}
+
+/// 系统资源统计
+#[derive(Debug, serde::Serialize)]
+pub struct SystemStats {
+    pub database_size: Option<String>,
+    pub total_tables: i64,
+    pub uptime_seconds: i64,
+}
+
+/// 获取系统统计信息（不依赖数据库的静态信息）
+pub fn get_system_stats() -> SystemStats {
+    let uptime = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    SystemStats {
+        database_size: None, // 需要超级用户权限查询
+        total_tables: 0,
+        uptime_seconds: uptime,
+    }
+}

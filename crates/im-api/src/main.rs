@@ -317,13 +317,14 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/admin/api-keys", get(api_key_handlers::get_api_keys))
             .route("/api/admin/api-keys/:id", delete(api_key_handlers::deactivate_api_key));
 
-        // 管理员用户管理 API (Task 99)
+        // 管理员用户管理 API (Task 99) & 仪表盘 (Task 107)
         let app = app
             .route("/api/admin/users", get(admin_handlers::list_users))
             .route("/api/admin/users/:id", get(admin_handlers::get_user_detail))
             .route("/api/admin/users/:id/status", put(admin_handlers::update_user_status))
             .route("/api/admin/users/:id/force-logout", post(admin_handlers::force_logout_user))
-            .route("/api/admin/users/:id/activity", get(admin_handlers::get_user_activity));
+            .route("/api/admin/users/:id/activity", get(admin_handlers::get_user_activity))
+            .route("/api/admin/dashboard", get(admin_handlers::get_dashboard));
 
         // 用户活动追踪 API (Task 101) & 会话统计摘要 (Task 100)
         let app = app
