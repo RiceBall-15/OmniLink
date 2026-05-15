@@ -78,7 +78,7 @@ pub async fn update_webhook(
     url: Option<&str>,
     secret: Option<&str>,
     events: Option<&[String]>,
-    description: Option<&str>,
+    _description: Option<&str>,
     is_active: Option<bool>,
 ) -> Result<Option<WebhookEntity>, sqlx::Error> {
     // 构建动态更新

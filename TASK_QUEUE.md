@@ -915,7 +915,7 @@
 - [ ] 支持 JSONB 存储灵活键值对偏好
 - [ ] 添加默认偏好模板
 
-#### 97. Webhook 集成框架 ⏳ 🔥
+#### 97. Webhook 集成框架 ✅ 🔥
 - [ ] 创建 webhook 模型（URL、事件类型、密钥）
 - [ ] 实现 webhook CRUD API（/api/users/webhooks）
 - [ ] 实现事件分发器（HTTP POST 调用 webhook URL）

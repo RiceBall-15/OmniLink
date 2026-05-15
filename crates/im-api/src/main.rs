@@ -29,6 +29,9 @@ use im_api::handlers::feedback;
 use im_api::handlers::chat_export;
 use im_api::handlers::user_preferences;
 use im_api::handlers::webhook as webhook_handlers;
+use im_api::handlers::data_retention;
+use im_api::handlers::admin as admin_handlers;
+use im_api::handlers::user_activity as activity_handlers;
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::security_headers::security_headers_middleware;
@@ -296,7 +299,27 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/webhooks/:id", get(webhook_handlers::get_webhook))
             .route("/api/webhooks/:id", put(webhook_handlers::update_webhook))
             .route("/api/webhooks/:id", delete(webhook_handlers::delete_webhook))
-            .route("/api/webhooks/:id/deliveries", get(webhook_handlers::get_deliveries));
+            .route("/api/webhooks/:id/deliveries", get(webhook_handlers::get_deliveries))
+            // 数据保留策略 API
+            .route("/api/admin/retention", post(data_retention::create_policy))
+            .route("/api/admin/retention", get(data_retention::get_policies))
+            .route("/api/admin/retention/:id", get(data_retention::get_policy))
+            .route("/api/admin/retention/:id", put(data_retention::update_policy))
+            .route("/api/admin/retention/:id", delete(data_retention::delete_policy))
+            .route("/api/admin/retention/cleanup", post(data_retention::run_cleanup));
+
+        // 管理员用户管理 API (Task 99)
+        let app = app
+            .route("/api/admin/users", get(admin_handlers::list_users))
+            .route("/api/admin/users/:id", get(admin_handlers::get_user_detail))
+            .route("/api/admin/users/:id/status", put(admin_handlers::update_user_status))
+            .route("/api/admin/users/:id/force-logout", post(admin_handlers::force_logout_user))
+            .route("/api/admin/users/:id/activity", get(admin_handlers::get_user_activity));
+
+        // 用户活动追踪 API (Task 101) & 会话统计摘要 (Task 100)
+        let app = app
+            .route("/api/users/activity", get(activity_handlers::get_my_activity))
+            .route("/api/im/conversations/:id/stats", get(activity_handlers::get_conversation_stats));
 
     // 克隆连接池用于后台定时消息处理任务
     let bg_pool = pool.clone();

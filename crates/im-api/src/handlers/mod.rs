@@ -24,3 +24,6 @@ pub mod chat_export;
 pub mod export_worker;
 pub mod user_preferences;
 pub mod webhook;
+pub mod data_retention;
+pub mod admin;
+pub mod user_activity;
