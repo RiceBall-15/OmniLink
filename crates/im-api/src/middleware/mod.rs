@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod compression;
 pub mod error_capture;
 pub mod etag;
 pub mod rate_limit;

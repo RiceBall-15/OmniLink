@@ -331,7 +331,9 @@ async fn main() -> anyhow::Result<()> {
             ])
             .allow_credentials(true)
             .max_age(std::time::Duration::from_secs(3600))
-        );
+        )
+        // 添加 API 响应压缩中间件层（gzip/brotli）
+        .layer(im_api::middleware::compression::create_compression_layer());
 
     // 启动定时消息后台处理任务
     im_api::handlers::scheduled_task::start_scheduled_message_processor(bg_pool.clone());
