@@ -944,3 +944,46 @@
 - [x] 活跃时段分析
 - [x] GET /api/users/activity 端点
 
+
+## V2.4：安全与性能优化（2026-05-16 启动）
+
+#### 102. 速率限制中间件 🔥
+- [ ] 创建 rate_limiter 中间件（基于 IP + 用户ID）
+- [ ] 支持可配置的限制规则（每分钟/每小时请求数）
+- [ ] 使用内存存储（HashMap + 滑动窗口）
+- [ ] 返回标准 429 Too Many Requests 响应
+- [ ] 支持白名单（内部服务调用不受限制）
+- [ ] 在 main.rs 中注册中间件
+
+#### 103. API Key 认证支持 🔥
+- [ ] 创建 api_keys 模型（key, name, permissions, rate_limit）
+- [ ] 实现 API Key 生成和管理 CRUD
+- [ ] 添加 ApiKeyAuth 中间件（支持 Bearer token 和 X-API-Key header）
+- [ ] 支持细粒度权限控制（read/write/admin）
+- [ ] 管理员 API：/api/admin/api-keys
+
+#### 104. 用户在线状态服务增强
+- [ ] GET /api/users/presence — 批量查询用户在线状态
+- [ ] 支持"最后活跃时间"查询
+- [ ] 自定义在线状态消息（忙碌/离开/勿扰等）
+- [ ] Redis pub/sub 跨实例状态同步
+
+#### 105. 消息引用/回复增强
+- [ ] 确保 reply_to_message_id 字段完整实现
+- [ ] 返回被引用消息的摘要信息
+- [ ] 支持嵌套引用展示
+- [ ] 通知被引用消息的发送者
+
+#### 106. 文件上传服务完善
+- [ ] MinIO 客户端配置和连接
+- [ ] 文件预签名 URL 生成
+- [ ] 图片缩略图自动生成
+- [ ] 文件上传进度回调
+
+#### 107. 管理员仪表盘数据 API
+- [ ] GET /api/admin/dashboard — 系统概览数据
+- [ ] 用户增长趋势（日/周/月）
+- [ ] 消息量统计趋势
+- [ ] 活跃会话数
+- [ ] 系统资源使用率
+
