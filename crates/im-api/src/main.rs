@@ -225,14 +225,18 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/tags", get(get_conversation_tags_with_auth))
 
         // 加密相关路由
-        .route("/api/im/encryption/keys", post(generate_encryption_keys_with_auth))
-        .route("/api/im/encryption/session-key/:conversation_id", get(get_session_key_with_auth))
-        .route("/api/im/encryption/encrypt", post(encrypt_message_with_auth))
-        .route("/api/im/encryption/decrypt", post(decrypt_message_with_auth))
-        .route("/api/im/encryption/info", get(get_encryption_info_with_auth))
-        .route("/api/im/encryption/key-exchange", post(key_exchange_with_auth))
-        .route("/api/im/encryption/store", post(store_encrypted_message_with_auth))
-        .route("/api/im/encryption/messages/:conversation_id", get(get_encrypted_messages_with_auth))
+       .route("/api/im/encryption/keys", post(generate_encryption_keys_with_auth))
+       .route("/api/im/encryption/session-key/:conversation_id", get(get_session_key_with_auth))
+       .route("/api/im/encryption/encrypt", post(encrypt_message_with_auth))
+       .route("/api/im/encryption/decrypt", post(decrypt_message_with_auth))
+       .route("/api/im/encryption/info", get(get_encryption_info_with_auth))
+       .route("/api/im/encryption/key-exchange", post(key_exchange_with_auth))
+       .route("/api/im/encryption/store", post(store_encrypted_message_with_auth))
+       .route("/api/im/encryption/messages/:conversation_id", get(get_encrypted_messages_with_auth))
+        // E2E加密公钥管理路由
+        .route("/api/im/encryption/register-key", post(register_public_key_with_auth))
+        .route("/api/im/encryption/public-key/:target_user_id", get(get_user_public_key_with_auth))
+        .route("/api/im/encryption/public-keys/batch", post(batch_get_public_keys_with_auth))
         // 审计日志 API
         .route("/api/audit/logs", get(audit::get_audit_logs))
         .route("/api/audit/stats", get(audit::get_audit_stats))
@@ -1173,6 +1177,45 @@ async fn get_encrypted_messages_with_auth(
         Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
     };
     encryption::get_encrypted_messages(State(pool), Extension(user_id), Path(conversation_id)).await.into_response()
+}
+
+/// 注册用户公钥（包装认证中间件）
+async fn register_public_key_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = match auth.user_id.parse::<uuid::Uuid>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
+    };
+    encryption::register_public_key(State(pool), Extension(user_id), Json(req)).await.into_response()
+}
+
+/// 获取用户公钥（包装认证中间件）
+async fn get_user_public_key_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(target_user_id): Path<String>,
+) -> impl IntoResponse {
+    let user_id = match auth.user_id.parse::<uuid::Uuid>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
+    };
+    encryption::get_user_public_key(State(pool), Extension(user_id), Path(target_user_id)).await.into_response()
+}
+
+/// 批量获取用户公钥（包装认证中间件）
+async fn batch_get_public_keys_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = match auth.user_id.parse::<uuid::Uuid>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST, Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID"))).into_response(),
+    };
+    encryption::batch_get_public_keys(State(pool), Extension(user_id), Json(req)).await.into_response()
 }
 
 /// 创建标签（包装认证中间件）

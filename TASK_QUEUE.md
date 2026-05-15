@@ -1009,19 +1009,19 @@
 - [x] 添加跨实例状态查询（订阅其他实例的状态广播）
 - [x] 单元测试
 
-#### 110. API 响应压缩测试 ⏳
-- [ ] 编写压缩中间件集成测试
-- [ ] 测试 gzip 压缩效果
-- [ ] 测试 brotli 压缩效果
-- [ ] 验证压缩配置选项
+#### 110. API 响应压缩测试 🔄
+- [x] 编写压缩中间件集成测试（6个测试用例已存在）
+- [x] 测试 gzip 压缩效果
+- [x] 测试 brotli 压缩效果
+- [x] 验证压缩配置选项
 - [ ] 性能基准测试
 
-#### 111. 前端 E2E 测试框架搭建 ⏳
-- [ ] 安装 Playwright 或 Cypress
-- [ ] 配置测试环境
-- [ ] 编写登录流程 E2E 测试
-- [ ] 编写消息发送 E2E 测试
-- [ ] CI 集成配置
+#### 111. 前端 E2E 测试框架搭建 🔄
+- [x] 安装 Playwright 或 Cypress（Playwright 已安装，含浏览器）
+- [x] 配置测试环境（playwright.config.ts 已配置）
+- [x] 编写登录流程 E2E 测试（auth.spec.ts 已存在）
+- [x] 编写消息发送 E2E 测试（chat.spec.ts 已存在）
+- [x] CI 集成配置（.github/workflows/e2e-tests.yml 已创建）
 
 #### 112. 测试覆盖率报告 ⏳
 - [ ] 配置后端 cargo-tarpaulin

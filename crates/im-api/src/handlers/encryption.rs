@@ -388,6 +388,265 @@ pub async fn store_encrypted_message(
     }
 }
 
+/// 注册用户公钥（E2E加密）
+/// 
+/// 用户注册身份公钥，用于后续的密钥交换和消息加密。
+/// 支持多种密钥类型：identity（身份密钥）、signed_pre_key（签名预密钥）、one_time_pre_key（一次性预密钥）
+#[utoipa::path(
+    post,
+    path = "/api/im/encryption/register-key",
+    tag = "encryption",
+    responses(
+        (status = 200, description = "注册成功", body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "请求参数错误", body = ApiResponse<serde_json::Value>),
+    )
+)]
+pub async fn register_public_key(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<Uuid>,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let public_key = match req.get("publicKey").and_then(|v| v.as_str()) {
+        Some(key) => key.to_string(),
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_PUBLIC_KEY", "缺少公钥")),
+            );
+        }
+    };
+
+    let key_type = req.get("keyType")
+        .and_then(|v| v.as_str())
+        .unwrap_or("identity")
+        .to_string();
+
+    // 验证密钥类型
+    if !["identity", "signed_pre_key", "one_time_pre_key"].contains(&key_type.as_str()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<serde_json::Value>::error("INVALID_KEY_TYPE", "无效的密钥类型，支持：identity, signed_pre_key, one_time_pre_key")),
+        );
+    }
+
+    // 验证公钥格式（Base64）
+    if base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &public_key).is_err() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<serde_json::Value>::error("INVALID_KEY_FORMAT", "公钥格式无效，需要Base64编码")),
+        );
+    }
+
+    // 获取当前版本号
+    let max_version: Result<(i32,), sqlx::Error> = sqlx::query_as(
+        "SELECT COALESCE(MAX(key_version), 0) FROM user_public_keys WHERE user_id = $1 AND key_type = $2"
+    )
+    .bind(user_id)
+    .bind(&key_type)
+    .fetch_one(&pool)
+    .await;
+
+    let new_version = match max_version {
+        Ok((v,)) => v + 1,
+        Err(_) => 1,
+    };
+
+    // 将旧密钥设为非活跃
+    let _ = sqlx::query(
+        "UPDATE user_public_keys SET is_active = false WHERE user_id = $1 AND key_type = $2 AND is_active = true"
+    )
+    .bind(user_id)
+    .bind(&key_type)
+    .execute(&pool)
+    .await;
+
+    // 插入新公钥
+    let key_id = Uuid::new_v4();
+    let now = chrono::Utc::now();
+    let expires_at = now + chrono::Duration::days(30); // 公钥30天过期
+
+    let result = sqlx::query(
+        "INSERT INTO user_public_keys (id, user_id, public_key, key_type, key_version, is_active, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, true, $6, $7)"
+    )
+    .bind(key_id)
+    .bind(user_id)
+    .bind(&public_key)
+    .bind(&key_type)
+    .bind(new_version)
+    .bind(now.naive_utc())
+    .bind(expires_at.naive_utc())
+    .execute(&pool)
+    .await;
+
+    match result {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "keyId": key_id,
+                "userId": user_id,
+                "keyType": key_type,
+                "keyVersion": new_version,
+                "expiresAt": expires_at.to_rfc3339(),
+                "message": "公钥注册成功"
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<serde_json::Value>::error("REGISTER_FAILED", format!("公钥注册失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取用户公钥
+/// 
+/// 获取指定用户的活跃公钥，用于密钥交换。
+/// 支持按密钥类型筛选。
+#[utoipa::path(
+    get,
+    path = "/api/im/encryption/public-key/{target_user_id}",
+    tag = "encryption",
+    params(("target_user_id" = String, Path, description = "目标用户ID")),
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "用户公钥不存在", body = ApiResponse<serde_json::Value>),
+    )
+)]
+pub async fn get_user_public_key(
+    State(pool): State<PgPool>,
+    Extension(_user_id): Extension<Uuid>,
+    Path(target_user_id): Path<String>,
+) -> impl IntoResponse {
+    let target_uuid = match Uuid::parse_str(&target_user_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<serde_json::Value>::error("INVALID_USER_ID", "无效的用户ID")),
+            );
+        }
+    };
+
+    // 获取用户的活跃公钥
+    let keys: Result<Vec<(Uuid, String, String, i32, chrono::NaiveDateTime)>, sqlx::Error> = sqlx::query_as(
+        "SELECT id, public_key, key_type, key_version, created_at FROM user_public_keys WHERE user_id = $1 AND is_active = true ORDER BY key_type, key_version DESC"
+    )
+    .bind(target_uuid)
+    .fetch_all(&pool)
+    .await;
+
+    match keys {
+        Ok(key_list) if !key_list.is_empty() => {
+            let result: Vec<serde_json::Value> = key_list.iter().map(|(id, public_key, key_type, version, created_at)| {
+                serde_json::json!({
+                    "keyId": id,
+                    "publicKey": public_key,
+                    "keyType": key_type,
+                    "keyVersion": version,
+                    "createdAt": created_at.and_utc().to_rfc3339()
+                })
+            }).collect();
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "userId": target_user_id,
+                    "keys": result,
+                    "count": result.len()
+                }))),
+            )
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<serde_json::Value>::error("KEY_NOT_FOUND", "该用户尚未注册公钥")),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<serde_json::Value>::error("FETCH_FAILED", format!("获取公钥失败: {}", e))),
+        ),
+    }
+}
+
+/// 批量获取用户公钥
+/// 
+/// 批量获取多个用户的公钥，用于群聊加密场景。
+#[utoipa::path(
+    post,
+    path = "/api/im/encryption/public-keys/batch",
+    tag = "encryption",
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+    )
+)]
+pub async fn batch_get_public_keys(
+    State(pool): State<PgPool>,
+    Extension(_user_id): Extension<Uuid>,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_ids = match req.get("userIds").and_then(|v| v.as_array()) {
+        Some(ids) => ids,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<serde_json::Value>::error("MISSING_USER_IDS", "缺少用户ID列表")),
+            );
+        }
+    };
+
+    let mut parsed_ids = Vec::new();
+    for id in user_ids {
+        if let Some(id_str) = id.as_str() {
+            if let Ok(uuid) = Uuid::parse_str(id_str) {
+                parsed_ids.push(uuid);
+            }
+        }
+    }
+
+    if parsed_ids.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<serde_json::Value>::error("NO_VALID_IDS", "没有有效的用户ID")),
+        );
+    }
+
+    // 批量查询公钥
+    let keys: Result<Vec<(Uuid, Uuid, String, String, i32, chrono::NaiveDateTime)>, sqlx::Error> = sqlx::query_as(
+        "SELECT id, user_id, public_key, key_type, key_version, created_at FROM user_public_keys WHERE user_id = ANY($1) AND is_active = true ORDER BY user_id, key_type"
+    )
+    .bind(&parsed_ids)
+    .fetch_all(&pool)
+    .await;
+
+    match keys {
+        Ok(key_list) => {
+            let mut result: std::collections::HashMap<String, Vec<serde_json::Value>> = std::collections::HashMap::new();
+            
+            for (id, uid, public_key, key_type, version, created_at) in key_list {
+                let entry = serde_json::json!({
+                    "keyId": id,
+                    "publicKey": public_key,
+                    "keyType": key_type,
+                    "keyVersion": version,
+                    "createdAt": created_at.and_utc().to_rfc3339()
+                });
+                result.entry(uid.to_string()).or_default().push(entry);
+            }
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "keys": result,
+                    "totalUsers": parsed_ids.len(),
+                    "foundUsers": result.len()
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<serde_json::Value>::error("BATCH_FETCH_FAILED", format!("批量获取公钥失败: {}", e))),
+        ),
+    }
+}
+
 /// 获取会话的加密消息历史
 #[utoipa::path(
     get,
