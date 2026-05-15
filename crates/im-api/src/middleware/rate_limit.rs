@@ -21,6 +21,10 @@ pub struct RateLimitConfig {
     pub max_requests: u32,
     /// 时间窗口持续时间
     pub window_duration: Duration,
+    /// IP 白名单（不受速率限制）
+    pub whitelist_ips: Vec<String>,
+    /// 认证用户的速率限制（可选，比 IP 限制更宽松）
+    pub authenticated_max_requests: Option<u32>,
 }
 
 impl Default for RateLimitConfig {
@@ -28,6 +32,8 @@ impl Default for RateLimitConfig {
         Self {
             max_requests: 100,
             window_duration: Duration::from_secs(60),
+            whitelist_ips: vec!["127.0.0.1".to_string(), "::1".to_string()],
+            authenticated_max_requests: None,
         }
     }
 }
@@ -179,7 +185,7 @@ enum RateLimitError {
     TooManyRequests { retry_after: Duration },
 }
 
-/// 速率限制中间件（带标准 X-RateLimit-* 响应头）
+/// 速率限制中间件（带标准 X-RateLimit-* 响应头，支持白名单）
 pub async fn rate_limit_middleware(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     axum::extract::State(state): axum::extract::State<RateLimitState>,
@@ -187,6 +193,12 @@ pub async fn rate_limit_middleware(
     next: axum::middleware::Next,
 ) -> Result<axum::http::Response<axum::body::Body>, StatusCode> {
     let ip = addr.ip().to_string();
+
+    // 检查白名单
+    let config = state.get_config().await;
+    if config.whitelist_ips.contains(&ip) {
+        return Ok(next.run(request).await);
+    }
 
     let result = state.check_rate_limit_detailed(&ip).await;
 
@@ -245,6 +257,8 @@ pub async fn rate_limit_middleware(
 pub struct UpdateRateLimitRequest {
     pub max_requests: Option<u32>,
     pub window_duration_secs: Option<u64>,
+    pub whitelist_ips: Option<Vec<String>>,
+    pub authenticated_max_requests: Option<u32>,
 }
 
 /// 获取当前限流配置
@@ -255,6 +269,8 @@ pub async fn get_rate_limit_config(
     Json(serde_json::json!({
         "max_requests": config.max_requests,
         "window_duration_secs": config.window_duration.as_secs(),
+        "whitelist_ips": config.whitelist_ips,
+        "authenticated_max_requests": config.authenticated_max_requests,
     }))
 }
 
@@ -270,6 +286,10 @@ pub async fn update_rate_limit_config(
             .window_duration_secs
             .map(Duration::from_secs)
             .unwrap_or(current.window_duration),
+        whitelist_ips: req.whitelist_ips.unwrap_or(current.whitelist_ips),
+        authenticated_max_requests: req
+            .authenticated_max_requests
+            .or(current.authenticated_max_requests),
     };
 
     // 基本验证

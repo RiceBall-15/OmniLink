@@ -110,6 +110,8 @@ async fn main() -> anyhow::Result<()> {
     let rate_limit_config = RateLimitConfig {
         max_requests: 100,
         window_duration: std::time::Duration::from_secs(60),
+        whitelist_ips: vec!["127.0.0.1".to_string(), "::1".to_string()],
+        authenticated_max_requests: Some(200), // 认证用户有更高的限额
     };
     let rate_limit_state = RateLimitState::new(rate_limit_config);
 
