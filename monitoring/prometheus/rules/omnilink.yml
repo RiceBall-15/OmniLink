@@ -1,0 +1,74 @@
+# OmniLink 告警规则
+# 部署到 Prometheus rules 目录
+
+groups:
+  - name: omnilink_alerts
+    rules:
+      # 服务可用性
+      - alert: OmniLinkServiceDown
+        expr: up{job="omnilink-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OmniLink API 服务不可用"
+          description: "OmniLink API 服务已停止响应超过1分钟"
+
+      # 高错误率
+      - alert: OmniLinkHighErrorRate
+        expr: rate(omnilink_errors_total[5m]) / rate(omnilink_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OmniLink 错误率超过5%"
+          description: "过去5分钟内错误率超过5%，当前值: {{ $value | humanizePercentage }}"
+
+      # WebSocket 连接数过高
+      - alert: OmniLinkHighWSConnections
+        expr: omnilink_ws_connections > 5000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WebSocket 连接数过高"
+          description: "当前WebSocket连接数: {{ $value }}，超过5000阈值"
+
+      # 数据库连接池耗尽
+      - alert: OmniLinkDBPoolExhausted
+        expr: omnilink_db_idle_connections == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "数据库连接池已耗尽"
+          description: "没有空闲的数据库连接，可能导致请求阻塞"
+
+      # 认证失败激增
+      - alert: OmniLinkAuthFailureSpike
+        expr: rate(omnilink_auth_failures_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "认证失败率异常升高"
+          description: "可能遭受暴力破解攻击，当前失败率: {{ $value }}/s"
+
+      # 服务运行时间短（频繁重启）
+      - alert: OmniLinkFrequentRestarts
+        expr: changes(omnilink_uptime_seconds[1h]) > 3
+        labels:
+          severity: warning
+        annotations:
+          summary: "OmniLink 服务频繁重启"
+          description: "过去1小时內服务重启超过3次"
+
+      # 消息吞吐量异常低
+      - alert: OmniLinkLowMessageThroughput
+        expr: rate(omnilink_messages_sent_total[30m]) < 0.01
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "消息吞吐量异常低"
+          description: "过去30分钟内几乎没有消息发送，可能需要检查"
