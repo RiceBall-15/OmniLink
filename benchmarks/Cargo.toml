@@ -13,6 +13,7 @@ chrono = "0.4"
 uuid = { version = "1", features = ["v4"] }
 tokio-tungstenite = "0.20"
 futures-util = "0.3"
+flate2 = "1"
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 
 [[bench]]
@@ -25,6 +26,10 @@ harness = false
 
 [[bench]]
 name = "database_queries"
+harness = false
+
+[[bench]]
+name = "compression_performance"
 harness = false
 
 [profile.bench]

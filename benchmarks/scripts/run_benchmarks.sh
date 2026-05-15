@@ -116,6 +116,11 @@ EOF
 - 消息历史查询: 预期 < 200ms (100条)
 - 消息搜索: 预期 < 500ms
 
+### 压缩性能
+- gzip 压缩速度: 预期 > 100MB/s (级别 6)
+- gzip 解压速度: 预期 > 300MB/s
+- 压缩率: JSON 数据预期 > 70% 压缩率
+
 ## 优化建议
 
 1. **消息吞吐量低**: 检查数据库连接池配置
@@ -158,7 +163,7 @@ main() {
         run_benchmark "$1"
     else
         # 运行所有测试
-        for bench in message_throughput websocket_concurrent database_queries; do
+        for bench in message_throughput websocket_concurrent database_queries compression_performance; do
             run_benchmark "$bench"
         done
     fi
