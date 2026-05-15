@@ -38,6 +38,7 @@ use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::security_headers::security_headers_middleware;
 use im_api::middleware::etag::etag_middleware;
 use im_api::middleware::rate_limit::{RateLimitConfig, RateLimitState, rate_limit_middleware, get_rate_limit_config, update_rate_limit_config};
+use im_api::middleware::redis_rate_limit::{RedisRateLimitConfig, RedisRateLimitState, get_redis_rate_limit_config, update_redis_rate_limit_config, get_ip_rate_limit_status, clear_ip_rate_limit};
 use im_api::middleware::request_id::request_id_middleware;
 use im_api::middleware::request_timing::request_timing_middleware;
 use im_api::models::auth::ApiResponse;
@@ -115,6 +116,41 @@ async fn main() -> anyhow::Result<()> {
         authenticated_max_requests: Some(200), // 认证用户有更高的限额
     };
     let rate_limit_state = RateLimitState::new(rate_limit_config);
+
+    // 初始化 Redis 连接（用于分布式限流，可选）
+    let redis_rate_limit_state = match std::env::var("REDIS_URL") {
+        Ok(redis_url) => {
+            match redis::Client::open(redis_url.as_str()) {
+                Ok(client) => {
+                    match redis::aio::ConnectionManager::new(client).await {
+                        Ok(conn) => {
+                            let redis_config = RedisRateLimitConfig {
+                                max_requests: 200,
+                                window_secs: 60,
+                                whitelist_ips: vec!["127.0.0.1".to_string(), "::1".to_string()],
+                                authenticated_max_requests: Some(500),
+                                key_prefix: "omnilink:ratelimit".to_string(),
+                            };
+                            info!("Redis rate limiter initialized");
+                            Some(RedisRateLimitState::new(conn, redis_config).await)
+                        }
+                        Err(e) => {
+                            warn!("Failed to create Redis connection manager: {}, using in-memory rate limiter", e);
+                            None
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to create Redis client: {}, using in-memory rate limiter", e);
+                    None
+                }
+            }
+        }
+        Err(_) => {
+            info!("REDIS_URL not set, using in-memory rate limiter");
+            None
+        }
+    };
 
     // 创建路由
     let app = Router::new()
@@ -252,6 +288,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/notifications/dnd-status", get(conversation::get_dnd_status))
         // 限流配置管理 API（热更新，无需重启）
         .route("/api/admin/rate-limit", get(get_rate_limit_config).put(update_rate_limit_config))
+        // Redis 分布式限流管理 API
+        .route("/api/admin/rate-limit/redis", get(get_redis_rate_limit_config).put(update_redis_rate_limit_config))
+        .route("/api/admin/rate-limit/redis/:ip", get(get_ip_rate_limit_status).delete(clear_ip_rate_limit))
         // 日志级别动态调整 API
         .route("/api/admin/log-level", get(get_log_level).put(update_log_level));
 
@@ -343,8 +382,16 @@ async fn main() -> anyhow::Result<()> {
         // 添加数据库连接池到状态
         .with_state(pool)
         // 添加限流状态到请求扩展（供管理 API 使用）
-        .layer(axum::Extension(rate_limit_state.clone()))
-        // 添加全局错误捕获中间件层（最外层，捕获所有未处理错误）
+        .layer(axum::Extension(rate_limit_state.clone()));
+
+    // 添加 Redis 分布式限流扩展（可选，依赖 REDIS_URL 环境变量）
+    let app = if let Some(redis_state) = redis_rate_limit_state {
+        app.layer(axum::Extension(redis_state))
+    } else {
+        app
+    };
+
+    let app = app
         .layer(axum::middleware::from_fn(error_capture_middleware))
         // 添加结构化请求日志中间件层
         .layer(tower_http::trace::TraceLayer::new_for_http()

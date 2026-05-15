@@ -203,7 +203,7 @@ impl RedisRateLimitState {
 /// Redis 限流中间件处理函数
 pub async fn redis_rate_limit_middleware(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    axum::extract::State(state): axum::extract::State<RedisRateLimitState>,
+    axum::Extension(state): axum::Extension<RedisRateLimitState>,
     request: axum::http::Request<axum::body::Body>,
     next: axum::middleware::Next,
 ) -> Result<axum::http::Response<axum::body::Body>, StatusCode> {
@@ -269,7 +269,7 @@ pub struct UpdateRedisRateLimitRequest {
 
 /// 获取当前 Redis 限流配置
 pub async fn get_redis_rate_limit_config(
-    axum::extract::State(state): axum::extract::State<RedisRateLimitState>,
+    axum::Extension(state): axum::Extension<RedisRateLimitState>,
 ) -> impl IntoResponse {
     let config = state.get_config_snapshot().await;
     Json(serde_json::json!({
@@ -284,8 +284,8 @@ pub async fn get_redis_rate_limit_config(
 
 /// 更新 Redis 限流配置
 pub async fn update_redis_rate_limit_config(
-    axum::extract::State(state): axum::extract::State<RedisRateLimitState>,
-    Json(req): Json<UpdateRedisRateLimitRequest>,
+    axum::Extension(state): axum::Extension<RedisRateLimitState>,
+    axum::extract::Json(req): axum::extract::Json<UpdateRedisRateLimitRequest>,
 ) -> impl IntoResponse {
     let current = state.get_config_snapshot().await;
     let new_config = RedisRateLimitConfig {
@@ -321,7 +321,7 @@ pub async fn update_redis_rate_limit_config(
 
 /// 查询指定 IP 的限流状态
 pub async fn get_ip_rate_limit_status(
-    axum::extract::State(state): axum::extract::State<RedisRateLimitState>,
+    axum::Extension(state): axum::Extension<RedisRateLimitState>,
     axum::extract::Path(ip): axum::extract::Path<String>,
 ) -> impl IntoResponse {
     let result = state.get_rate_limit_status(&ip).await;
@@ -336,7 +336,7 @@ pub async fn get_ip_rate_limit_status(
 
 /// 清除指定 IP 的限流记录（管理员接口）
 pub async fn clear_ip_rate_limit(
-    axum::extract::State(state): axum::extract::State<RedisRateLimitState>,
+    axum::Extension(state): axum::Extension<RedisRateLimitState>,
     axum::extract::Path(ip): axum::extract::Path<String>,
 ) -> impl IntoResponse {
     state.clear_rate_limit(&ip).await;
