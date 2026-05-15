@@ -912,14 +912,14 @@
 #### 96. 用户偏好设置 API ✅ 🔥
 - [x] 创建 user_preferences 模型和数据库迁移
 - [x] 实现 GET/PUT /api/users/preferences 端点
-- [ ] 支持 JSONB 存储灵活键值对偏好
-- [ ] 添加默认偏好模板
+- [x] 支持 JSONB 存储灵活键值对偏好
+- [x] 添加默认偏好模板（17个模板，5个分类）
 
 #### 97. Webhook 集成框架 ✅ 🔥
-- [ ] 创建 webhook 模型（URL、事件类型、密钥）
-- [ ] 实现 webhook CRUD API（/api/users/webhooks）
-- [ ] 实现事件分发器（HTTP POST 调用 webhook URL）
-- [ ] 添加 webhook 日志记录
+- [x] 创建 webhook 模型（URL、事件类型、密钥）
+- [x] 实现 webhook CRUD API（/api/users/webhooks）
+- [x] 实现事件分发器（HTTP POST 调用 webhook URL）
+- [x] 添加 webhook 日志记录
 
 #### 98. 数据保留策略 ✅
 - [x] 创建 retention_policy 模型
