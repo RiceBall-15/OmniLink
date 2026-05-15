@@ -10,7 +10,7 @@ use axum::{
     Json,
 };
 use redis::{aio::ConnectionManager, AsyncCommands};
-use std::{net::SocketAddr, sync::Arc, time::{Duration, SystemTime, UNIX_EPOCH}};
+use std::{net::SocketAddr, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 

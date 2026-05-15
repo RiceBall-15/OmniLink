@@ -1,3 +1,4 @@
+use base64::Engine;
 use reqwest::Client;
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -209,7 +210,7 @@ impl TestFactory {
     pub fn key_pair_data(&self) -> Value {
         json!({
             "keyType": "identity",
-            "publicKey": base64::encode(Uuid::new_v4().as_bytes()),
+            "publicKey": base64::engine::general_purpose::STANDARD.encode(Uuid::new_v4().as_bytes()),
             "keyVersion": 1
         })
     }

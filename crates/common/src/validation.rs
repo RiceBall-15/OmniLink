@@ -44,7 +44,7 @@ static XSS_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
     vec![
         Regex::new(r"(?i)(<script[^>]*>)").unwrap(),
         Regex::new(r"(?i)(javascript\s*:)").unwrap(),
-        Regex::new(r"(?i)(on\w+\s*=\s*['""])").unwrap(),
+        Regex::new(r#"(?i)(on\w+\s*=\s*['"])"#).unwrap(),
         Regex::new(r"(?i)(<iframe[^>]*>)").unwrap(),
         Regex::new(r"(?i)(<object[^>]*>)").unwrap(),
         Regex::new(r"(?i)(<embed[^>]*>)").unwrap(),
