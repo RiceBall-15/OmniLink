@@ -1003,11 +1003,11 @@
 ## V2.5：生产就绪与质量保证（2026-05-16 启动）
 
 #### 109. Redis Pub/Sub 跨实例状态同步 ✅ 🔥
-- [ ] 添加 Redis Pub/Sub 依赖（redis crate 的 pubsub 功能）
-- [ ] 实现 PresenceChannel 结构（发布/订阅用户状态变更）
-- [ ] 在 StatusManager 中集成 pub/sub（上线/下线时发布事件）
-- [ ] 添加跨实例状态查询（订阅其他实例的状态广播）
-- [ ] 单元测试
+- [x] 添加 Redis Pub/Sub 依赖（redis crate 的 pubsub 功能）
+- [x] 实现 PresenceChannel 结构（发布/订阅用户状态变更）
+- [x] 在 StatusManager 中集成 pub/sub（上线/下线时发布事件）
+- [x] 添加跨实例状态查询（订阅其他实例的状态广播）
+- [x] 单元测试
 
 #### 110. API 响应压缩测试 ⏳
 - [ ] 编写压缩中间件集成测试

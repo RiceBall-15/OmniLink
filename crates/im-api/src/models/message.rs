@@ -889,6 +889,7 @@ mod tests {
             burn_after_reading: false,
             burn_after_seconds: None,
             burned_at: None,
+            quoted_message: None,
         };
 
         let json = serde_json::to_string(&msg).unwrap();

@@ -323,6 +323,8 @@ mod tests {
         let config = RateLimitConfig {
             max_requests: 3,
             window_duration: Duration::from_secs(60),
+            whitelist_ips: vec![],
+            authenticated_max_requests: None,
         };
         let state = RateLimitState::new(config);
         let ip = "192.168.1.1";
@@ -351,6 +353,8 @@ mod tests {
         let config = RateLimitConfig {
             max_requests: 2,
             window_duration: Duration::from_secs(60),
+            whitelist_ips: vec![],
+            authenticated_max_requests: None,
         };
         let state = RateLimitState::new(config);
 
@@ -370,6 +374,8 @@ mod tests {
         let config = RateLimitConfig {
             max_requests: 2,
             window_duration: Duration::from_millis(100),
+            whitelist_ips: vec![],
+            authenticated_max_requests: None,
         };
         let state = RateLimitState::new(config);
         let ip = "192.168.1.1";
@@ -391,6 +397,8 @@ mod tests {
         let config = RateLimitConfig {
             max_requests: 2,
             window_duration: Duration::from_millis(100),
+            whitelist_ips: vec![],
+            authenticated_max_requests: None,
         };
         let state = RateLimitState::new(config);
         let ip = "192.168.1.1";
@@ -413,6 +421,8 @@ mod tests {
         let config = RateLimitConfig {
             max_requests: 2,
             window_duration: Duration::from_secs(60),
+            whitelist_ips: vec![],
+            authenticated_max_requests: None,
         };
         let state = RateLimitState::new(config);
         let ip = "192.168.1.1";
@@ -426,6 +436,8 @@ mod tests {
         let new_config = RateLimitConfig {
             max_requests: 5,
             window_duration: Duration::from_secs(60),
+            whitelist_ips: vec![],
+            authenticated_max_requests: None,
         };
         state.update_config(new_config).await;
 
@@ -442,6 +454,8 @@ mod tests {
         let config = RateLimitConfig {
             max_requests: 5,
             window_duration: Duration::from_secs(60),
+            whitelist_ips: vec![],
+            authenticated_max_requests: None,
         };
         let state = RateLimitState::new(config);
         let ip = "10.0.0.1";

@@ -1,38 +1,61 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright E2E 测试配置
+ * OmniLink E2E 测试配置
  * 
- * 注意：需要先安装 Playwright 浏览器：
- * npx playwright install chromium
- * 
- * 运行测试：npx playwright test
+ * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: true,
-  forbidOnly: !!process.env.CI,
+  /* 每个测试最长时间 */
+  timeout: 30 * 1000,
+  /* 测试间超时 */
+  expect: {
+    timeout: 10000,
+  },
+  /* 并行运行测试 */
+  fullyParallel: false,
+  /* CI 环境下失败不重试 */
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  /* 并行 worker 数量 */
+  workers: 1,
+  /* 报告器 */
   reporter: [
     ['html', { outputFolder: 'playwright-report' }],
-    ['json', { outputFile: 'playwright-results.json' }],
+    ['list'],
   ],
+  /* 全局测试设置 */
   use: {
-    baseURL: 'http://localhost:5173',
-    trace: 'on-first-retry',
+    /* 基础 URL */
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173',
+    /* 失败时截图 */
     screenshot: 'only-on-failure',
+    /* 失败时录制 trace */
+    trace: 'on-first-retry',
+    /* 视频录制 */
+    video: 'on-first-retry',
   },
+  /* 浏览器配置 */
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    // 可以添加更多浏览器
+    // {
+    //   name: 'firefox',
+    //   use: { ...devices['Desktop Firefox'] },
+    // },
+    // {
+    //   name: 'webkit',
+    //   use: { ...devices['Desktop Safari'] },
+    // },
   ],
+  /* 本地开发服务器配置 */
   webServer: {
     command: 'npm run dev',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
-    timeout: 30000,
+    timeout: 120 * 1000,
   },
 });
