@@ -90,6 +90,40 @@ impl IMService {
             .send_to_conversation(request.conversation_id, ws_message)
             .await;
 
+        // 如果是引用回复，通知被引用消息的发送者
+        if let Some(reply_to_id) = request.reply_to {
+            if let Ok(Some(quoted_message)) = self.message_repository.get_by_id(reply_to_id).await {
+                // 只有当被引用消息的发送者不是当前发送者时才通知
+                if quoted_message.sender_id != sender_id {
+                    // 检查被引用消息发送者是否在线
+                    let is_online = self.connection_manager.is_online(quoted_message.sender_id).await;
+                    
+                    if is_online {
+                        let quote_reply_notification = WSMessage {
+                            message_type: WSMessageType::QuoteReply,
+                            conversation_id: Some(request.conversation_id),
+                            message_id: Some(message_id),
+                            sender_id: Some(sender_id),
+                            content: Some(request.content.clone()),
+                            timestamp: Some(message.created_at.timestamp()),
+                            data: Some(serde_json::json!({
+                                "quoted_message_id": reply_to_id,
+                                "quoted_sender_id": quoted_message.sender_id,
+                                "reply_message_id": message_id,
+                                "reply_sender_id": sender_id,
+                                "conversation_id": request.conversation_id,
+                            })),
+                        };
+                        self.connection_manager.send_to_user(quoted_message.sender_id, quote_reply_notification).await;
+                        tracing::info!(
+                            "Sent quote reply notification to user {} for message {}",
+                            quoted_message.sender_id, message_id
+                        );
+                    }
+                }
+            }
+        }
+
         // 获取对话参与者并标记已送达（过滤被屏蔽用户）
         if let Ok(participants) = self.get_conversation_participants(request.conversation_id).await {
             // 过滤掉屏蔽了发送者的用户

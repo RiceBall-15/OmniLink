@@ -39,6 +39,7 @@ pub enum WSMessageType {
     Edit,         // "edit" - 消息编辑
     Recall,       // "recall" - 消息撤回
     Burn,         // "burn" - 阅后即焚消息已被焚毁
+    QuoteReply,   // "quote_reply" - 引用回复通知
 
     // 心跳保活
     Ping,         // "ping" - 心跳探测
