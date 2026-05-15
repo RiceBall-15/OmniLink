@@ -545,5 +545,60 @@
 
 ---
 
-**总体进度**: 75个任务中已完成75个，完成率 100%
-**最新提交**: `d260564` (2026-05-15 04:45)
+### V2.3 API增强功能 (2026-05-16)
+
+#### 任务 96：用户偏好设置 API ✅ (2026-05-16)
+- 用户偏好模型 (UserPreference) - key-value存储
+- 完整 CRUD API（/api/users/preferences）
+- 全局/会话级别偏好设置
+- commit: 5ef0a36
+
+#### 任务 97：Webhook集成框架 ✅ (2026-05-16)
+- Webhook模型（URL、事件类型、密钥、签名验证）
+- 完整 CRUD API（/api/webhooks）
+- Webhook日志记录与投递历史
+- 签名验证（HMAC-SHA256）
+- commit: a263399
+
+#### 任务 98：数据保留策略 ✅ (2026-05-16)
+- RetentionPolicy模型 - 按会话/全局配置保留天数
+- 完整 CRUD API（/api/admin/retention）
+- 后台清理执行端点（/api/admin/retention/cleanup）
+- 迁移文件: migrations/025_data_retention.sql
+- commit: 52c9b1f
+
+#### 任务 99：管理员用户管理 API ✅ (2026-05-16)
+- GET /api/admin/users — 用户列表（分页、搜索、状态筛选）
+- GET /api/admin/users/:id — 用户详情（统计信息）
+- PUT /api/admin/users/:id/status — 封禁/解封用户
+- POST /api/admin/users/:id/force-logout — 强制登出
+- GET /api/admin/users/:id/activity — 用户活动日志
+- commit: 52c9b1f
+
+#### 任务 100：会话统计摘要 API ✅ (2026-05-16)
+- GET /api/im/conversations/:id/stats — 增强版统计
+- 消息总数、活跃成员数、高峰时段（hourly distribution）
+- 消息类型分布（text/image/file/voice/video/system）
+- 时间段统计（今日/本周/本月消息数）
+- 首条/末条消息时间
+- commit: 52c9b1f
+
+#### 任务 101：用户活动追踪 ✅ (2026-05-16)
+- user_activity表（活动类型、描述、元数据）
+- GET /api/users/activity — 用户活动统计
+- 最近30天消息数、本周/本月统计
+- 活跃时段分析（hourly distribution）
+- 活动类型分布
+- 活跃天数统计
+- 迁移文件: migrations/024_admin_user_activity.sql
+- commit: 52c9b1f
+
+#### 构建修复：Swagger UI离线支持
+- 下载swagger-ui v5.17.12到本地
+- 通过SWAGGER_UI_DOWNLOAD_URL环境变量指向本地zip
+- 解决github.com网络不可达导致的编译失败
+
+---
+
+**总体进度**: 101个任务中已完成101个，完成率 100%
+**最新提交**: `52c9b1f` (2026-05-16 01:15)

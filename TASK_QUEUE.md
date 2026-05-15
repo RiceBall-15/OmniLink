@@ -921,26 +921,26 @@
 - [ ] 实现事件分发器（HTTP POST 调用 webhook URL）
 - [ ] 添加 webhook 日志记录
 
-#### 98. 数据保留策略 ⏳
-- [ ] 创建 retention_policy 模型
-- [ ] 实现按会话/全局配置保留天数
-- [ ] 添加后台清理定时任务
-- [ ] 管理员 API 配置保留策略
+#### 98. 数据保留策略 ✅
+- [x] 创建 retention_policy 模型
+- [x] 实现按会话/全局配置保留天数
+- [x] 添加后台清理定时任务
+- [x] 管理员 API 配置保留策略
 
-#### 99. 管理员用户管理 API ⏳
-- [ ] GET /api/admin/users — 用户列表（分页、搜索、筛选）
-- [ ] PUT /api/admin/users/:id/status — 封禁/解封用户
-- [ ] POST /api/admin/users/:id/force-logout — 强制登出
-- [ ] GET /api/admin/users/:id/activity — 用户活动统计
+#### 99. 管理员用户管理 API ✅
+- [x] GET /api/admin/users — 用户列表（分页、搜索、筛选）
+- [x] PUT /api/admin/users/:id/status — 封禁/解封用户
+- [x] POST /api/admin/users/:id/force-logout — 强制登出
+- [x] GET /api/admin/users/:id/activity — 用户活动统计
 
-#### 100. 会话统计摘要 API ⏳
-- [ ] GET /api/im/conversations/:id/stats — 消息总数、活跃成员、高峰时段
-- [ ] 按时间段统计（日/周/月）
-- [ ] 消息类型分布统计
+#### 100. 会话统计摘要 API ✅
+- [x] GET /api/im/conversations/:id/stats — 消息总数、活跃成员、高峰时段
+- [x] 按时间段统计（日/周/月）
+- [x] 消息类型分布统计
 
-#### 101. 用户活动追踪 ⏳
-- [ ] 记录用户最后活跃时间
-- [ ] 统计用户消息频率
-- [ ] 活跃时段分析
-- [ ] GET /api/users/activity 端点
+#### 101. 用户活动追踪 ✅
+- [x] 记录用户最后活跃时间
+- [x] 统计用户消息频率
+- [x] 活跃时段分析
+- [x] GET /api/users/activity 端点
 
