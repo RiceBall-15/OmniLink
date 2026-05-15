@@ -7,6 +7,7 @@ use crate::models::message::{
     MessageEntity, CreateMessageParams, MessageStatus,
     MessageBookmark, BookmarkInfo,
     DraftMessage, ScheduledMessage,
+    DeliveryReceipt, DeliveryReceiptStats,
 };
 
 /// 创建消息
@@ -1260,4 +1261,107 @@ pub async fn count_messages_in_conversation(
     .map_err(|e| anyhow::anyhow!("统计消息数量失败: {}", e))?;
 
     Ok(count)
+}
+
+/// 创建或更新消息投递回执
+pub async fn upsert_delivery_receipt(
+    pool: &PgPool,
+    message_id: &Uuid,
+    user_id: &Uuid,
+    status: &str,
+) -> Result<DeliveryReceipt> {
+    let receipt = sqlx::query_as::<_, DeliveryReceipt>(
+        r#"
+        INSERT INTO message_delivery_receipts (message_id, user_id, status)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (message_id, user_id)
+        DO UPDATE SET status = $3, updated_at = NOW()
+        RETURNING *
+        "#
+    )
+    .bind(message_id)
+    .bind(user_id)
+    .bind(status)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("创建投递回执失败: {}", e))?;
+
+    Ok(receipt)
+}
+
+/// 获取消息的所有投递回执
+pub async fn get_delivery_receipts_by_message(
+    pool: &PgPool,
+    message_id: &Uuid,
+) -> Result<Vec<DeliveryReceipt>> {
+    let receipts = sqlx::query_as::<_, DeliveryReceipt>(
+        r#"
+        SELECT * FROM message_delivery_receipts
+        WHERE message_id = $1
+        ORDER BY updated_at DESC
+        "#
+    )
+    .bind(message_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("查询投递回执失败: {}", e))?;
+
+    Ok(receipts)
+}
+
+/// 获取消息投递统计
+pub async fn get_delivery_receipt_stats(
+    pool: &PgPool,
+    message_id: &Uuid,
+    total_recipients: i64,
+) -> Result<DeliveryReceiptStats> {
+    let stats = sqlx::query_as::<_, (i64, i64)>(
+        r#"
+        SELECT
+            COUNT(*) FILTER (WHERE status = 'delivered'),
+            COUNT(*) FILTER (WHERE status = 'read')
+        FROM message_delivery_receipts
+        WHERE message_id = $1
+        "#
+    )
+    .bind(message_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("查询投递统计失败: {}", e))?;
+
+    let delivered_count = stats.0;
+    let read_count = stats.1;
+    let pending_count = total_recipients - delivered_count - read_count;
+
+    Ok(DeliveryReceiptStats {
+        message_id: *message_id,
+        total_recipients,
+        delivered_count,
+        read_count,
+        pending_count: pending_count.max(0),
+    })
+}
+
+/// 批量获取消息投递回执
+pub async fn get_delivery_receipts_batch(
+    pool: &PgPool,
+    message_ids: &[Uuid],
+) -> Result<Vec<DeliveryReceipt>> {
+    if message_ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let receipts = sqlx::query_as::<_, DeliveryReceipt>(
+        r#"
+        SELECT * FROM message_delivery_receipts
+        WHERE message_id = ANY($1)
+        ORDER BY message_id, updated_at DESC
+        "#
+    )
+    .bind(message_ids)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| anyhow::anyhow!("批量查询投递回执失败: {}", e))?;
+
+    Ok(receipts)
 }

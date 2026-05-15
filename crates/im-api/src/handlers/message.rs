@@ -2837,3 +2837,105 @@ pub async fn cleanup_burn_messages_handler(
         ),
     }
 }
+
+// ========== 消息投递状态跟踪 API ==========
+
+use crate::db::message::{upsert_delivery_receipt, get_delivery_receipts_by_message, get_delivery_receipt_stats};
+use crate::models::message::{CreateDeliveryReceiptRequest, DeliveryReceiptStats};
+
+/// 记录消息投递状态（送达/已读）
+///
+/// 当消息被客户端接收时调用此接口记录投递状态
+pub async fn record_delivery_receipt_handler(
+    State(pool): State<PgPool>,
+    Extension(_user_id): Extension<Uuid>,
+    Json(req): Json<CreateDeliveryReceiptRequest>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    // 验证 status 值
+    if !["delivered", "read"].contains(&req.status.as_str()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::error("INVALID_STATUS", "状态必须是 delivered 或 read".to_string())),
+        );
+    }
+
+    match upsert_delivery_receipt(&pool, &req.message_id, &req.user_id, &req.status).await {
+        Ok(receipt) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(serde_json::json!({
+                "id": receipt.id,
+                "messageId": receipt.message_id,
+                "userId": receipt.user_id,
+                "status": receipt.status,
+                "createdAt": receipt.created_at,
+                "updatedAt": receipt.updated_at,
+            }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("RECEIPT_FAILED", format!("记录投递状态失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取消息的投递状态列表
+///
+/// 返回指定消息的所有投递回执（每个接收者的投递状态）
+pub async fn get_delivery_receipts_handler(
+    State(pool): State<PgPool>,
+    Extension(_user_id): Extension<Uuid>,
+    Path(message_id): Path<Uuid>,
+) -> (StatusCode, Json<ApiResponse<serde_json::Value>>) {
+    match get_delivery_receipts_by_message(&pool, &message_id).await {
+        Ok(receipts) => {
+            let receipt_list: Vec<serde_json::Value> = receipts.iter().map(|r| {
+                serde_json::json!({
+                    "id": r.id,
+                    "messageId": r.message_id,
+                    "userId": r.user_id,
+                    "status": r.status,
+                    "createdAt": r.created_at,
+                    "updatedAt": r.updated_at,
+                })
+            }).collect();
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "messageId": message_id,
+                    "receipts": receipt_list,
+                    "total": receipt_list.len(),
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("QUERY_FAILED", format!("查询投递状态失败: {}", e))),
+        ),
+    }
+}
+
+/// 获取消息投递统计
+///
+/// 返回消息的投递统计信息（已送达数、已读数、待投递数）
+pub async fn get_delivery_stats_handler(
+    State(pool): State<PgPool>,
+    Extension(_user_id): Extension<Uuid>,
+    Path(message_id): Path<Uuid>,
+    Query(params): Query<serde_json::Value>,
+) -> (StatusCode, Json<ApiResponse<DeliveryReceiptStats>>) {
+    let total_recipients = params.get("totalRecipients")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+
+    match get_delivery_receipt_stats(&pool, &message_id, total_recipients).await {
+        Ok(stats) => (
+            StatusCode::OK,
+            Json(ApiResponse::success(stats)),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::error("STATS_FAILED", format!("查询投递统计失败: {}", e))),
+        ),
+    }
+}

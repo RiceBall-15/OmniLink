@@ -10,6 +10,7 @@ use axum::{
 use tokio::net::TcpListener;
 use tracing::info;
 use sqlx::PgPool;
+use uuid::Uuid;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -156,6 +157,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/im/conversations/:id/messages/search", get(search_messages_with_auth))
         .route("/api/im/messages/search", get(global_search_messages_with_auth))
         .route("/api/im/conversations/:id/messages/stats", get(get_message_stats_with_auth))
+
+        // 消息投递状态跟踪
+        .route("/api/im/messages/delivery-receipt", post(record_delivery_receipt_with_auth))
+        .route("/api/im/messages/:id/delivery-receipts", get(get_delivery_receipts_with_auth))
+        .route("/api/im/messages/:id/delivery-stats", get(get_delivery_stats_with_auth))
 
         // 批量操作
         .route("/api/im/messages/batch/send", post(batch_send_messages_with_auth))
@@ -704,6 +710,37 @@ async fn cleanup_burn_messages_with_auth(
     State(pool): State<PgPool>,
 ) -> impl IntoResponse {
     message::cleanup_burn_messages_handler(State(pool)).await
+}
+
+/// 记录消息投递状态（包装认证中间件）
+async fn record_delivery_receipt_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Json(req): Json<im_api::models::message::CreateDeliveryReceiptRequest>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id.parse::<Uuid>().unwrap_or_default();
+    message::record_delivery_receipt_handler(State(pool), Extension(user_id), Json(req)).await
+}
+
+/// 获取消息投递状态列表（包装认证中间件）
+async fn get_delivery_receipts_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id.parse::<Uuid>().unwrap_or_default();
+    message::get_delivery_receipts_handler(State(pool), Extension(user_id), Path(message_id)).await
+}
+
+/// 获取消息投递统计（包装认证中间件）
+async fn get_delivery_stats_with_auth(
+    State(pool): State<PgPool>,
+    auth: AuthUser,
+    Path(message_id): Path<Uuid>,
+    Query(params): Query<serde_json::Value>,
+) -> impl IntoResponse {
+    let user_id = auth.user_id.parse::<Uuid>().unwrap_or_default();
+    message::get_delivery_stats_handler(State(pool), Extension(user_id), Path(message_id), Query(params)).await
 }
 
 /// 获取活跃公告列表（用户视图）
