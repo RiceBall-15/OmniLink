@@ -287,6 +287,7 @@ pub async fn search_messages_in_conversation(
     start_date: Option<&str>,
     end_date: Option<&str>,
     message_type: Option<&str>,
+    sender_id: Option<&str>,
     page: i64,
     limit: i64,
 ) -> Result<Vec<MessageEntity>> {
@@ -313,6 +314,11 @@ pub async fn search_messages_in_conversation(
         param_count += 1;
     }
 
+    if sender_id.is_some() {
+        query.push_str(&format!(" AND sender_id = ${}", param_count));
+        param_count += 1;
+    }
+
     query.push_str(&format!(" ORDER BY created_at DESC LIMIT ${} OFFSET ${}", param_count, param_count + 1));
 
     let mut sql_query = sqlx::query_as::<_, MessageEntity>(&query)
@@ -329,6 +335,10 @@ pub async fn search_messages_in_conversation(
 
     if let Some(msg_type) = message_type {
         sql_query = sql_query.bind(msg_type);
+    }
+
+    if let Some(sid) = sender_id {
+        sql_query = sql_query.bind(sid);
     }
 
     let messages = sql_query
@@ -349,6 +359,7 @@ pub async fn search_user_messages(
     start_date: Option<&str>,
     end_date: Option<&str>,
     message_type: Option<&str>,
+    sender_id: Option<&str>,
     page: i64,
     limit: i64,
 ) -> Result<Vec<MessageEntity>> {
@@ -378,6 +389,11 @@ pub async fn search_user_messages(
         param_count += 1;
     }
 
+    if sender_id.is_some() {
+        query.push_str(&format!(" AND m.sender_id = ${}", param_count));
+        param_count += 1;
+    }
+
     query.push_str(&format!(" ORDER BY m.created_at DESC LIMIT ${} OFFSET ${}", param_count, param_count + 1));
 
     let mut sql_query = sqlx::query_as::<_, MessageEntity>(&query)
@@ -394,6 +410,10 @@ pub async fn search_user_messages(
 
     if let Some(msg_type) = message_type {
         sql_query = sql_query.bind(msg_type);
+    }
+
+    if let Some(sid) = sender_id {
+        sql_query = sql_query.bind(sid);
     }
 
     let messages = sql_query

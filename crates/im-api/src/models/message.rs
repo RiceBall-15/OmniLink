@@ -364,6 +364,9 @@ pub struct SendMessageRequest {
     /// 阅读后焚毁时间（秒），默认30秒
     #[serde(rename = "burnAfterSeconds", skip_serializing_if = "Option::is_none")]
     pub burn_after_seconds: Option<i32>,
+    /// 媒体元数据（可选，用于 Voice/Video/Image/File 消息）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<MediaMetadata>,
 }
 
 /// 编辑消息请求

@@ -195,13 +195,15 @@ pub async fn send_message(
         req.burn_after_seconds
     };
 
+    let metadata_json = req.metadata.as_ref().map(|m| serde_json::to_value(m).unwrap_or_default());
+
     let params = CreateMessageParams {
         conversation_id: conv_uuid,
         sender_id: sender_uuid,
         content: req.content,
         type_: req.type_,
         reply_to: reply_to_uuid,
-        metadata: None,
+        metadata: metadata_json,
         burn_after_reading,
         burn_after_seconds,
     };
@@ -481,6 +483,9 @@ pub struct SearchMessagesQuery {
     /// 按消息类型过滤（可选）：text, image, file, system, voice, video
     #[serde(rename = "type")]
     pub type_: Option<String>,
+    /// 按发送者过滤（可选）：sender user ID
+    #[serde(rename = "senderId")]
+    pub sender_id: Option<String>,
     #[serde(default = "default_page")]
     pub page: i64,
     #[serde(default = "default_limit")]
@@ -501,6 +506,9 @@ pub struct GlobalSearchMessagesQuery {
     /// 按消息类型过滤（可选）：text, image, file, system, voice, video
     #[serde(rename = "type")]
     pub type_: Option<String>,
+    /// 按发送者过滤（可选）：sender user ID
+    #[serde(rename = "senderId")]
+    pub sender_id: Option<String>,
     #[serde(default = "default_page")]
     pub page: i64,
     #[serde(default = "default_limit")]
@@ -637,6 +645,7 @@ pub async fn search_all_messages(
             &pool, conv_id, &query.q,
             query.start_date.as_deref(), query.end_date.as_deref(),
             query.type_.as_deref(),
+            query.sender_id.as_deref(),
             query.page, query.limit,
         ).await
     } else {
@@ -645,6 +654,7 @@ pub async fn search_all_messages(
             &pool, &user_uuid, &query.q,
             query.start_date.as_deref(), query.end_date.as_deref(),
             query.type_.as_deref(),
+            query.sender_id.as_deref(),
             query.page, query.limit,
         ).await
     };
@@ -743,6 +753,7 @@ pub async fn search_messages(
         query.start_date.as_deref(),
         query.end_date.as_deref(),
         query.type_.as_deref(),
+        query.sender_id.as_deref(),
         query.page,
         query.limit,
     )
