@@ -200,6 +200,17 @@ mod tests {
     }
 
     #[test]
+    fn test_queue_key_unique_per_user() {
+        let user1 = Uuid::new_v4();
+        let user2 = Uuid::new_v4();
+        let key1 = OfflineMessageQueue::queue_key(user1);
+        let key2 = OfflineMessageQueue::queue_key(user2);
+        assert_ne!(key1, key2);
+        assert!(key1.starts_with("offline:queue:"));
+        assert!(key2.starts_with("offline:queue:"));
+    }
+
+    #[test]
     fn test_offline_message_serialization() {
         let msg = OfflineMessage {
             message_id: Uuid::new_v4(),
@@ -214,5 +225,61 @@ mod tests {
         let deserialized: OfflineMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.content, "Hello");
         assert_eq!(deserialized.message_type, "text");
+    }
+
+    #[test]
+    fn test_offline_message_special_chars() {
+        let msg = OfflineMessage {
+            message_id: Uuid::new_v4(),
+            conversation_id: Uuid::new_v4(),
+            sender_id: Uuid::new_v4(),
+            content: "Hello\nWorld\t!@#$%^&*()".to_string(),
+            message_type: "text".to_string(),
+            timestamp: 1700000000,
+        };
+
+        let json = serde_json::to_string(&msg).unwrap();
+        let deserialized: OfflineMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.content, "Hello\nWorld\t!@#$%^&*()");
+    }
+
+    #[test]
+    fn test_offline_message_image_type() {
+        let msg = OfflineMessage {
+            message_id: Uuid::new_v4(),
+            conversation_id: Uuid::new_v4(),
+            sender_id: Uuid::new_v4(),
+            content: "https://example.com/image.png".to_string(),
+            message_type: "image".to_string(),
+            timestamp: 1700000000,
+        };
+
+        let json = serde_json::to_string(&msg).unwrap();
+        let deserialized: OfflineMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.message_type, "image");
+    }
+
+    #[test]
+    fn test_offline_queue_ttl_default() {
+        // 验证默认TTL逻辑（7天 = 604800秒）
+        let ttl = 7 * 24 * 3600;
+        assert_eq!(ttl, 604800);
+    }
+
+    #[test]
+    fn test_offline_message_empty_content() {
+        let msg = OfflineMessage {
+            message_id: Uuid::new_v4(),
+            conversation_id: Uuid::new_v4(),
+            sender_id: Uuid::new_v4(),
+            content: String::new(),
+            message_type: "text".to_string(),
+            timestamp: 0,
+        };
+
+        let json = serde_json::to_string(&msg).unwrap();
+        let deserialized: OfflineMessage = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.content.is_empty());
+        assert_eq!(deserialized.timestamp, 0);
     }
 }

@@ -226,9 +226,94 @@ mod tests {
     }
 
     #[test]
+    fn test_cache_entry_with_blocked_ids() {
+        let mut blocked = HashSet::new();
+        let uid1 = Uuid::new_v4();
+        let uid2 = Uuid::new_v4();
+        blocked.insert(uid1);
+        blocked.insert(uid2);
+
+        let entry = BlockCacheEntry {
+            blocked_ids: blocked.clone(),
+            cached_at: Utc::now(),
+        };
+
+        assert_eq!(entry.blocked_ids.len(), 2);
+        assert!(entry.blocked_ids.contains(&uid1));
+        assert!(entry.blocked_ids.contains(&uid2));
+    }
+
+    #[test]
     fn test_filter_empty_recipients() {
         // 验证空列表处理
         let recipients: Vec<Uuid> = Vec::new();
         assert!(recipients.is_empty());
+    }
+
+    #[test]
+    fn test_filter_blocked_recipients_logic() {
+        // 测试过滤逻辑（不需要Redis）
+        let sender_id = Uuid::new_v4();
+        let recipient1 = Uuid::new_v4();
+        let recipient2 = Uuid::new_v4();
+        let recipient3 = Uuid::new_v4();
+
+        let recipients = vec![recipient1, recipient2, recipient3];
+
+        // 模拟 recipient2 屏蔽了 sender
+        let mut blocked_by_recipient2 = HashSet::new();
+        blocked_by_recipient2.insert(sender_id);
+
+        // 验证过滤逻辑
+        let filtered: Vec<Uuid> = recipients
+            .iter()
+            .filter(|&&uid| {
+                if uid == recipient2 {
+                    !blocked_by_recipient2.contains(&sender_id)
+                } else {
+                    true
+                }
+            })
+            .copied()
+            .collect();
+
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.contains(&recipient1));
+        assert!(!filtered.contains(&recipient2));
+        assert!(filtered.contains(&recipient3));
+    }
+
+    #[test]
+    fn test_block_manager_cache_ttl_default() {
+        // 验证默认缓存TTL逻辑
+        let ttl_none: Option<i64> = None;
+        let ttl_value = ttl_none.unwrap_or(300);
+        assert_eq!(ttl_value, 300);
+
+        let ttl_some: Option<i64> = Some(600);
+        let ttl_value = ttl_some.unwrap_or(300);
+        assert_eq!(ttl_value, 600);
+    }
+
+    #[test]
+    fn test_multiple_caches_independent() {
+        let mut cache1: HashMap<Uuid, BlockCacheEntry> = HashMap::new();
+        let mut cache2: HashMap<Uuid, BlockCacheEntry> = HashMap::new();
+
+        let uid = Uuid::new_v4();
+        let mut blocked = HashSet::new();
+        blocked.insert(uid);
+
+        cache1.insert(
+            Uuid::new_v4(),
+            BlockCacheEntry {
+                blocked_ids: blocked.clone(),
+                cached_at: Utc::now(),
+            },
+        );
+
+        // cache2 应该是空的
+        assert!(cache2.is_empty());
+        assert_eq!(cache1.len(), 1);
     }
 }

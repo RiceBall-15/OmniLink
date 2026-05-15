@@ -570,23 +570,45 @@ mod tests {
     }
 
     #[test]
+    fn test_pending_ack_zero_max_retries() {
+        let ack = PendingAck::new(
+            "msg-1".to_string(),
+            Uuid::new_v4(),
+            0,
+        );
+        // With 0 max retries, should_retry should be false
+        assert!(!ack.should_retry());
+    }
+
+    #[test]
     fn test_connection_quality_levels() {
+        // Test each level with separate instances to avoid sample accumulation
+        
+        // Excellent (< 100ms)
+        let mut q1 = ConnectionQuality::new(Uuid::new_v4(), Uuid::new_v4());
+        q1.record_latency(50.0);
+        assert_eq!(q1.quality_level, QualityLevel::Excellent);
+        assert_eq!(q1.adaptive_heartbeat_interval_secs, 60);
+
+        // Good (100-300ms)
+        let mut q2 = ConnectionQuality::new(Uuid::new_v4(), Uuid::new_v4());
+        q2.record_latency(200.0);
+        assert_eq!(q2.quality_level, QualityLevel::Good);
+        assert_eq!(q2.adaptive_heartbeat_interval_secs, 30);
+
+        // Fair (300-1000ms)
+        let mut q3 = ConnectionQuality::new(Uuid::new_v4(), Uuid::new_v4());
+        q3.record_latency(500.0);
+        assert_eq!(q3.quality_level, QualityLevel::Fair);
+        assert_eq!(q3.adaptive_heartbeat_interval_secs, 15);
+    }
+
+    #[test]
+    fn test_connection_quality_poor_level() {
         let mut quality = ConnectionQuality::new(Uuid::new_v4(), Uuid::new_v4());
-
-        // Excellent
-        quality.record_latency(50.0);
-        assert_eq!(quality.quality_level, QualityLevel::Excellent);
-        assert_eq!(quality.adaptive_heartbeat_interval_secs, 60);
-
-        // Good
-        quality.record_latency(200.0);
-        assert_eq!(quality.quality_level, QualityLevel::Good);
-        assert_eq!(quality.adaptive_heartbeat_interval_secs, 30);
-
-        // Fair
-        quality.record_latency(500.0);
-        assert_eq!(quality.quality_level, QualityLevel::Fair);
-        assert_eq!(quality.adaptive_heartbeat_interval_secs, 15);
+        quality.record_latency(1500.0);
+        assert_eq!(quality.quality_level, QualityLevel::Poor);
+        assert_eq!(quality.adaptive_heartbeat_interval_secs, 10);
     }
 
     #[test]
@@ -599,6 +621,14 @@ mod tests {
     }
 
     #[test]
+    fn test_ack_message_empty_id() {
+        let ack = AckMessage::new(String::new());
+        let json = ack.to_json();
+        let parsed = AckMessage::from_json(&json).unwrap();
+        assert!(parsed.message_id.is_empty());
+    }
+
+    #[test]
     fn test_heartbeat_message() {
         let ping = HeartbeatMessage::client_ping();
         assert_eq!(ping.msg_type, "ping");
@@ -606,5 +636,24 @@ mod tests {
         let pong = HeartbeatMessage::server_pong(ping.client_timestamp);
         assert_eq!(pong.msg_type, "pong");
         assert!(pong.server_timestamp.is_some());
+    }
+
+    #[test]
+    fn test_heartbeat_roundtrip() {
+        let ping = HeartbeatMessage::client_ping();
+        let json = serde_json::to_string(&ping).unwrap();
+        assert!(json.contains("ping"));
+
+        let pong = HeartbeatMessage::server_pong(ping.client_timestamp);
+        let json = serde_json::to_string(&pong).unwrap();
+        assert!(json.contains("pong"));
+    }
+
+    #[test]
+    fn test_quality_level_ordering() {
+        // Verify quality levels are distinct
+        assert_ne!(QualityLevel::Excellent, QualityLevel::Good);
+        assert_ne!(QualityLevel::Good, QualityLevel::Fair);
+        assert_ne!(QualityLevel::Fair, QualityLevel::Poor);
     }
 }
