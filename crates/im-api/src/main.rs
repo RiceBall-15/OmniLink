@@ -27,6 +27,7 @@ use im_api::handlers::message_retry;
 use im_api::handlers::quick_reply;
 use im_api::handlers::feedback;
 use im_api::handlers::chat_export;
+use im_api::handlers::user_preferences;
 use im_api::middleware::auth::AuthUser;
 use im_api::middleware::error_capture::error_capture_middleware;
 use im_api::middleware::security_headers::security_headers_middleware;
@@ -278,6 +279,14 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/im/exports/:id", get(chat_export::get_export_job_handler))
             .route("/api/im/exports/:id/download", get(chat_export::download_export_file_handler))
             .route("/api/im/exports", get(chat_export::list_user_export_jobs_handler));
+
+        // 用户偏好设置 API
+        let app = app
+            .route("/api/users/preferences", get(user_preferences::get_preferences))
+            .route("/api/users/preferences", put(user_preferences::set_preference))
+            .route("/api/users/preferences", delete(user_preferences::delete_preference))
+            .route("/api/users/preferences/batch", put(user_preferences::batch_set_preferences))
+            .route("/api/users/preferences/category/:category", delete(user_preferences::delete_category));
 
     // 克隆连接池用于后台定时消息处理任务
     let bg_pool = pool.clone();

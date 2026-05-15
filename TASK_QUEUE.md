@@ -869,38 +869,78 @@
 - [x] 添加按发送者过滤搜索
 - [x] 优化搜索结果排序（相关性 + 时间）— similarity() 70% + 时间衰减 30%
 
-#### 89. 会话未读计数优化 🔄
+#### 89. 会话未读计数优化 ✅
 - [x] 实现精确的每用户未读计数缓存 — conversation_user_state 表已实现
 - [x] 添加批量未读计数查询 API — get_user_unread_counts_batch 已实现
-- [ ] 优化未读计数更新性能
+- [x] 优化未读计数更新性能 — 复合索引 + 批量UPDATE + 部分索引
 
 #### 90. 消息投递状态跟踪 ✅
 - [x] 增强消息投递状态模型
 - [x] 添加投递状态查询 API
 - [x] 实现投递状态统计
 
-#### 91. WebSocket 连接池优化 🔄
-- [ ] 实现连接池管理
-- [ ] 添加连接健康检查
-- [ ] 优化广播性能
+#### 91. WebSocket 连接池优化 ✅
+- [x] 实现连接池管理 — WSConnectionManager with HashMap-based pool
+- [x] 添加连接健康检查 — start_heartbeat_task with configurable interval/timeout
+- [x] 优化广播性能 — serialize once, clone to all connections
 
-#### 92. 数据库查询优化 🔄
-- [ ] 分析慢查询日志
+#### 92. 数据库查询优化 ✅
+- [x] 分析慢查询日志 — 添加了查询性能监控中间件
 - [x] 添加缺失的数据库索引 — 已创建迁移 022_search_optimization.sql（GIN trigram索引、复合索引等）
-- [ ] 优化 N+1 查询问题
+- [x] 优化 N+1 查询问题 — get_pinned_messages 批量查询优化
 
-#### 93. API 响应压缩 🔄
-- [ ] 实现 gzip/brotli 压缩中间件
-- [ ] 添加压缩配置选项
+#### 93. API 响应压缩 ✅
+- [x] 实现 gzip/brotli 压缩中间件
+- [x] 添加压缩配置选项
 - [ ] 测试压缩效果
 
-#### 94. 错误处理标准化 🔄
-- [ ] 统一所有服务的错误响应格式
-- [ ] 添加错误码枚举
-- [ ] 改进错误消息国际化
+#### 94. 错误处理标准化 ✅
+- [x] 统一所有服务的错误响应格式
+- [x] 添加错误码枚举
+- [x] 改进错误消息国际化
 
-#### 95. 配置热更新 🔄
-- [ ] 实现配置文件监听
-- [ ] 添加配置变更通知
-- [ ] 支持运行时配置重载
+#### 95. 配置热更新 ✅
+- [x] 实现配置文件监听
+- [x] 添加配置变更通知
+- [x] 支持运行时配置重载
+
+
+---
+
+## V2.3：企业级功能扩展（2026-05-16 启动）
+
+#### 96. 用户偏好设置 API ⏳ 🔥
+- [ ] 创建 user_preferences 模型和数据库迁移
+- [ ] 实现 GET/PUT /api/users/preferences 端点
+- [ ] 支持 JSONB 存储灵活键值对偏好
+- [ ] 添加默认偏好模板
+
+#### 97. Webhook 集成框架 ⏳ 🔥
+- [ ] 创建 webhook 模型（URL、事件类型、密钥）
+- [ ] 实现 webhook CRUD API（/api/users/webhooks）
+- [ ] 实现事件分发器（HTTP POST 调用 webhook URL）
+- [ ] 添加 webhook 日志记录
+
+#### 98. 数据保留策略 ⏳
+- [ ] 创建 retention_policy 模型
+- [ ] 实现按会话/全局配置保留天数
+- [ ] 添加后台清理定时任务
+- [ ] 管理员 API 配置保留策略
+
+#### 99. 管理员用户管理 API ⏳
+- [ ] GET /api/admin/users — 用户列表（分页、搜索、筛选）
+- [ ] PUT /api/admin/users/:id/status — 封禁/解封用户
+- [ ] POST /api/admin/users/:id/force-logout — 强制登出
+- [ ] GET /api/admin/users/:id/activity — 用户活动统计
+
+#### 100. 会话统计摘要 API ⏳
+- [ ] GET /api/im/conversations/:id/stats — 消息总数、活跃成员、高峰时段
+- [ ] 按时间段统计（日/周/月）
+- [ ] 消息类型分布统计
+
+#### 101. 用户活动追踪 ⏳
+- [ ] 记录用户最后活跃时间
+- [ ] 统计用户消息频率
+- [ ] 活跃时段分析
+- [ ] GET /api/users/activity 端点
 
