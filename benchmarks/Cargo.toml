@@ -1,0 +1,32 @@
+[package]
+name = "omnilink-benchmarks"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+uuid = { version = "1", features = ["v4"] }
+tokio-tungstenite = "0.20"
+futures-util = "0.3"
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+
+[[bench]]
+name = "message_throughput"
+harness = false
+
+[[bench]]
+name = "websocket_concurrent"
+harness = false
+
+[[bench]]
+name = "database_queries"
+harness = false
+
+[profile.bench]
+opt-level = 2
+lto = "thin"
