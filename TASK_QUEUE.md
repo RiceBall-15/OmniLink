@@ -1204,13 +1204,13 @@
 - [x] 添加连接池指标端点（/api/admin/pool-stats）
 - [x] 单元测试
 
-#### 135. API 请求体验证框架 ⏳
-- [ ] 创建 ValidationMiddleware 模块
-- [ ] 定义请求体验证规则（长度、格式、范围）
-- [ ] 支持自定义验证器注册
-- [ ] 统一验证错误响应格式
-- [ ] 为现有 API 添加验证规则
-- [ ] 单元测试
+#### 135. API 请求体验证框架 ✅
+- [x] 创建 ValidationMiddleware 模块（validated_json.rs）
+- [x] 定义请求体验证规则（长度、格式、范围）- ValidationRule trait, LengthRule, RangeRule, PatternRule, EnumRule, CustomRule
+- [x] 支持自定义验证器注册（CustomRule + validate_serializable()）
+- [x] 统一验证错误响应格式（ValidationErrorResponse, 422 status）
+- [x] 为现有 API 添加验证规则（register + send_message handler）
+- [x] 单元测试（20+ 测试用例）
 
 #### 136. WebSocket 连接质量监控 ⏳
 - [ ] 实现连接延迟测量（RTT ping/pong）

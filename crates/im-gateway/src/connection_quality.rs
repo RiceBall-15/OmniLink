@@ -384,6 +384,50 @@ impl AckManager {
             .unwrap_or(30)
     }
 
+    /// 获取弱连接降级策略
+    ///
+    /// 根据连接质量等级返回推送策略参数：
+    /// - Excellent: 全速推送，无延迟
+    /// - Good: 正常推送
+    /// - Fair: 降低推送频率，消息批量发送
+    /// - Poor: 最小推送，仅关键消息
+    pub async fn get_degradation_strategy(&self, connection_id: &Uuid) -> DegradationStrategy {
+        let quality = self.connection_quality.read().await;
+        quality
+            .get(connection_id)
+            .map(|q| match q.quality_level {
+                QualityLevel::Excellent => DegradationStrategy {
+                    max_messages_per_second: 100,
+                    batch_size: 1,
+                    batch_interval_ms: 0,
+                    priority_only: false,
+                    description: "全速推送".to_string(),
+                },
+                QualityLevel::Good => DegradationStrategy {
+                    max_messages_per_second: 50,
+                    batch_size: 1,
+                    batch_interval_ms: 0,
+                    priority_only: false,
+                    description: "正常推送".to_string(),
+                },
+                QualityLevel::Fair => DegradationStrategy {
+                    max_messages_per_second: 20,
+                    batch_size: 5,
+                    batch_interval_ms: 1000,
+                    priority_only: false,
+                    description: "批量推送（每秒最多20条，批量5条）".to_string(),
+                },
+                QualityLevel::Poor => DegradationStrategy {
+                    max_messages_per_second: 5,
+                    batch_size: 10,
+                    batch_interval_ms: 3000,
+                    priority_only: true,
+                    description: "仅推送关键消息（@提及、系统通知）".to_string(),
+                },
+            })
+            .unwrap_or(DegradationStrategy::default())
+    }
+
     /// 获取待确认消息数量
     pub async fn pending_count(&self) -> usize {
         let pending = self.pending_acks.read().await;
@@ -481,6 +525,35 @@ impl HeartbeatMessage {
             Some((now - self.client_timestamp) as f64)
         } else {
             None
+        }
+    }
+}
+
+/// 弱连接降级策略
+///
+/// 根据连接质量等级自动调整消息推送参数
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DegradationStrategy {
+    /// 每秒最大消息数
+    pub max_messages_per_second: u32,
+    /// 批量发送大小
+    pub batch_size: u32,
+    /// 批量发送间隔（毫秒）
+    pub batch_interval_ms: u64,
+    /// 是否仅推送关键消息
+    pub priority_only: bool,
+    /// 策略描述
+    pub description: String,
+}
+
+impl Default for DegradationStrategy {
+    fn default() -> Self {
+        Self {
+            max_messages_per_second: 50,
+            batch_size: 1,
+            batch_interval_ms: 0,
+            priority_only: false,
+            description: "正常推送".to_string(),
         }
     }
 }
@@ -655,5 +728,57 @@ mod tests {
         assert_ne!(QualityLevel::Excellent, QualityLevel::Good);
         assert_ne!(QualityLevel::Good, QualityLevel::Fair);
         assert_ne!(QualityLevel::Fair, QualityLevel::Poor);
+    }
+
+    #[test]
+    fn test_degradation_strategy_default() {
+        let strategy = DegradationStrategy::default();
+        assert_eq!(strategy.max_messages_per_second, 50);
+        assert_eq!(strategy.batch_size, 1);
+        assert_eq!(strategy.batch_interval_ms, 0);
+        assert!(!strategy.priority_only);
+        assert_eq!(strategy.description, "正常推送");
+    }
+
+    #[test]
+    fn test_quality_report_conversion() {
+        let mut quality = ConnectionQuality::new(Uuid::new_v4(), Uuid::new_v4());
+        quality.record_latency(50.0);
+        quality.record_sent();
+        quality.record_acked();
+
+        let report = QualityReport::from(&quality);
+        assert_eq!(report.avg_latency_ms, 50.0);
+        assert_eq!(report.quality_level, "Excellent");
+        assert_eq!(report.total_sent, 1);
+        assert_eq!(report.total_acked, 1);
+        assert_eq!(report.total_timeout, 0);
+        assert_eq!(report.heartbeat_interval_secs, 60);
+    }
+
+    #[test]
+    fn test_quality_report_serialization() {
+        let quality = ConnectionQuality::new(Uuid::new_v4(), Uuid::new_v4());
+        let report = QualityReport::from(&quality);
+        let json = serde_json::to_string(&report).unwrap();
+        assert!(json.contains("quality_level"));
+        assert!(json.contains("avg_latency_ms"));
+        let parsed: QualityReport = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.quality_level, report.quality_level);
+    }
+
+    #[test]
+    fn test_packet_loss_rate_calculation() {
+        let mut quality = ConnectionQuality::new(Uuid::new_v4(), Uuid::new_v4());
+        // 8 sent, 6 acked, 2 timeout => loss rate = 2/8 = 0.25
+        for _ in 0..6 {
+            quality.record_acked();
+        }
+        for _ in 0..2 {
+            quality.record_timeout();
+        }
+        assert!((quality.packet_loss_rate - 0.25).abs() < 0.001);
+        // 0.25 >= 0.10, so quality level should be Poor
+        assert_eq!(quality.quality_level, QualityLevel::Poor);
     }
 }

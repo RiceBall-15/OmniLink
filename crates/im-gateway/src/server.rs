@@ -28,6 +28,7 @@ impl GatewayServer {
             .route("/health", routing::get(health_check))
             .route("/metrics", routing::get(metrics_handler))
             .route("/ws", routing::get(websocket_handler))
+            .route("/api/quality/stats", routing::get(quality_stats_handler))
     }
 
     async fn websocket_handler(
@@ -89,6 +90,37 @@ async fn metrics_handler() -> axum::Json<serde_json::Value> {
             "memory_used_mb": mem_used,
             "memory_total_mb": mem_total,
             "memory_usage_percent": if mem_total > 0 { (mem_used as f64 / mem_total as f64 * 100.0) as u64 } else { 0 },
+        }
+    }))
+}
+
+/// 连接质量统计 API
+///
+/// 返回当前所有连接的质量指标摘要
+async fn quality_stats_handler() -> axum::Json<serde_json::Value> {
+    // 返回连接质量统计占位数据
+    // 实际实现需要从 AckManager 获取连接质量数据
+    axum::Json(serde_json::json!({
+        "status": "ok",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "connection_quality": {
+            "total_connections": 0,
+            "excellent": 0,
+            "good": 0,
+            "fair": 0,
+            "poor": 0,
+        },
+        "message_stats": {
+            "total_sent": 0,
+            "total_acked": 0,
+            "total_timeout": 0,
+            "overall_loss_rate": 0.0,
+        },
+        "degradation_summary": {
+            "full_speed": 0,
+            "normal": 0,
+            "batched": 0,
+            "priority_only": 0,
         }
     }))
 }
