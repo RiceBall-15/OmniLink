@@ -1,0 +1,112 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  schedule:
+    # Run weekly security audit
+    - cron: '0 6 * * 1'
+
+jobs:
+  # ============================================================
+  # Cargo Audit - Security vulnerabilities in dependencies
+  # ============================================================
+  cargo-audit:
+    name: Cargo Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run cargo audit
+        run: cargo audit
+
+  # ============================================================
+  # Cargo Deny - License and dependency policy
+  # ============================================================
+  cargo-deny:
+    name: Cargo Deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny
+
+      - name: Check licenses
+        run: cargo deny check licenses
+
+      - name: Check advisories
+        run: cargo deny check advisories
+
+  # ============================================================
+  # Test Coverage
+  # ============================================================
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: omnilink
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: omnilink_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://omnilink:test_password@localhost:5432/omnilink_test
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: test_jwt_secret_for_ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Run database migrations
+        run: |
+          for f in migrations/*.sql; do
+            psql -h localhost -U omnilink -d omnilink_test -f "$f" || true
+          done
+        env:
+          PGPASSWORD: test_password
+
+      - name: Generate coverage report
+        run: |
+          cargo tarpaulin --workspace \
+            --exclude omnilink-integration-tests \
+            --exclude omnilink-benchmarks \
+            --out xml \
+            --output-dir coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage/cobertura.xml
+          fail_ci_if_error: false
