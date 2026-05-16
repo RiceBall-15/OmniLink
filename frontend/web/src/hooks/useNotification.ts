@@ -3,12 +3,13 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { notificationService, NotificationSettings } from '../services/notificationService';
+import { notificationService, NotificationSettings, NotificationItem } from '../services/notificationService';
 
 export function useNotification() {
   const [settings, setSettings] = useState<NotificationSettings>(notificationService.getSettings());
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [unreadCount, setUnreadCount] = useState(notificationService.getUnreadCount());
+  const [notifications, setNotifications] = useState<NotificationItem[]>(notificationService.getNotifications());
 
   // 初始化时检查权限
   useEffect(() => {
@@ -50,6 +51,35 @@ export function useNotification() {
     setUnreadCount(0);
   }, []);
 
+  // 添加通知
+  const addNotification = useCallback((notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>) => {
+    const item = notificationService.addNotification(notification);
+    setNotifications(notificationService.getNotifications());
+    setUnreadCount(notificationService.getUnreadCount());
+    return item;
+  }, []);
+
+  // 标记通知为已读
+  const markAsRead = useCallback((notificationId: string) => {
+    notificationService.markAsRead(notificationId);
+    setNotifications(notificationService.getNotifications());
+    setUnreadCount(notificationService.getUnreadCount());
+  }, []);
+
+  // 全部标为已读
+  const markAllAsRead = useCallback(() => {
+    notificationService.markAllAsRead();
+    setNotifications(notificationService.getNotifications());
+    setUnreadCount(0);
+  }, []);
+
+  // 删除通知
+  const clearNotification = useCallback((notificationId: string) => {
+    notificationService.removeNotification(notificationId);
+    setNotifications(notificationService.getNotifications());
+    setUnreadCount(notificationService.getUnreadCount());
+  }, []);
+
   // 发送测试通知
   const sendTestNotification = useCallback(async () => {
     await notificationService.sendNotification({
@@ -63,10 +93,15 @@ export function useNotification() {
     settings,
     permission,
     unreadCount,
+    notifications,
     requestPermission,
     updateSettings,
     clearUnreadCount,
     sendTestNotification,
+    addNotification,
+    markAsRead,
+    markAllAsRead,
+    clearNotification,
   };
 }
 

@@ -3,6 +3,16 @@
  * 处理消息提醒、通知权限、声音设置
  */
 
+export interface NotificationItem {
+  id: string;
+  type: 'message' | 'mention' | 'system' | 'friend_request' | 'group_invite';
+  title: string;
+  message: string;
+  timestamp: number;
+  read: boolean;
+  data?: any;
+}
+
 export interface NotificationOptions {
   title: string;
   body: string;
@@ -33,10 +43,13 @@ class NotificationService {
   };
   private unreadCount = 0;
   private audio: HTMLAudioElement | null = null;
+  private notifications: NotificationItem[] = [];
+  private maxNotifications = 50;
 
   constructor() {
     this.loadSettings();
     this.initAudio();
+    this.loadNotifications();
   }
 
   /**
@@ -68,6 +81,99 @@ class NotificationService {
   /**
    * 保存设置
    */
+  /**
+   * 加载通知列表
+   */
+  private loadNotifications() {
+    try {
+      const saved = localStorage.getItem('notification_list');
+      if (saved) {
+        this.notifications = JSON.parse(saved);
+        this.unreadCount = this.notifications.filter(n => !n.read).length;
+      }
+    } catch (error) {
+      console.warn('Failed to load notifications:', error);
+    }
+  }
+
+  /**
+   * 保存通知列表
+   */
+  private saveNotifications() {
+    try {
+      localStorage.setItem('notification_list', JSON.stringify(this.notifications));
+    } catch (error) {
+      console.warn('Failed to save notifications:', error);
+    }
+  }
+
+  /**
+   * 添加通知到列表
+   */
+  addNotification(notification: Omit<NotificationItem, 'id' | 'timestamp' | 'read'>): NotificationItem {
+    const item: NotificationItem = {
+      ...notification,
+      id: `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      read: false,
+    };
+
+    this.notifications.unshift(item);
+
+    // 限制最大数量
+    if (this.notifications.length > this.maxNotifications) {
+      this.notifications = this.notifications.slice(0, this.maxNotifications);
+    }
+
+    this.unreadCount = this.notifications.filter(n => !n.read).length;
+    this.updateBadge();
+    this.saveNotifications();
+
+    return item;
+  }
+
+  /**
+   * 标记通知为已读
+   */
+  markAsRead(notificationId: string): void {
+    const notification = this.notifications.find(n => n.id === notificationId);
+    if (notification) {
+      notification.read = true;
+      this.unreadCount = this.notifications.filter(n => !n.read).length;
+      this.updateBadge();
+      this.saveNotifications();
+    }
+  }
+
+  /**
+   * 全部标为已读
+   */
+  markAllAsRead(): void {
+    this.notifications.forEach(n => {
+      n.read = true;
+    });
+    this.unreadCount = 0;
+    this.updateBadge();
+    this.saveNotifications();
+  }
+
+  /**
+   * 删除通知
+   */
+  removeNotification(notificationId: string): void {
+    this.notifications = this.notifications.filter(n => n.id !== notificationId);
+    this.unreadCount = this.notifications.filter(n => !n.read).length;
+    this.updateBadge();
+    this.saveNotifications();
+  }
+
+  /**
+   * 获取通知列表
+   */
+  getNotifications(): NotificationItem[] {
+    return [...this.notifications];
+  }
+
   private saveSettings() {
     try {
       localStorage.setItem('notification_settings', JSON.stringify(this.settings));
