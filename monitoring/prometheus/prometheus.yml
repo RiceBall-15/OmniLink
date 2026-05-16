@@ -1,45 +1,92 @@
-# Prometheus 配置 - OmniLink 监控
-# 部署到 /etc/prometheus/prometheus.yml
-
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
-# 告警规则
+# Alert rules
 rule_files:
-  - "rules/omnilink.yml"
+  - /etc/prometheus/alerts.yml
 
-# 抓取配置
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Scrape configurations
 scrape_configs:
-  # Prometheus 自身监控
-  - job_name: "prometheus"
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
     static_configs:
-      - targets: ["localhost:9090"]
+      - targets: ['localhost:9090']
 
-  # OmniLink API 服务
-  - job_name: "omnilink-api"
-    metrics_path: "/metrics"
+  # OmniLink IM API
+  - job_name: 'im-api'
+    static_configs:
+      - targets: ['im-api:8002']
+    metrics_path: '/metrics'
     scrape_interval: 10s
-    static_configs:
-      - targets: ["localhost:8080"]
-        labels:
-          service: "im-api"
-          environment: "production"
 
-  # 可以添加更多实例（集群部署时）
-  # - targets: ["api-2:8080", "api-3:8080"]
-
-  # Node Exporter（系统监控）
-  - job_name: "node-exporter"
+  # OmniLink IM Gateway
+  - job_name: 'im-gateway'
     static_configs:
-      - targets: ["localhost:9100"]
+      - targets: ['im-gateway:3002']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
 
-  # PostgreSQL Exporter
-  - job_name: "postgres-exporter"
+  # OmniLink AI Service
+  - job_name: 'ai-service'
     static_configs:
-      - targets: ["localhost:9187"]
+      - targets: ['ai-service:8003']
+    metrics_path: '/health'
+    scrape_interval: 30s
 
-  # Redis Exporter
-  - job_name: "redis-exporter"
+  # OmniLink File Service
+  - job_name: 'file-service'
     static_configs:
-      - targets: ["localhost:9121"]
+      - targets: ['file-service:8007']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+  # OmniLink User Service
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-service:8004']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+  # OmniLink Push Service
+  - job_name: 'push-service'
+    static_configs:
+      - targets: ['push-service:3005']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+  # OmniLink Config Service
+  - job_name: 'config-service'
+    static_configs:
+      - targets: ['config-service:8008']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+  # OmniLink Usage Service
+  - job_name: 'usage-service'
+    static_configs:
+      - targets: ['usage-service:8006']
+    metrics_path: '/health'
+    scrape_interval: 30s
+
+  # PostgreSQL exporter
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  # Redis exporter
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # Node exporter (system metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
