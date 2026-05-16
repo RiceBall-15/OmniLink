@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useThrottle } from '../hooks/useThrottle';
 
 export interface MobileLayoutProps {
   children: React.ReactNode;
@@ -23,12 +24,21 @@ export function MobileLayout({
   const [isMobile, setIsMobile] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  // 节流窗口宽度变化
+  const throttledWidth = useThrottle(windowWidth, 200);
+
+  // 根据节流后的宽度更新移动设备状态
+  useEffect(() => {
+    setIsMobile(throttledWidth <= 768);
+  }, [throttledWidth]);
 
   // 检测是否为移动设备
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
+      setWindowWidth(window.innerWidth);
     };
 
     checkMobile();
