@@ -27,6 +27,7 @@ pub mod log_level;
 pub mod validation;
 pub mod tracing_setup;
 pub mod circuit_breaker;
+pub mod graceful_shutdown;
 
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};
