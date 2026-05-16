@@ -8,6 +8,7 @@ use serde::Serialize;
 use sqlx::PgPool;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
+use common::system_metrics::{SystemMetricsCollector, SystemMetrics};
 
 /// 全局启动时间
 static START_TIME: std::sync::OnceLock<SystemTime> = std::sync::OnceLock::new();
@@ -258,6 +259,13 @@ omnilink_auth_failures_total {auth_failures}
         [(axum::http::header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")],
         metrics_text,
     )
+}
+
+/// 系统指标端点（CPU、内存、磁盘、进程）
+pub async fn get_system_metrics() -> Json<SystemMetrics> {
+    let collector = SystemMetricsCollector::new();
+    let metrics = collector.collect().await;
+    Json(metrics)
 }
 
 #[cfg(test)]

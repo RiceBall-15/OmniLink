@@ -7,9 +7,9 @@
 //! - `auth`: JWT 认证和密码管理
 //! - `db`: 数据库连接管理
 //! - `crypto`: 加密工具（ECDH 密钥交换、AES 加解密）
-//! - `middleware`: HTTP 认证中间件
 //! - `pool_monitor`: 连接池监控和健康检查
 //! - `log_level`: 动态日志级别调整
+//! - `system_metrics`: 系统指标收集（CPU、内存、磁盘）
 
 pub mod error;
 pub mod models;
@@ -30,6 +30,9 @@ pub mod circuit_breaker;
 pub mod graceful_shutdown;
 pub mod api_version;
 pub mod structured_logging;
+
+// V2.8: 新增模块
+pub mod system_metrics;
 
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};

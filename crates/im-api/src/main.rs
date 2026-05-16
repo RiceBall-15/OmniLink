@@ -20,7 +20,7 @@ use im_api::handlers::message;
 use im_api::handlers::conversation;
 use im_api::handlers::health::health_check_with_deps;
 use im_api::handlers::encryption;
-use im_api::handlers::metrics::{get_metrics, get_prometheus_metrics, init_start_time};
+use im_api::handlers::metrics::{get_metrics, get_prometheus_metrics, get_system_metrics, init_start_time};
 use im_api::handlers::audit;
 use im_api::handlers::contact;
 use im_api::handlers::message_retry;
@@ -292,7 +292,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/admin/rate-limit/redis", get(get_redis_rate_limit_config).put(update_redis_rate_limit_config))
         .route("/api/admin/rate-limit/redis/:ip", get(get_ip_rate_limit_status).delete(clear_ip_rate_limit))
         // 日志级别动态调整 API
-        .route("/api/admin/log-level", get(get_log_level).put(update_log_level));
+        .route("/api/admin/log-level", get(get_log_level).put(update_log_level))
+        // 系统指标 API（CPU、内存、磁盘、进程）
+        .route("/api/admin/system-metrics", get(get_system_metrics));
 
         // 消息线程/话题回复 API
         let app = app
