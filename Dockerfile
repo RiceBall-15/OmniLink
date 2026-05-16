@@ -1,5 +1,9 @@
 # Multi-stage build for OmniLink
-# Stage 1: Build the Rust backend
+# Builds all 8 microservices and the frontend
+
+# ============================================================
+# Stage 1: Build Rust backend services
+# ============================================================
 FROM rust:1.77-slim as backend-builder
 
 WORKDIR /app
@@ -16,10 +20,20 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 COPY migrations/ ./migrations/
 
-# Build release binary
-RUN cargo build --release --bin omnilink
+# Build all service binaries in release mode
+RUN cargo build --release \
+    --bin im-api \
+    --bin im-gateway \
+    --bin ai-service \
+    --bin user-service \
+    --bin file-service \
+    --bin push-service \
+    --bin config-service \
+    --bin usage-service
 
+# ============================================================
 # Stage 2: Build the frontend
+# ============================================================
 FROM node:20-slim as frontend-builder
 
 WORKDIR /app/frontend
@@ -36,7 +50,9 @@ COPY frontend/web/ ./
 # Build frontend
 RUN npm run build
 
+# ============================================================
 # Stage 3: Production image
+# ============================================================
 FROM debian:bookworm-slim
 
 WORKDIR /app
@@ -49,8 +65,15 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy backend binary
-COPY --from=backend-builder /app/target/release/omnilink /usr/local/bin/
+# Copy all service binaries
+COPY --from=backend-builder /app/target/release/im-api /usr/local/bin/
+COPY --from=backend-builder /app/target/release/im-gateway /usr/local/bin/
+COPY --from=backend-builder /app/target/release/ai-service /usr/local/bin/
+COPY --from=backend-builder /app/target/release/user-service /usr/local/bin/
+COPY --from=backend-builder /app/target/release/file-service /usr/local/bin/
+COPY --from=backend-builder /app/target/release/push-service /usr/local/bin/
+COPY --from=backend-builder /app/target/release/config-service /usr/local/bin/
+COPY --from=backend-builder /app/target/release/usage-service /usr/local/bin/
 
 # Copy frontend build
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
@@ -59,15 +82,9 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY --from=backend-builder /app/migrations ./migrations
 
 # Create non-root user
-RUN useradd -m -s /bin/bash omnilink
+RUN useradd -m -s /bin/bash omnilink && \
+    chown -R omnilink:omnilink /app
 USER omnilink
 
-# Expose ports
-EXPOSE 8080
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
-
-# Run the application
-CMD ["omnilink"]
+# Default command (overridden by docker-compose)
+CMD ["im-api"]

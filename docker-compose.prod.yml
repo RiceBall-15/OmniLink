@@ -4,44 +4,52 @@
 version: '3.8'
 
 x-common-env: &common-env
-  DATABASE_URL: postgres://im_chat:${DB_PASSWORD:-changeme}@postgres:5432/im_chat
+  DATABASE_URL: postgres://${POSTGRES_USER:-omnilink}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-omnilink}
   REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
   RUST_LOG: ${RUST_LOG:-info}
   APP_ENV: production
 
 services:
-  # PostgreSQL
+  # ============================================================
+  # Infrastructure Services
+  # ============================================================
+
+  # PostgreSQL database
   postgres:
     image: postgres:16-alpine
     container_name: omnilink-postgres
     environment:
-      POSTGRES_USER: im_chat
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
-      POSTGRES_DB: im_chat
+      POSTGRES_USER: ${POSTGRES_USER:-omnilink}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-omnilink}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d:ro
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U im_chat"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-omnilink}"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
     networks:
       - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
-  # Redis
+  # Redis for caching and pub/sub
   redis:
     image: redis:7-alpine
     container_name: omnilink-redis
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-changeme}
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-changeme}
     volumes:
       - redis_data:/data
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
       interval: 10s
@@ -50,20 +58,58 @@ services:
     restart: unless-stopped
     networks:
       - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
-  # IM API Service
+  # MinIO for file storage
+  minio:
+    image: minio/minio:latest
+    container_name: omnilink-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ============================================================
+  # Application Services
+  # ============================================================
+
+  # IM API - Main HTTP API service
   im-api:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: im-api
     container_name: omnilink-im-api
+    command: ["im-api"]
     environment:
       <<: *common-env
-      SERVICE_PORT: "8002"
+      SERVER_PORT: "8002"
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-changeme}
+      MINIO_BUCKET: ${MINIO_BUCKET:-omnilink}
+      MINIO_USE_SSL: "false"
     ports:
-      - "8002:8002"
+      - "${IM_API_PORT:-8002}:8002"
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,10 +131,254 @@ services:
         reservations:
           memory: 256M
 
+  # IM Gateway - WebSocket service
+  im-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omnilink-im-gateway
+    command: ["im-gateway"]
+    environment:
+      <<: *common-env
+      IM_GATEWAY_PORT: "3002"
+    ports:
+      - "${IM_GATEWAY_PORT:-3002}:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+
+  # AI Service - LLM integration
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omnilink-ai-service
+    command: ["ai-service"]
+    environment:
+      <<: *common-env
+      AI_SERVICE_PORT: "8003"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      QWEN_API_KEY: ${QWEN_API_KEY:-}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      ERNIE_API_KEY: ${ERNIE_API_KEY:-}
+    ports:
+      - "${AI_SERVICE_PORT:-8003}:8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # User Service - User management
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omnilink-user-service
+    command: ["user-service"]
+    environment:
+      <<: *common-env
+    ports:
+      - "${USER_SERVICE_PORT:-8004}:8004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # File Service - File management
+  file-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omnilink-file-service
+    command: ["file-service"]
+    environment:
+      <<: *common-env
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-changeme}
+      MINIO_BUCKET: ${MINIO_BUCKET:-omnilink}
+      MINIO_USE_SSL: "false"
+    ports:
+      - "${FILE_SERVICE_PORT:-8007}:8007"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # Push Service - Push notifications
+  push-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omnilink-push-service
+    command: ["push-service"]
+    environment:
+      <<: *common-env
+    ports:
+      - "${PUSH_SERVICE_PORT:-3005}:3005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # Config Service - Configuration management
+  config-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omnilink-config-service
+    command: ["config-service"]
+    environment:
+      <<: *common-env
+    ports:
+      - "${CONFIG_SERVICE_PORT:-8008}:8008"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # Usage Service - Token usage tracking
+  usage-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omnilink-usage-service
+    command: ["usage-service"]
+    environment:
+      <<: *common-env
+    ports:
+      - "${USAGE_SERVICE_PORT:-8006}:8006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ============================================================
+  # Reverse Proxy (Nginx)
+  # ============================================================
+  nginx:
+    image: nginx:alpine
+    container_name: omnilink-nginx
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - im-api
+      - im-gateway
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - omnilink-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
 volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  minio_data:
     driver: local
 
 networks:

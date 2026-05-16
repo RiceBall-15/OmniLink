@@ -1,51 +1,200 @@
-.message-list {
+/* ===== 消息列表容器 ===== */
+.message-list-wrapper {
+  position: relative;
   flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  scroll-behavior: smooth;
+  overflow: hidden;
 }
 
-.empty-messages {
+.message-list {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+/* ===== 日期分隔符 ===== */
+.message-list__date-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 0 8px;
+}
+
+.message-list__date-separator span {
+  font-size: 12px;
+  color: #94a3b8;
+  background: #f1f5f9;
+  padding: 4px 14px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+/* ===== 加载更多 ===== */
+.message-list__load-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.message-list__load-spinner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.message-list__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.message-list__load-hint {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* ===== 无更多消息 ===== */
+.message-list__no-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 8px;
+}
+
+.message-list__no-more span {
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+/* ===== 空状态 ===== */
+.message-list__empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #999;
+  color: #94a3b8;
   text-align: center;
 }
 
-.empty-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
+.message-list__empty-icon {
+  font-size: 56px;
+  margin-bottom: 12px;
+  opacity: 0.4;
 }
 
-.empty-messages p {
-  margin-bottom: 0.5rem;
+.message-list__empty-hint {
+  font-size: 13px;
+  margin-top: 4px;
+  color: #cbd5e1;
 }
 
-.empty-hint {
-  font-size: 0.875rem;
-  opacity: 0.7;
+/* ===== 底部锚点 ===== */
+.message-list__bottom-anchor {
+  height: 1px;
+  flex-shrink: 0;
 }
 
-/* 消息列表滚动优化 */
-.message-list::-webkit-scrollbar {
-  width: 6px;
+/* ===== 回到底部按钮 ===== */
+.message-list__scroll-button {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid #e2e8f0;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #475569;
+  transition: all 0.15s ease;
+  z-index: 10;
 }
 
-.message-list::-webkit-scrollbar-track {
-  background: transparent;
+.message-list__scroll-button:hover {
+  background: #f8fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.message-list::-webkit-scrollbar-thumb {
-  background: #ddd;
-  border-radius: 3px;
+.message-list__new-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #ef4444;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.message-list::-webkit-scrollbar-thumb:hover {
-  background: #bbb;
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== 深色模式 ===== */
+@media (prefers-color-scheme: dark) {
+  .message-list {
+    scrollbar-color: #334155 #0f172a;
+  }
+
+  .message-list__date-separator span {
+    background: #1e293b;
+    color: #64748b;
+  }
+
+  .message-list__load-spinner {
+    color: #94a3b8;
+  }
+
+  .message-list__spinner {
+    border-color: #334155;
+    border-top-color: #3b82f6;
+  }
+
+  .message-list__load-hint {
+    color: #64748b;
+  }
+
+  .message-list__no-more span {
+    color: #475569;
+  }
+
+  .message-list__empty {
+    color: #64748b;
+  }
+
+  .message-list__empty-hint {
+    color: #475569;
+  }
+
+  .message-list__scroll-button {
+    background: #1e293b;
+    border-color: #334155;
+    color: #94a3b8;
+  }
+
+  .message-list__scroll-button:hover {
+    background: #0f172a;
+  }
 }
