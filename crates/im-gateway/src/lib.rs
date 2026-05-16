@@ -26,3 +26,4 @@ pub mod offline_queue;
 pub mod connection_quality;
 pub mod block_manager;
 pub mod presence_channel;
+pub mod message_batcher;
