@@ -665,24 +665,24 @@
 
 ### V2.6 功能完善与优化 (2026-05-16)
 
-#### 任务 120：Docker 容器化配置 ⏳
-- [ ] 创建 Dockerfile（多阶段构建）
-- [ ] 创建 docker-compose.yml（开发环境）
-- [ ] 添加健康检查配置
-- [ ] 创建 .dockerignore
-- [ ] 添加环境变量配置
+#### 任务 120：Docker 容器化配置 ✅ (2026-05-17)
+- [x] 创建 Dockerfile（多阶段构建）
+- [x] 创建 docker-compose.yml（开发环境）
+- [x] 添加健康检查配置
+- [x] 创建 .dockerignore
+- [x] 添加环境变量配置
 
-#### 任务 121：CI/CD 流水线配置 ⏳
-- [ ] GitHub Actions 测试流水线
-- [ ] 构建和部署流水线
-- [ ] 代码质量检查
-- [ ] 安全扫描集成
-- [ ] 自动化发布流程
+#### 任务 121：CI/CD 流水线配置 ✅ (2026-05-17)
+- [x] GitHub Actions 测试流水线
+- [x] 构建和部署流水线
+- [x] 代码质量检查
+- [x] 安全扫描集成
+- [x] 自动化发布流程
 
-#### 任务 122：监控与告警配置 ⏳
-- [ ] Prometheus 指标暴露
-- [ ] Grafana 仪表板模板
-- [ ] 告警规则配置
+#### 任务 122：监控与告警配置 ✅ (2026-05-17)
+- [x] Prometheus 指标暴露（prometheus.yml + alerts.yml）
+- [x] Grafana 仪表板模板（omnilink-overview.json）
+- [x] 告警规则配置（Alertmanager + 13条告警规则）
 - [ ] 日志聚合配置
 - [ ] 分布式追踪集成
 
