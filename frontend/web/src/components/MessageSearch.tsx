@@ -2,13 +2,22 @@ import { useState, useEffect } from 'react'
 import { useDebounce } from '../hooks/useDebounce'
 import './MessageSearch.css'
 
+// 搜索结果类型定义
+interface SearchResult {
+  id: string
+  content: string
+  createdAt: string
+  senderId: string
+  conversationId?: string
+}
+
 interface MessageSearchProps {
   onMessageSelect: (messageId: string) => void
 }
 
 export function MessageSearch({ onMessageSelect }: MessageSearchProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<any[]>([])
+  const [results, setResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
 
@@ -71,7 +80,7 @@ export function MessageSearch({ onMessageSelect }: MessageSearchProps) {
     }
   }
 
-  const handleSelectMessage = (message: any) => {
+  const handleSelectMessage = (message: SearchResult) => {
     onMessageSelect(message.id)
     setQuery('')
     setResults([])
