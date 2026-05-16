@@ -191,4 +191,101 @@ impl ConversationService {
             }
         }
     }
+
+    /// 添加成员到对话
+    pub async fn add_member(
+        &self,
+        conversation_id: Uuid,
+        user_id: Uuid,
+        operator_id: Uuid,
+    ) -> Result<ParticipantInfo> {
+        // 验证操作者是否是对话成员
+        let participants = self.conversation_repository
+            .get_participants(conversation_id)
+            .await?;
+
+        let operator = participants.iter().find(|p| p.user_id == operator_id);
+        match operator {
+            Some(p) if p.role == "owner" || p.role == "admin" => {}
+            Some(_) => return Err(AppError::Authorization("Only owner or admin can add members".to_string())),
+            None => return Err(AppError::Authorization("Not a conversation member".to_string())),
+        }
+
+        // 检查用户是否已在对话中
+        if participants.iter().any(|p| p.user_id == user_id) {
+            return Err(AppError::Validation("User already in conversation".to_string()));
+        }
+
+        // 添加成员
+        self.conversation_repository
+            .add_participant(conversation_id, user_id, "member".to_string())
+            .await?;
+
+        let user = self.get_user_info(user_id).await?;
+        Ok(ParticipantInfo {
+            user_id,
+            username: user.username,
+            avatar_url: user.avatar_url,
+            role: "member".to_string(),
+            joined_at: Utc::now().timestamp(),
+        })
+    }
+
+    /// 从对话移除成员
+    pub async fn remove_member(
+        &self,
+        conversation_id: Uuid,
+        user_id: Uuid,
+        operator_id: Uuid,
+    ) -> Result<()> {
+        let participants = self.conversation_repository
+            .get_participants(conversation_id)
+            .await?;
+
+        // 验证操作者权限
+        let operator = participants.iter().find(|p| p.user_id == operator_id);
+        match operator {
+            Some(p) if p.role == "owner" || p.role == "admin" => {}
+            Some(_) if operator_id == user_id => {
+                // 用户可以自己退出
+            }
+            Some(_) => return Err(AppError::Authorization("Only owner or admin can remove members".to_string())),
+            None => return Err(AppError::Authorization("Not a conversation member".to_string())),
+        }
+
+        // 不能移除创建者
+        if let Some(target) = participants.iter().find(|p| p.user_id == user_id) {
+            if target.role == "owner" && operator_id != user_id {
+                return Err(AppError::Authorization("Cannot remove conversation owner".to_string()));
+            }
+        }
+
+        // 移除成员
+        self.conversation_repository
+            .remove_participant(conversation_id, user_id)
+            .await?;
+
+        Ok(())
+    }
+
+    /// 获取对话成员列表
+    pub async fn get_members(&self, conversation_id: Uuid) -> Result<Vec<ParticipantInfo>> {
+        let participants = self.conversation_repository
+            .get_participants(conversation_id)
+            .await?;
+
+        let mut result = Vec::new();
+        for p in participants {
+            let user = self.get_user_info(p.user_id).await?;
+            result.push(ParticipantInfo {
+                user_id: p.user_id,
+                username: user.username,
+                avatar_url: user.avatar_url,
+                role: p.role,
+                joined_at: p.joined_at,
+            });
+        }
+
+        Ok(result)
+    }
 }
