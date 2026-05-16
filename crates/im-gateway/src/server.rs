@@ -26,6 +26,7 @@ impl GatewayServer {
     fn router(&self) -> Router {
         Router::new()
             .route("/health", routing::get(health_check))
+            .route("/metrics", routing::get(metrics_handler))
             .route("/ws", routing::get(websocket_handler))
     }
 
@@ -53,4 +54,41 @@ async fn handle_socket(mut socket: axum::extract::ws::WebSocket) {
 
 async fn health_check() -> &'static str {
     "Gateway OK"
+}
+
+async fn metrics_handler() -> axum::Json<serde_json::Value> {
+    // 返回基础系统指标
+    let (mem_used, mem_total) = {
+        #[cfg(target_os = "linux")]
+        {
+            if let Ok(info) = std::fs::read_to_string("/proc/meminfo") {
+                let mut total = 0u64;
+                let mut available = 0u64;
+                for line in info.lines() {
+                    if line.starts_with("MemTotal:") {
+                        total = line.split_whitespace().nth(1)
+                            .and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+                    } else if line.starts_with("MemAvailable:") {
+                        available = line.split_whitespace().nth(1)
+                            .and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+                    }
+                }
+                ((total - available) / 1024, total / 1024)
+            } else {
+                (0, 0)
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        { (0, 0) }
+    };
+
+    axum::Json(serde_json::json!({
+        "status": "ok",
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "system": {
+            "memory_used_mb": mem_used,
+            "memory_total_mb": mem_total,
+            "memory_usage_percent": if mem_total > 0 { (mem_used as f64 / mem_total as f64 * 100.0) as u64 } else { 0 },
+        }
+    }))
 }

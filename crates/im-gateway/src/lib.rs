@@ -28,3 +28,4 @@ pub mod block_manager;
 pub mod presence_channel;
 pub mod message_batcher;
 pub mod notification_pipeline;
+pub mod metrics;
