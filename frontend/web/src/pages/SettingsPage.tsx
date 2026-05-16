@@ -1,11 +1,17 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
+import { useI18n } from '../i18n/setup'
+import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import { ThemeToggle } from '../components/ThemeToggle'
+import { useThemeStore } from '../stores/themeStore'
 import './SettingsPage.css'
 
 export function SettingsPage() {
   const { user } = useAuth()
   const { showSuccess, showError } = useToast()
+  const { t } = useI18n()
+  const { theme } = useThemeStore()
   const [activeTab, setActiveTab] = useState('profile')
   const [saving, setSaving] = useState(false)
 
@@ -17,14 +23,13 @@ export function SettingsPage() {
     avatar: '',
   })
 
-  // 主题设置
-  const [theme, setTheme] = useState('light')
-
   // 通知设置
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
     sound: true,
+    desktopNotification: false,
+    messagePreview: true,
   })
 
   // 隐私设置
@@ -32,16 +37,16 @@ export function SettingsPage() {
     showOnline: true,
     showReadReceipts: true,
     allowSearch: false,
+    readBurn: false,
   })
 
   const handleSaveProfile = async () => {
     setSaving(true)
     try {
-      // 模拟保存
       await new Promise((resolve) => setTimeout(resolve, 1000))
-      showSuccess('个人资料保存成功')
+      showSuccess(t('common.success'))
     } catch (error) {
-      showError('保存失败，请稍后重试')
+      showError(t('common.error'))
     } finally {
       setSaving(false)
     }
@@ -50,29 +55,29 @@ export function SettingsPage() {
   const handleSaveSettings = async () => {
     setSaving(true)
     try {
-      // 模拟保存
       await new Promise((resolve) => setTimeout(resolve, 1000))
-      showSuccess('设置保存成功')
+      showSuccess(t('common.success'))
     } catch (error) {
-      showError('保存失败，请稍后重试')
+      showError(t('common.error'))
     } finally {
       setSaving(false)
     }
   }
 
   const tabs = [
-    { id: 'profile', label: '个人资料', icon: '👤' },
-    { id: 'theme', label: '主题外观', icon: '🎨' },
-    { id: 'notifications', label: '通知设置', icon: '🔔' },
-    { id: 'privacy', label: '隐私安全', icon: '🔒' },
+    { id: 'profile', label: t('nav.profile'), icon: '👤' },
+    { id: 'appearance', label: t('settings.appearance'), icon: '🎨' },
+    { id: 'notifications', label: t('settings.notifications'), icon: '🔔' },
+    { id: 'privacy', label: t('settings.privacy'), icon: '🔒' },
+    { id: 'about', label: t('settings.about'), icon: 'ℹ️' },
   ]
 
   return (
     <div className="settings-page">
       <div className="settings-header">
-        <h1>⚙️ 设置</h1>
+        <h1>⚙️ {t('settings.title')}</h1>
         <button className="back-button" onClick={() => window.history.back()}>
-          ← 返回
+          ← {t('common.back')}
         </button>
       </div>
 
@@ -93,12 +98,13 @@ export function SettingsPage() {
 
         {/* 设置内容 */}
         <div className="settings-content">
+          {/* 个人资料 */}
           {activeTab === 'profile' && (
             <div className="settings-section">
-              <h2>个人资料</h2>
+              <h2>{t('nav.profile')}</h2>
               <div className="settings-form">
                 <div className="form-group">
-                  <label>头像</label>
+                  <label>{t('auth.username')}</label>
                   <div className="avatar-upload">
                     <div className="avatar-preview">
                       {profile.avatar ? (
@@ -109,40 +115,27 @@ export function SettingsPage() {
                         </div>
                       )}
                     </div>
-                    <button className="upload-button">更换头像</button>
+                    <button className="upload-button">{t('files.upload')}</button>
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="username">用户名</label>
+                  <label htmlFor="username">{t('auth.username')}</label>
                   <input
                     id="username"
                     type="text"
                     value={profile.username}
                     onChange={(e) => setProfile({ ...profile, username: e.target.value })}
-                    placeholder="输入用户名"
                   />
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="email">邮箱</label>
+                  <label htmlFor="email">{t('auth.email')}</label>
                   <input
                     id="email"
                     type="email"
                     value={profile.email}
                     onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                    placeholder="输入邮箱"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="bio">个人简介</label>
-                  <textarea
-                    id="bio"
-                    value={profile.bio}
-                    onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                    placeholder="介绍一下自己..."
-                    rows={4}
                   />
                 </div>
 
@@ -152,50 +145,37 @@ export function SettingsPage() {
                     onClick={handleSaveProfile}
                     disabled={saving}
                   >
-                    {saving ? '保存中...' : '保存更改'}
+                    {saving ? t('common.loading') : t('common.save')}
                   </button>
                 </div>
               </div>
             </div>
           )}
 
-          {activeTab === 'theme' && (
+          {/* 外观设置 */}
+          {activeTab === 'appearance' && (
             <div className="settings-section">
-              <h2>主题外观</h2>
+              <h2>{t('settings.appearance')}</h2>
               <div className="settings-form">
                 <div className="form-group">
-                  <label>主题模式</label>
-                  <div className="theme-selector">
-                    <button
-                      className={`theme-option ${theme === 'light' ? 'active' : ''}`}
-                      onClick={() => setTheme('light')}
-                    >
-                      <span className="theme-icon">☀️</span>
-                      <span>浅色</span>
-                    </button>
-                    <button
-                      className={`theme-option ${theme === 'dark' ? 'active' : ''}`}
-                      onClick={() => setTheme('dark')}
-                    >
-                      <span className="theme-icon">🌙</span>
-                      <span>深色</span>
-                    </button>
-                    <button
-                      className={`theme-option ${theme === 'auto' ? 'active' : ''}`}
-                      onClick={() => setTheme('auto')}
-                    >
-                      <span className="theme-icon">🌓</span>
-                      <span>自动</span>
-                    </button>
-                  </div>
+                  <label>{t('settings.language')}</label>
+                  <LanguageSwitcher />
                 </div>
 
                 <div className="form-group">
-                  <label>字体大小</label>
+                  <label>{t('settings.theme')}</label>
+                  <ThemeToggle />
+                  <p className="form-hint">
+                    {t('settings.theme')}: {theme}
+                  </p>
+                </div>
+
+                <div className="form-group">
+                  <label>{t('settings.fontSize')}</label>
                   <select className="form-select">
-                    <option value="small">小</option>
-                    <option value="medium" selected>中</option>
-                    <option value="large">大</option>
+                    <option value="small">A-</option>
+                    <option value="medium" defaultValue="medium">A</option>
+                    <option value="large">A+</option>
                   </select>
                 </div>
 
@@ -205,58 +185,52 @@ export function SettingsPage() {
                     onClick={handleSaveSettings}
                     disabled={saving}
                   >
-                    {saving ? '保存中...' : '保存更改'}
+                    {saving ? t('common.loading') : t('common.save')}
                   </button>
                 </div>
               </div>
             </div>
           )}
 
+          {/* 通知设置 */}
           {activeTab === 'notifications' && (
             <div className="settings-section">
-              <h2>通知设置</h2>
+              <h2>{t('settings.notifications')}</h2>
               <div className="settings-form">
                 <div className="form-group">
-                  <label>通知类型</label>
                   <div className="toggle-list">
-                    <div className="toggle-item">
-                      <div className="toggle-info">
-                        <span className="toggle-label">邮件通知</span>
-                        <span className="toggle-description">接收重要消息的邮件提醒</span>
+                    {[
+                      { key: 'email', label: t('notifications.newMessage'), desc: '接收邮件通知' },
+                      { key: 'push', label: t('notifications.pushEnabled'), desc: '接收浏览器推送' },
+                      { key: 'sound', label: t('notifications.soundEnabled'), desc: '新消息提示音' },
+                      { key: 'desktopNotification', label: t('settings.desktopNotification'), desc: '桌面弹窗通知' },
+                      { key: 'messagePreview', label: t('settings.messagePreview'), desc: '通知中显示消息内容' },
+                    ].map(item => (
+                      <div className="toggle-item" key={item.key}>
+                        <div className="toggle-info">
+                          <span className="toggle-label">{item.label}</span>
+                          <span className="toggle-description">{item.desc}</span>
+                        </div>
+                        <button
+                          className={`toggle-button ${(notifications as any)[item.key] ? 'active' : ''}`}
+                          onClick={() => setNotifications({
+                            ...notifications,
+                            [item.key]: !(notifications as any)[item.key],
+                          })}
+                        >
+                          <span className="toggle-slider"></span>
+                        </button>
                       </div>
-                      <button
-                        className={`toggle-button ${notifications.email ? 'active' : ''}`}
-                        onClick={() => setNotifications({ ...notifications, email: !notifications.email })}
-                      >
-                        <span className="toggle-slider"></span>
-                      </button>
-                    </div>
+                    ))}
+                  </div>
+                </div>
 
-                    <div className="toggle-item">
-                      <div className="toggle-info">
-                        <span className="toggle-label">推送通知</span>
-                        <span className="toggle-description">接收浏览器推送通知</span>
-                      </div>
-                      <button
-                        className={`toggle-button ${notifications.push ? 'active' : ''}`}
-                        onClick={() => setNotifications({ ...notifications, push: !notifications.push })}
-                      >
-                        <span className="toggle-slider"></span>
-                      </button>
-                    </div>
-
-                    <div className="toggle-item">
-                      <div className="toggle-info">
-                        <span className="toggle-label">声音提示</span>
-                        <span className="toggle-description">新消息时播放提示音</span>
-                      </div>
-                      <button
-                        className={`toggle-button ${notifications.sound ? 'active' : ''}`}
-                        onClick={() => setNotifications({ ...notifications, sound: !notifications.sound })}
-                      >
-                        <span className="toggle-slider"></span>
-                      </button>
-                    </div>
+                <div className="form-group">
+                  <label>{t('notifications.quietHours')}</label>
+                  <div className="time-range">
+                    <input type="time" defaultValue="22:00" className="time-input" />
+                    <span>—</span>
+                    <input type="time" defaultValue="08:00" className="time-input" />
                   </div>
                 </div>
 
@@ -266,58 +240,42 @@ export function SettingsPage() {
                     onClick={handleSaveSettings}
                     disabled={saving}
                   >
-                    {saving ? '保存中...' : '保存更改'}
+                    {saving ? t('common.loading') : t('common.save')}
                   </button>
                 </div>
               </div>
             </div>
           )}
 
+          {/* 隐私安全 */}
           {activeTab === 'privacy' && (
             <div className="settings-section">
-              <h2>隐私安全</h2>
+              <h2>{t('settings.privacy')}</h2>
               <div className="settings-form">
                 <div className="form-group">
-                  <label>在线状态</label>
                   <div className="toggle-list">
-                    <div className="toggle-item">
-                      <div className="toggle-info">
-                        <span className="toggle-label">显示在线状态</span>
-                        <span className="toggle-description">其他用户可以看到你是否在线</span>
+                    {[
+                      { key: 'showOnline', label: t('chat.online'), desc: '显示你的在线状态' },
+                      { key: 'showReadReceipts', label: t('chat.readReceipt'), desc: '显示消息已读状态' },
+                      { key: 'allowSearch', label: '允许搜索', desc: '其他用户可通过邮箱找到你' },
+                      { key: 'readBurn', label: t('chat.burnAfterRead'), desc: '阅后即焚默认开启' },
+                    ].map(item => (
+                      <div className="toggle-item" key={item.key}>
+                        <div className="toggle-info">
+                          <span className="toggle-label">{item.label}</span>
+                          <span className="toggle-description">{item.desc}</span>
+                        </div>
+                        <button
+                          className={`toggle-button ${(privacy as any)[item.key] ? 'active' : ''}`}
+                          onClick={() => setPrivacy({
+                            ...privacy,
+                            [item.key]: !(privacy as any)[item.key],
+                          })}
+                        >
+                          <span className="toggle-slider"></span>
+                        </button>
                       </div>
-                      <button
-                        className={`toggle-button ${privacy.showOnline ? 'active' : ''}`}
-                        onClick={() => setPrivacy({ ...privacy, showOnline: !privacy.showOnline })}
-                      >
-                        <span className="toggle-slider"></span>
-                      </button>
-                    </div>
-
-                    <div className="toggle-item">
-                      <div className="toggle-info">
-                        <span className="toggle-label">已读回执</span>
-                        <span className="toggle-description">显示消息已读状态</span>
-                      </div>
-                      <button
-                        className={`toggle-button ${privacy.showReadReceipts ? 'active' : ''}`}
-                        onClick={() => setPrivacy({ ...privacy, showReadReceipts: !privacy.showReadReceipts })}
-                      >
-                        <span className="toggle-slider"></span>
-                      </button>
-                    </div>
-
-                    <div className="toggle-item">
-                      <div className="toggle-info">
-                        <span className="toggle-label">允许搜索</span>
-                        <span className="toggle-description">其他用户可以通过邮箱找到你</span>
-                      </div>
-                      <button
-                        className={`toggle-button ${privacy.allowSearch ? 'active' : ''}`}
-                        onClick={() => setPrivacy({ ...privacy, allowSearch: !privacy.allowSearch })}
-                      >
-                        <span className="toggle-slider"></span>
-                      </button>
-                    </div>
+                    ))}
                   </div>
                 </div>
 
@@ -336,8 +294,31 @@ export function SettingsPage() {
                     onClick={handleSaveSettings}
                     disabled={saving}
                   >
-                    {saving ? '保存中...' : '保存更改'}
+                    {saving ? t('common.loading') : t('common.save')}
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 关于 */}
+          {activeTab === 'about' && (
+            <div className="settings-section">
+              <h2>{t('settings.about')}</h2>
+              <div className="settings-form">
+                <div className="about-info">
+                  <div className="about-logo">
+                    <span className="logo-icon">🔗</span>
+                    <h3>OmniLink</h3>
+                  </div>
+                  <p className="about-version">{t('settings.version')}: v2.9.0</p>
+                  <p className="about-desc">
+                    OmniLink 是一个全功能即时通讯平台，支持 AI 助手、文件管理、群组聊天等功能。
+                  </p>
+                  <div className="about-links">
+                    <a href="/admin/performance">{t('admin.performance')}</a>
+                    <a href="/admin/health">{t('admin.healthCheck')}</a>
+                  </div>
                 </div>
               </div>
             </div>
