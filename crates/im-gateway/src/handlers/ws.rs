@@ -9,6 +9,7 @@ use crate::connection_manager::{WSConnection, WSConnectionManager, ConnectionId}
 use crate::status_manager::OnlineStatusManager;
 use crate::services::IMService;
 use crate::models::{WSMessage, WSMessageType, WSConnectRequest};
+use crate::connection_quality::AckManager;
 use common::auth::TokenManager;
 
 /// 应用共享状态
@@ -18,6 +19,7 @@ pub struct AppState {
     pub status_manager: Arc<OnlineStatusManager>,
     pub token_manager: Arc<TokenManager>,
     pub im_service: Arc<IMService>,
+    pub ack_manager: Arc<AckManager>,
 }
 
 /// WebSocket 路由处理器
@@ -162,6 +164,9 @@ async fn handle_websocket(
     // 停止心跳任务
     heartbeat_task.abort();
 
+    // 注销连接质量监控
+    state.ack_manager.unregister_connection(&connection_id).await;
+
     // 移除连接
     if let Some(conn) = state.connection_manager.remove_connection(connection_id).await {
         // 如果这是用户的最后一个连接，更新在线状态为离线
@@ -233,6 +238,26 @@ async fn handle_auth_message(
 
                     // 添加连接到管理器
                     state.connection_manager.add_connection(connection).await;
+
+                    // 注册连接质量监控
+                    state.ack_manager.register_connection(connection_id, uid).await;
+
+                    // 启动 ACK 检查任务（仅首次启动）
+                    static ACK_TASK_STARTED: std::sync::Once = std::sync::Once::new();
+                    ACK_TASK_STARTED.call_once(|| {
+                        let ack_mgr = state.ack_manager.clone();
+                        tokio::spawn(async move {
+                            let ack_mgr_ref = ack_mgr;
+                            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+                            loop {
+                                interval.tick().await;
+                                let retry_list = ack_mgr_ref.check_pending_messages().await;
+                                if !retry_list.is_empty() {
+                                    tracing::info!("ACK check: {} messages need retry", retry_list.len());
+                                }
+                            }
+                        });
+                    });
 
                     // 如果指定了会话ID，设置到连接中
                     if let Some(conv_id) = connect_req.conversation_id {

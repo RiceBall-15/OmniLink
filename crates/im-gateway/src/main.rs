@@ -74,12 +74,16 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| "default-secret-change-me".to_string());
     let token_manager = Arc::new(TokenManager::new(jwt_secret.as_bytes()));
 
+    // 创建ACK管理器（连接质量监控）
+    let ack_manager = Arc::new(im_gateway::connection_quality::AckManager::new(3, 5000));
+
     // 创建应用状态
     let ws_state = Arc::new(AppState {
         connection_manager: connection_manager.clone(),
         status_manager: status_manager.clone(),
         token_manager: token_manager.clone(),
         im_service: im_service.clone(),
+        ack_manager: ack_manager.clone(),
     });
 
     // 认证中间件
