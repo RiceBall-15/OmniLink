@@ -29,6 +29,7 @@ pub mod tracing_setup;
 pub mod circuit_breaker;
 pub mod graceful_shutdown;
 pub mod api_version;
+pub mod structured_logging;
 
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};
