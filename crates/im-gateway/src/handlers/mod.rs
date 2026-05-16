@@ -5,6 +5,7 @@
 //! - HTTP API: 消息发送、历史查询、已读标记、会话管理等
 
 pub mod ws;
+pub mod file_upload;
 
 use axum::{
     extract::{Json, Path, Query, State},
