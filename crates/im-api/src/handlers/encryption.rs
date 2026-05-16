@@ -20,6 +20,7 @@ use uuid::Uuid;
 use sqlx::PgPool;
 
 use crate::models::auth::ApiResponse;
+use serde::Deserialize;
 use common::crypto;
 
 /// 生成用户身份密钥对

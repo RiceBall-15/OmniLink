@@ -33,3 +33,4 @@ hex = "0.4"
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tower.workspace = true
+reqwest.workspace = true

@@ -8,3 +8,4 @@ pub mod redis_rate_limit;
 pub mod request_id;
 pub mod request_timing;
 pub mod security_headers;
+pub mod validated_json;

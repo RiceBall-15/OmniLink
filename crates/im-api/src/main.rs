@@ -372,7 +372,9 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/admin/delivery/status/:message_id", get(delivery::get_delivery_status))
             .route("/api/admin/delivery/dead-letters", get(delivery::get_dead_letters))
             .route("/api/admin/delivery/dead-letters/:message_id/retry", post(delivery::retry_dead_letter))
-            .route("/api/admin/delivery/dead-letters/:message_id", delete(delivery::delete_dead_letter));
+            .route("/api/admin/delivery/dead-letters/:message_id", delete(delivery::delete_dead_letter))
+            // 连接池统计端点
+            .route("/api/admin/pool-stats", get(get_pool_stats));
 
         // 管理员用户管理 API (Task 99) & 仪表盘 (Task 107)
         let app = app
@@ -479,6 +481,30 @@ async fn main() -> anyhow::Result<()> {
 #[allow(dead_code)]
 async fn health_check() -> &'static str {
     "IM API is healthy"
+}
+
+/// 获取数据库连接池统计信息
+async fn get_pool_stats(State(pool): State<PgPool>) -> impl IntoResponse {
+    let pool_options = pool.options();
+    let size = pool.size();
+    let idle = pool.num_idle();
+    
+    Json(serde_json::json!({
+        "code": 200,
+        "message": "获取成功",
+        "data": {
+            "total_connections": size,
+            "idle_connections": idle,
+            "active_connections": size - idle as u32,
+            "max_connections": pool_options.get_max_connections(),
+            "min_connections": pool_options.get_min_connections(),
+            "connect_timeout_secs": pool_options.get_connect_timeout().as_secs(),
+            "max_lifetime_secs": pool_options.get_max_lifetime().map(|d| d.as_secs()),
+            "idle_timeout_secs": pool_options.get_idle_timeout().map(|d| d.as_secs()),
+            "checked_out": size - idle as u32,
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        }
+    }))
 }
 
 /// 获取当前日志级别

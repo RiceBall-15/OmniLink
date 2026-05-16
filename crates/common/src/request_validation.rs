@@ -50,6 +50,9 @@ pub trait ValidationRule: Send + Sync {
 
     /// 规则描述（用于错误消息）
     fn description(&self) -> String;
+
+    /// 克隆为 Box（支持 Clone）
+    fn clone_box(&self) -> Box<dyn ValidationRule>;
 }
 
 /// 长度验证规则
@@ -100,6 +103,10 @@ impl ValidationRule for LengthRule {
             (None, None) => "无长度限制".to_string(),
         }
     }
+
+    fn clone_box(&self) -> Box<dyn ValidationRule> {
+        Box::new(self.clone())
+    }
 }
 
 /// 范围验证规则（数值）
@@ -149,6 +156,10 @@ impl ValidationRule for RangeRule {
             (None, None) => "无范围限制".to_string(),
         }
     }
+
+    fn clone_box(&self) -> Box<dyn ValidationRule> {
+        Box::new(self.clone())
+    }
 }
 
 /// 正则表达式验证规则
@@ -185,6 +196,10 @@ impl ValidationRule for PatternRule {
     fn description(&self) -> String {
         format!("匹配模式: {}", self.pattern)
     }
+
+    fn clone_box(&self) -> Box<dyn ValidationRule> {
+        Box::new(self.clone())
+    }
 }
 
 /// 枚举值验证规则
@@ -219,9 +234,14 @@ impl ValidationRule for EnumRule {
     fn description(&self) -> String {
         format!("允许值: [{}]", self.allowed_values.join(", "))
     }
+
+    fn clone_box(&self) -> Box<dyn ValidationRule> {
+        Box::new(self.clone())
+    }
 }
 
 /// 自定义闭包验证规则
+#[derive(Clone)]
 pub struct CustomRule {
     pub name: String,
     pub validator: Arc<dyn Fn(&Value) -> Result<(), String> + Send + Sync>,
@@ -251,6 +271,10 @@ impl ValidationRule for CustomRule {
     fn description(&self) -> String {
         format!("自定义规则: {}", self.name)
     }
+
+    fn clone_box(&self) -> Box<dyn ValidationRule> {
+        Box::new(self.clone())
+    }
 }
 
 // ============================================================================
@@ -269,6 +293,17 @@ pub struct FieldValidation {
     pub rules: Vec<Box<dyn ValidationRule>>,
     /// 字段描述（用于错误消息）
     pub description: Option<String>,
+}
+
+impl Clone for FieldValidation {
+    fn clone(&self) -> Self {
+        Self {
+            field_name: self.field_name.clone(),
+            required: self.required,
+            rules: self.rules.iter().map(|r| r.clone_box()).collect(),
+            description: self.description.clone(),
+        }
+    }
 }
 
 impl FieldValidation {
@@ -402,6 +437,15 @@ pub struct ValidationSchema {
     fields: HashMap<String, FieldValidation>,
     /// 自定义全局验证器
     global_validators: Vec<Box<dyn ValidationRule>>,
+}
+
+impl Clone for ValidationSchema {
+    fn clone(&self) -> Self {
+        Self {
+            fields: self.fields.clone(),
+            global_validators: self.global_validators.iter().map(|r| r.clone_box()).collect(),
+        }
+    }
 }
 
 impl ValidationSchema {

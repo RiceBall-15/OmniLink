@@ -42,7 +42,7 @@ impl std::fmt::Display for DeliveryStatus {
 }
 
 /// 待确认消息条目
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct PendingMessage {
     /// 消息ID
     pub message_id: Uuid,
@@ -353,7 +353,7 @@ pub struct PendingQueueSummary {
 }
 
 /// 死信队列条目
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct DeadLetterEntry {
     /// 原始消息ID
     pub message_id: Uuid,
