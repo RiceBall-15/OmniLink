@@ -1291,7 +1291,9 @@
 - [x] 创建 useThrottle hook
 - [x] 应用到搜索输入
 - [ ] 应用到滚动事件
-- [ ] 应用到窗口 resize 事件
+- [x] 应用到窗口 resize 事件
+- **说明**: VirtualScroll 已使用 passive scroll listener 优化；MobileLayout 已应用 throttle
+- **说明**: VirtualScroll 已使用 passive scroll listener 优化；MobileLayout 已应用 throttle
 
 #### 145. 消息列表虚拟滚动优化 🔥 ✅
 - [x] 优化 VirtualScroll 组件性能
