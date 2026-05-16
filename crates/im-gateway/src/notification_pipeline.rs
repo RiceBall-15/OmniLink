@@ -491,6 +491,64 @@ impl NotificationPipeline {
         self.delivery_queue.read().await.len()
     }
 
+    /// 重试失败的投递
+    ///
+    /// 检查所有失败的投递记录，对已到重试时间的进行重试。
+    /// 超过最大重试次数的标记为 Abandoned。
+    pub async fn retry_failed_deliveries(&self) -> usize {
+        let mut retried = 0;
+        let mut to_retry: Vec<(Uuid, DeliveryChannel, u32)> = Vec::new();
+
+        {
+            let records = self.delivery_records.read().await;
+            for (event_id, channel_records) in records.iter() {
+                for record in channel_records.iter() {
+                    if let DeliveryStatus::Failed(_) = &record.status {
+                        if let Some(next_retry) = record.next_retry_at {
+                            if Instant::now() >= next_retry {
+                                if record.attempts < self.config.max_retries {
+                                    to_retry.push((*event_id, record.channel.clone(), record.attempts));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for (event_id, channel, attempts) in to_retry {
+            // 更新投递记录中的尝试次数和状态
+            let mut records = self.delivery_records.write().await;
+            if let Some(channel_records) = records.get_mut(&event_id) {
+                for record in channel_records.iter_mut() {
+                    if record.channel == channel {
+                        record.attempts = attempts + 1;
+                        record.status = DeliveryStatus::Delivering;
+                        record.last_attempt_at = Some(Instant::now());
+                        // 指数退避：base_delay * 2^(attempts-1)
+                        let delay = self.config.retry_base_delay_ms * 2u64.pow(attempts);
+                        record.next_retry_at = Some(Instant::now() + Duration::from_millis(delay));
+                        break;
+                    }
+                }
+
+                // 检查是否超过最大重试次数
+                for record in channel_records.iter_mut() {
+                    if record.channel == channel && record.attempts >= self.config.max_retries {
+                        if !matches!(record.status, DeliveryStatus::Delivered) {
+                            record.status = DeliveryStatus::Abandoned;
+                            let mut stats = self.stats.write().await;
+                            stats.total_failed += 1;
+                        }
+                    }
+                }
+            }
+            retried += 1;
+        }
+
+        retried
+    }
+
     /// 启动后台处理任务
     pub fn start_background_task(self: &Arc<Self>) -> tokio::task::JoinHandle<()> {
         let pipeline = Arc::clone(self);
@@ -498,9 +556,15 @@ impl NotificationPipeline {
             let mut interval = tokio::time::interval(Duration::from_millis(100));
             loop {
                 interval.tick().await;
+                // 处理队列中的通知
                 let processed = pipeline.process_queue().await;
                 if processed > 0 {
                     tracing::debug!("Notification pipeline processed {} events", processed);
+                }
+                // 重试失败的投递
+                let retried = pipeline.retry_failed_deliveries().await;
+                if retried > 0 {
+                    tracing::debug!("Notification pipeline retried {} deliveries", retried);
                 }
             }
         })
@@ -798,5 +862,72 @@ mod tests {
 
         pipeline.submit(event).await.unwrap();
         assert_eq!(pipeline.queue_len().await, 1);
+    }
+
+    #[tokio::test]
+    async fn test_retry_failed_deliveries() {
+        let config = NotificationPipelineConfig {
+            max_retries: 3,
+            retry_base_delay_ms: 0, // 立即重试
+            ..Default::default()
+        };
+        let pipeline = NotificationPipeline::new(config);
+
+        // 手动创建一个失败的投递记录
+        let event_id = Uuid::new_v4();
+        {
+            let mut records = pipeline.delivery_records.write().await;
+            records.insert(event_id, vec![
+                DeliveryRecord {
+                    channel: DeliveryChannel::Push,
+                    status: DeliveryStatus::Failed("Push not implemented".to_string()),
+                    attempts: 1,
+                    last_attempt_at: Some(Instant::now()),
+                    next_retry_at: Some(Instant::now() - Duration::from_millis(100)), // 已过重试时间
+                },
+            ]);
+        }
+
+        // 重试
+        let retried = pipeline.retry_failed_deliveries().await;
+        assert_eq!(retried, 1);
+
+        // 验证状态已更新为 Delivering
+        let records = pipeline.delivery_records.read().await;
+        let channel_records = records.get(&event_id).unwrap();
+        assert_eq!(channel_records[0].attempts, 2);
+        assert!(matches!(channel_records[0].status, DeliveryStatus::Delivering));
+    }
+
+    #[tokio::test]
+    async fn test_retry_abandons_after_max_retries() {
+        let config = NotificationPipelineConfig {
+            max_retries: 2,
+            retry_base_delay_ms: 0,
+            ..Default::default()
+        };
+        let pipeline = NotificationPipeline::new(config);
+
+        let event_id = Uuid::new_v4();
+        {
+            let mut records = pipeline.delivery_records.write().await;
+            records.insert(event_id, vec![
+                DeliveryRecord {
+                    channel: DeliveryChannel::Email,
+                    status: DeliveryStatus::Failed("Email failed".to_string()),
+                    attempts: 2, // 已达最大重试次数
+                    last_attempt_at: Some(Instant::now()),
+                    next_retry_at: Some(Instant::now() - Duration::from_millis(100)),
+                },
+            ]);
+        }
+
+        let retried = pipeline.retry_failed_deliveries().await;
+        assert_eq!(retried, 1);
+
+        // 验证状态已更新为 Abandoned
+        let records = pipeline.delivery_records.read().await;
+        let channel_records = records.get(&event_id).unwrap();
+        assert!(matches!(channel_records[0].status, DeliveryStatus::Abandoned));
     }
 }

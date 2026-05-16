@@ -1212,13 +1212,13 @@
 - [x] 为现有 API 添加验证规则（register + send_message handler）
 - [x] 单元测试（20+ 测试用例）
 
-#### 136. WebSocket 连接质量监控 ⏳
-- [ ] 实现连接延迟测量（RTT ping/pong）
-- [ ] 添加消息丢失率统计
-- [ ] 连接质量评分算法（A/B/C/D等级）
-- [ ] 弱连接自动降级策略（降低推送频率）
-- [ ] 连接质量查询 API
-- [ ] 单元测试
+#### 136. WebSocket 连接质量监控 ✅
+- [x] 实现连接延迟测量（RTT ping/pong）- HeartbeatMessage with calculate_rtt()
+- [x] 添加消息丢失率统计 - packet_loss_rate in ConnectionQuality
+- [x] 连接质量评分算法（A/B/C/D等级）- QualityLevel: Excellent/Good/Fair/Poor
+- [x] 弱连接自动降级策略（降低推送频率）- DegradationStrategy with 4 levels
+- [x] 连接质量查询 API - /api/quality/stats endpoint
+- [x] 单元测试（15+ 测试用例）
 
 #### 137. 消息通知投递管道 ⏳
 - [ ] 创建 NotificationPipeline 模块
