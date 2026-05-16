@@ -26,6 +26,7 @@ use crate::db::user::{
 };
 use crate::middleware::auth::AuthUser;
 use crate::utils::jwt::generate_token;
+use common::request_validation::ValidationSchemas;
 
 /// 安全序列化为 JSON Value，避免 unwrap 导致 panic
 fn to_json_value<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, (StatusCode, Json<ApiResponse<serde_json::Value>>)> {
@@ -75,6 +76,15 @@ pub async fn register(
         return (
             StatusCode::BAD_REQUEST,
             Json(ApiResponse::error("INVALID_EMAIL", "邮箱格式不正确")),
+        );
+    }
+
+    // 业务级验证（密码强度、用户名格式等）
+    if let Err(errors) = ValidationSchemas::user_register().validate_serializable(&req) {
+        let error_msg = errors.to_response().message;
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ApiResponse::error("VALIDATION_ERROR", error_msg)),
         );
     }
 

@@ -23,6 +23,7 @@ use crate::models::auth::ApiResponse;
 use crate::models::message::{Message, SendMessageRequest, EditMessageRequest, CreateMessageParams, AddReactionRequest, ReactionSummary, MessageEntity};
 use crate::db::message::{create_message, get_messages_by_conversation, get_message_by_id, update_message_content, recall_message, mark_conversation_as_read, can_edit_message, can_recall_message, get_quoted_messages_batch};
 use crate::middleware::auth::AuthUser;
+use common::request_validation::ValidationSchemas;
 
 
 /// 安全序列化为 JSON Value，避免 unwrap 导致 panic
@@ -212,6 +213,15 @@ pub async fn send_message(
         return (
             StatusCode::BAD_REQUEST,
             Json(ApiResponse::error("EMPTY_CONTENT", "消息内容不能为空")),
+        );
+    }
+
+    // 业务级验证（消息长度、类型等）
+    if let Err(errors) = ValidationSchemas::send_message_content().validate_serializable(&req) {
+        let error_msg = errors.to_response().message;
+        return (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ApiResponse::error("VALIDATION_ERROR", error_msg)),
         );
     }
 

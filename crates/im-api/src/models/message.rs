@@ -425,7 +425,7 @@ pub struct QuotedMessageInfo {
 }
 
 /// 发送消息请求
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct SendMessageRequest {
     pub content: String,
     #[serde(rename = "type")]

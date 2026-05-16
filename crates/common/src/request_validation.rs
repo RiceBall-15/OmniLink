@@ -534,6 +534,31 @@ impl ValidationSchema {
         }
     }
 
+    /// 验证任何实现了 Serialize 的类型
+    ///
+    /// 将类型序列化为 Value 后进行验证，适用于在 handler 中验证已反序列化的请求体。
+    ///
+    /// # 示例
+    ///
+    /// ```rust,no_run
+    /// use common::request_validation::ValidationSchemas;
+    ///
+    /// let schema = ValidationSchemas::user_register();
+    /// let request = serde_json::json!({"username": "test", "email": "test@example.com", "password": "StrongPass1"});
+    /// assert!(schema.validate_serializable(&request).is_ok());
+    /// ```
+    pub fn validate_serializable<T: serde::Serialize>(&self, data: &T) -> Result<(), ValidationErrors> {
+        let value = serde_json::to_value(data).map_err(|e| ValidationErrors {
+            errors: vec![ValidationErrorDetail {
+                field: "_body".to_string(),
+                message: format!("序列化失败: {}", e),
+                code: "serialization_error".to_string(),
+                params: serde_json::json!({}),
+            }],
+        })?;
+        self.validate(&value)
+    }
+
     /// 验证 serde_json::Value（便利方法）
     pub fn validate_json(&self, json_str: &str) -> Result<(), ValidationErrors> {
         let value: Value = serde_json::from_str(json_str).map_err(|e| ValidationErrors {
@@ -711,6 +736,23 @@ impl ValidationSchemas {
             )
             .field(
                 FieldValidation::new("message_type")
+                    .optional()
+                    .description("消息类型")
+                    .enum_values(vec!["text", "image", "file", "voice", "video", "system"]),
+            )
+    }
+
+    /// 发送消息内容验证（用于 URL 路径包含 conversation_id 的场景）
+    pub fn send_message_content() -> ValidationSchema {
+        ValidationSchema::new()
+            .field(
+                FieldValidation::new("content")
+                    .required()
+                    .description("消息内容")
+                    .length_range(1, 10000),
+            )
+            .field(
+                FieldValidation::new("type")
                     .optional()
                     .description("消息类型")
                     .enum_values(vec!["text", "image", "file", "voice", "video", "system"]),
@@ -1183,7 +1225,61 @@ mod tests {
             .enum_values(vec!["text", "image", "file"]);
         let schema = ValidationSchema::new().field(field);
 
-        assert!(schema.validate(&json!({"type": "text"})).is_ok());
-        assert!(schema.validate(&json!({"type": "video"})).is_err());
+        assert!(schema.validate(&json!({ "type": "text" })).is_ok());
+        assert!(schema.validate(&json!({ "type": "video" })).is_err());
+    }
+
+    #[test]
+    fn test_validate_serializable() {
+        #[derive(serde::Serialize)]
+        struct TestRequest {
+            username: String,
+            email: String,
+        }
+
+        let schema = ValidationSchemas::user_register();
+
+        // 有效的请求
+        let req = TestRequest {
+            username: "test_user".to_string(),
+            email: "test@example.com".to_string(),
+        };
+        // 注册 schema 还需要 password 字段，所以这里会失败
+        assert!(schema.validate_serializable(&req).is_err());
+
+        // 使用简单的 schema 测试成功场景
+        let simple_schema = ValidationSchema::new()
+            .field(FieldValidation::new("username").required().length_range(3, 50))
+            .field(FieldValidation::new("email").required().email());
+        assert!(simple_schema.validate_serializable(&req).is_ok());
+
+        // 无效的请求
+        let bad_req = TestRequest {
+            username: "ab".to_string(),
+            email: "invalid".to_string(),
+        };
+        assert!(simple_schema.validate_serializable(&bad_req).is_err());
+    }
+
+    #[test]
+    fn test_send_message_content_schema() {
+        let schema = ValidationSchemas::send_message_content();
+
+        // 有效内容
+        assert!(schema.validate(&json!({ "content": "Hello!" })).is_ok());
+        assert!(schema
+            .validate(&json!({ "content": "Hi", "type": "text" }))
+            .is_ok());
+
+        // 空内容
+        assert!(schema.validate(&json!({ "content": "" })).is_err());
+
+        // 缺少内容
+        assert!(schema.validate(&json!({})).is_err());
+
+        // 无效消息类型
+        assert!(schema
+            .validate(&json!({ "content": "Hi", "type": "invalid" }))
+            .is_err());
     }
 }

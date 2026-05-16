@@ -59,7 +59,7 @@ impl UserEntity {
 }
 
 /// 用户注册请求
-#[derive(Debug, Deserialize, Validate, utoipa::ToSchema)]
+#[derive(Debug, Deserialize, Serialize, Validate, utoipa::ToSchema)]
 pub struct RegisterRequest {
     #[validate(length(min = 3, max = 20, message = "用户名长度必须在 3-20 个字符之间"))]
     pub username: String,

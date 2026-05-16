@@ -141,6 +141,42 @@ pub fn validate_or_reject(body: &Value, schema: &ValidationSchema) -> Result<(),
     schema.validate(body).map_err(|errors| errors.into_axum_response())
 }
 
+/// 辅助函数：验证已反序列化的请求体，返回 ApiError 元组
+///
+/// 在返回 `(StatusCode, Json<Value>)` 的 handler 中使用：
+///
+/// ```rust,no_run
+/// use im_api::middleware::validated_json::validate_request;
+/// use common::request_validation::ValidationSchemas;
+///
+/// async fn register(Json(req): Json<RegisterRequest>) -> (StatusCode, Json<Value>) {
+///     if let Some(err) = validate_request(&req, &ValidationSchemas::user_register()) {
+///         return err;
+///     }
+///     // ... 业务逻辑
+/// }
+/// ```
+pub fn validate_request<T: serde::Serialize>(
+    data: &T,
+    schema: &ValidationSchema,
+) -> Option<(StatusCode, Json<Value>)> {
+    match schema.validate_serializable(data) {
+        Ok(()) => None,
+        Err(errors) => {
+            let response = errors.to_response();
+            Some((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({
+                    "success": false,
+                    "message": response.message,
+                    "code": response.code,
+                    "errors": response.errors,
+                })),
+            ))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,5 +238,33 @@ mod tests {
         assert!(state.get("register").is_some());
         assert!(state.get("login").is_some());
         assert!(state.get("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_validate_request_success() {
+        let schema = ValidationSchemas::user_register();
+        let req = json!({
+            "username": "test_user",
+            "email": "test@example.com",
+            "password": "StrongPass1"
+        });
+        assert!(validate_request(&req, &schema).is_none());
+    }
+
+    #[test]
+    fn test_validate_request_failure() {
+        let schema = ValidationSchemas::user_register();
+        let req = json!({
+            "username": "ab",
+            "email": "invalid",
+            "password": "weak"
+        });
+        let result = validate_request(&req, &schema);
+        assert!(result.is_some());
+        let (status, body) = result.unwrap();
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        let body_val: Value = serde_json::from_str(&body.0.to_string()).unwrap();
+        assert_eq!(body_val["success"], false);
+        assert_eq!(body_val["code"], "VALIDATION_ERROR");
     }
 }
