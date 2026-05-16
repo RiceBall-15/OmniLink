@@ -10,6 +10,7 @@ import { AuthPage } from './AuthPage'
 import { useToast } from '../components/Toast'
 import { MessageStatus } from '../types/message'
 import type { WSMessage } from '../types/message'
+import { useKeyboardShortcuts, type KeyboardShortcut } from '../hooks/useKeyboardShortcuts'
 import './ChatPage.css'
 
 /**
@@ -38,6 +39,42 @@ export function ChatPage() {
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // 键盘快捷键
+  const shortcuts: KeyboardShortcut[] = [
+    {
+      key: 'ctrl+k',
+      description: '打开搜索',
+      handler: () => setSearchOpen(prev => !prev),
+    },
+    {
+      key: 'ctrl+n',
+      description: '新建会话',
+      handler: () => {
+        createConversation({ name: '新对话', type: 'human' })
+        showSuccess('已创建新会话')
+      },
+    },
+    {
+      key: 'escape',
+      description: '关闭面板',
+      handler: () => {
+        if (searchOpen) setSearchOpen(false)
+        if (fileUploadOpen) setFileUploadOpen(false)
+      },
+    },
+    ...Array.from({ length: 9 }, (_, i) => ({
+      key: `ctrl+${i + 1}`,
+      description: `切换到会话 ${i + 1}`,
+      handler: () => {
+        if (conversations[i]) {
+          setSelectedConversation(conversations[i].id)
+        }
+      },
+    })),
+  ]
+
+  useKeyboardShortcuts(shortcuts)
 
   // WebSocket 连接
   const { connected, sendMessage: sendWsMessage, error: wsError } = useWebSocket(

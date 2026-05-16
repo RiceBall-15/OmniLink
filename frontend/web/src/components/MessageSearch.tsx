@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useDebounce } from '../hooks/useDebounce'
 import './MessageSearch.css'
 
 interface MessageSearchProps {
@@ -10,6 +11,9 @@ export function MessageSearch({ onMessageSelect }: MessageSearchProps) {
   const [results, setResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
+
+  // 使用防抖 hook
+  const debouncedQuery = useDebounce(query, 300)
 
   // 模拟搜索功能
   const handleSearch = async (searchQuery: string) => {
@@ -45,12 +49,8 @@ export function MessageSearch({ onMessageSelect }: MessageSearchProps) {
   }
 
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      handleSearch(query)
-    }, 300)
-
-    return () => clearTimeout(timeoutId)
-  }, [query])
+    handleSearch(debouncedQuery)
+  }, [debouncedQuery])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (results.length === 0) return
