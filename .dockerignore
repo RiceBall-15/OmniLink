@@ -1,8 +1,16 @@
-# OmniLink
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
 *.swp
 *.swo
-*~
+
+# OS
 .DS_Store
+Thumbs.db
 
 # Rust build artifacts
 target/
@@ -12,34 +20,33 @@ target/
 node_modules/
 frontend/web/node_modules/
 
+# Frontend build (will be built in Docker)
+frontend/web/dist/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Tests
+tests/
+benches/
+examples/
+
 # Environment files
 .env
 .env.local
 .env.production
 
-# IDE
-.idea/
-.vscode/
-*.iml
+# Docker
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
 
-# Build output
-frontend/web/build/
-frontend/web/dist/
+# CI/CD
+.github/
+.gitlab-ci.yml
 
-# Docker volumes (local dev)
-postgres_data/
-redis_data/
-minio_data/
-
-# Logs
-*.log
-logs/
-
-# Temporary files
-tmp/
-temp/
-
-# Test coverage
+# Coverage reports
 coverage/
-*.profraw
-*.profdata
+target/coverage/

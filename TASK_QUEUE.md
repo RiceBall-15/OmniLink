@@ -383,8 +383,8 @@
 - [x] 服务层测试（API service, notificationService）
 - [x] 类型定义测试（message, user types, enums）
 - [x] Vitest 配置和测试基础设施
-- [ ] E2E 测试框架（待后续阶段）
-- [ ] 测试覆盖率报告（待后续阶段）
+- [x] E2E 测试框架（待后续阶段）— ✅ 已完成 Task 111
+- [x] 测试覆盖率报告（待后续阶段）— ✅ 已完成 Task 112
 
 ### 阶段九：进阶功能与优化 🔥
 
@@ -966,7 +966,7 @@
 - [x] GET /api/users/presence — 批量查询用户在线状态
 - [x] 支持"最后活跃时间"查询
 - [x] 自定义在线状态消息（忙碌/离开/勿扰等）
-- [ ] Redis pub/sub 跨实例状态同步
+- [x] Redis pub/sub 跨实例状态同步 — ✅ 已完成 Task 109
 
 #### 105. 消息引用/回复增强 ✅
 - [x] 确保 reply_to_message_id 字段完整实现

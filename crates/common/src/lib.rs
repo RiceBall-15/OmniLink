@@ -25,6 +25,7 @@ pub mod audit;
 pub mod config;
 pub mod log_level;
 pub mod validation;
+pub mod tracing_setup;
 
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};

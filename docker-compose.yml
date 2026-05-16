@@ -1,83 +1,87 @@
-# OmniLink IM System - Docker Compose
-# 开发环境配置
+version: '3.8'
 
 services:
-  # PostgreSQL 数据库
+  # PostgreSQL database
   postgres:
     image: postgres:16-alpine
     container_name: omnilink-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-omnilink}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omnilink_dev_2024}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omnilink_password}
       POSTGRES_DB: ${POSTGRES_DB:-omnilink}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U omnilink"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-omnilink}"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - omnilink-net
 
-  # Redis 缓存
+  # Redis for caching and pub/sub
   redis:
     image: redis:7-alpine
     container_name: omnilink-redis
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-omnilink_dev_2024}
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password}
     volumes:
       - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-omnilink_dev_2024}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_password}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - omnilink-net
 
-  # MinIO 对象存储
+  # MinIO for file storage
   minio:
     image: minio/minio:latest
     container_name: omnilink-minio
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     volumes:
       - minio_data:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
-      timeout: 10s
+      timeout: 20s
       retries: 3
-    networks:
-      - omnilink-net
 
-  # OmniLink API 服务
-  im-api:
+  # OmniLink application
+  omnilink:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: omnilink-api
-    command: ["im-api"]
+    container_name: omnilink-app
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://omnilink:${POSTGRES_PASSWORD:-omnilink_dev_2024}@postgres:5432/omnilink
-      REDIS_URL: redis://:${REDIS_PASSWORD:-omnilink_dev_2024}@redis:6379
-      MINIO_ENDPOINT: http://minio:9000
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-omnilink}:${POSTGRES_PASSWORD:-omnilink_password}@postgres:5432/${POSTGRES_DB:-omnilink}
+      # Redis
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_password}@redis:6379
+      # MinIO
+      MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
-      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
-      RUST_LOG: info
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-omnilink}
+      MINIO_USE_SSL: "false"
+      # Application
+      RUST_LOG: ${RUST_LOG:-info}
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret-here}
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8080
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,76 +93,13 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
-      start_period: 10s
       retries: 3
-    networks:
-      - omnilink-net
-
-  # OmniLink WebSocket Gateway
-  im-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: omnilink-gateway
-    command: ["im-gateway"]
-    environment:
-      DATABASE_URL: postgresql://omnilink:${POSTGRES_PASSWORD:-omnilink_dev_2024}@postgres:5432/omnilink
-      REDIS_URL: redis://:${REDIS_PASSWORD:-omnilink_dev_2024}@redis:6379
-      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
-      RUST_LOG: info
-    ports:
-      - "8081:8081"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - omnilink-net
-
-  # OmniLink Worker 后台任务
-  im-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: omnilink-worker
-    command: ["im-worker"]
-    environment:
-      DATABASE_URL: postgresql://omnilink:${POSTGRES_PASSWORD:-omnilink_dev_2024}@postgres:5432/omnilink
-      REDIS_URL: redis://:${REDIS_PASSWORD:-omnilink_dev_2024}@redis:6379
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
-      RUST_LOG: info
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - omnilink-net
-
-  # Nginx 反向代理 (可选)
-  nginx:
-    image: nginx:alpine
-    container_name: omnilink-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - im-api
-      - im-gateway
-    networks:
-      - omnilink-net
+      start_period: 40s
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
+    driver: local
   minio_data:
-
-networks:
-  omnilink-net:
-    driver: bridge
+    driver: local
