@@ -50,6 +50,11 @@ const UserProfilePage = createRouteComponent(
   { preload: false }
 )
 
+const PerformanceMonitorPage = createRouteComponent(
+  () => import('./pages/PerformanceMonitorPage'),
+  { preload: false }
+)
+
 // 路由守卫组件
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
@@ -180,6 +185,16 @@ function App() {
           element={
             <ProtectedRoute>
               <UserProfilePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 性能监控路由 */}
+        <Route
+          path="/admin/performance"
+          element={
+            <ProtectedRoute>
+              <PerformanceMonitorPage />
             </ProtectedRoute>
           }
         />
