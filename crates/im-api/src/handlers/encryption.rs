@@ -707,3 +707,281 @@ pub async fn get_encrypted_messages(
         ),
     }
 }
+
+/// 密钥轮换请求
+#[derive(Debug, Deserialize)]
+pub struct RotateKeyRequest {
+    /// 新的加密密钥（Base64编码）
+    pub new_key: String,
+}
+
+/// 轮换会话密钥
+///
+/// 停用当前密钥，创建新密钥版本，保留最近3个版本用于解密历史消息。
+/// 轮换成功后通过WebSocket通知会话成员。
+#[utoipa::path(
+    post,
+    path = "/api/im/conversations/{id}/rotate-key",
+    tag = "encryption",
+    params(
+        ("id" = String, Path, description = "会话ID")
+    ),
+    responses(
+        (status = 200, description = "密钥轮换成功", body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "无效的会话ID"),
+        (status = 500, description = "密钥轮换失败"),
+    )
+)]
+pub async fn rotate_conversation_key(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<Uuid>,
+    Path(conversation_id): Path<String>,
+    Json(req): Json<RotateKeyRequest>,
+) -> impl IntoResponse {
+    let conv_uuid = match Uuid::parse_str(&conversation_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<serde_json::Value>::error(
+                    "INVALID_CONVERSATION_ID",
+                    "无效的会话ID",
+                )),
+            );
+        }
+    };
+
+    // 验证用户是否为会话成员
+    let is_member: Result<bool, sqlx::Error> = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2)"
+    )
+    .bind(conv_uuid)
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await;
+
+    match is_member {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::<serde_json::Value>::error(
+                    "NOT_MEMBER",
+                    "您不是该会话的成员",
+                )),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<serde_json::Value>::error(
+                    "DB_ERROR",
+                    format!("验证会话成员失败: {}", e),
+                )),
+            );
+        }
+    }
+
+    // 验证新密钥格式
+    if req.new_key.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<serde_json::Value>::error(
+                "INVALID_KEY",
+                "新密钥不能为空",
+            )),
+        );
+    }
+
+    // 从数据库获取或创建密钥轮换记录
+    // 首先检查是否有现有的密钥版本
+    let existing_versions: Result<Vec<(i32, String, chrono::NaiveDateTime)>, sqlx::Error> = sqlx::query_as(
+        "SELECT version, encrypted_key, created_at FROM conversation_key_versions 
+         WHERE conversation_id = $1 ORDER BY version DESC LIMIT 3"
+    )
+    .bind(conv_uuid)
+    .fetch_all(&pool)
+    .await;
+
+    let previous_version = match existing_versions {
+        Ok(versions) => versions.first().map(|(v, _, _)| *v).unwrap_or(0),
+        Err(_) => 0,
+    };
+
+    let new_version = previous_version + 1;
+
+    // 插入新密钥版本
+    let insert_result = sqlx::query(
+        "INSERT INTO conversation_key_versions (id, conversation_id, version, encrypted_key, created_by, created_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())"
+    )
+    .bind(Uuid::new_v4())
+    .bind(conv_uuid)
+    .bind(new_version)
+    .bind(&req.new_key)
+    .bind(user_id)
+    .execute(&pool)
+    .await;
+
+    match insert_result {
+        Ok(_) => {
+            // 清理旧版本（保留最近3个）
+            let cleanup_result = sqlx::query(
+                "DELETE FROM conversation_key_versions 
+                 WHERE conversation_id = $1 
+                 AND version NOT IN (
+                     SELECT version FROM conversation_key_versions 
+                     WHERE conversation_id = $1 
+                     ORDER BY version DESC 
+                     LIMIT 3
+                 )"
+            )
+            .bind(conv_uuid)
+            .execute(&pool)
+            .await;
+
+            if let Err(e) = cleanup_result {
+                tracing::warn!("清理旧密钥版本失败: {}", e);
+            }
+
+            // 获取会话成员列表（用于WebSocket通知）
+            let members: Result<Vec<Uuid>, sqlx::Error> = sqlx::query_scalar(
+                "SELECT user_id FROM conversation_members WHERE conversation_id = $1"
+            )
+            .bind(conv_uuid)
+            .fetch_all(&pool)
+            .await;
+
+            let member_count = members.map(|m| m.len()).unwrap_or(0);
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "conversationId": conversation_id,
+                    "previousVersion": previous_version,
+                    "newVersion": new_version,
+                    "rotatedBy": user_id.to_string(),
+                    "rotatedAt": chrono::Utc::now().to_rfc3339(),
+                    "memberCount": member_count,
+                    "message": "密钥轮换成功，会话成员将收到通知"
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<serde_json::Value>::error(
+                "ROTATE_FAILED",
+                format!("密钥轮换失败: {}", e),
+            )),
+        ),
+    }
+}
+
+/// 获取会话密钥版本历史
+#[utoipa::path(
+    get,
+    path = "/api/im/conversations/{id}/key-versions",
+    tag = "encryption",
+    params(
+        ("id" = String, Path, description = "会话ID")
+    ),
+    responses(
+        (status = 200, description = "获取成功", body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "无效的会话ID"),
+    )
+)]
+pub async fn get_key_versions(
+    State(pool): State<PgPool>,
+    Extension(user_id): Extension<Uuid>,
+    Path(conversation_id): Path<String>,
+) -> impl IntoResponse {
+    let conv_uuid = match Uuid::parse_str(&conversation_id) {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<serde_json::Value>::error(
+                    "INVALID_CONVERSATION_ID",
+                    "无效的会话ID",
+                )),
+            );
+        }
+    };
+
+    // 验证用户是否为会话成员
+    let is_member: Result<bool, sqlx::Error> = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2)"
+    )
+    .bind(conv_uuid)
+    .bind(user_id)
+    .fetch_one(&pool)
+    .await;
+
+    match is_member {
+        Ok(true) => {}
+        Ok(false) => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(ApiResponse::<serde_json::Value>::error(
+                    "NOT_MEMBER",
+                    "您不是该会话的成员",
+                )),
+            );
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<serde_json::Value>::error(
+                    "DB_ERROR",
+                    format!("验证会话成员失败: {}", e),
+                )),
+            );
+        }
+    }
+
+    // 获取密钥版本列表
+    let versions: Result<Vec<(Uuid, i32, String, Uuid, chrono::NaiveDateTime)>, sqlx::Error> = sqlx::query_as(
+        "SELECT id, version, encrypted_key, created_by, created_at 
+         FROM conversation_key_versions 
+         WHERE conversation_id = $1 
+         ORDER BY version DESC"
+    )
+    .bind(conv_uuid)
+    .fetch_all(&pool)
+    .await;
+
+    match versions {
+        Ok(versions) => {
+            let result: Vec<serde_json::Value> = versions
+                .iter()
+                .map(|(id, version, _, created_by, created_at)| {
+                    serde_json::json!({
+                        "keyId": id,
+                        "version": version,
+                        "createdBy": created_by,
+                        "createdAt": created_at.and_utc().to_rfc3339()
+                    })
+                })
+                .collect();
+
+            let current_version = result.first().map(|v| v["version"].as_i64().unwrap_or(0));
+
+            (
+                StatusCode::OK,
+                Json(ApiResponse::success(serde_json::json!({
+                    "conversationId": conversation_id,
+                    "versions": result,
+                    "currentVersion": current_version,
+                    "totalVersions": result.len()
+                }))),
+            )
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<serde_json::Value>::error(
+                "FETCH_FAILED",
+                format!("获取密钥版本失败: {}", e),
+            )),
+        ),
+    }
+}

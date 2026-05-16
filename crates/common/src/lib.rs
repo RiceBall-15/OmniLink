@@ -35,6 +35,7 @@ pub mod structured_logging;
 pub mod system_metrics;
 pub mod health_aggregator;
 pub mod message_delivery;
+pub mod key_rotation;
 
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};
