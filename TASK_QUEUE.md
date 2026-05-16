@@ -1125,30 +1125,40 @@
 
 ## V2.7：弹性与可观测性增强（2026-05-16 启动）
 
-#### 125. 断路器模式实现 🔥
-- [ ] 创建 CircuitBreaker 模块（Closed/Open/HalfOpen 状态机）
-- [ ] 实现可配置的失败阈值和恢复超时
-- [ ] 添加断路器状态查询 API
-- [ ] 单元测试覆盖所有状态转换
-- [ ] 集成到微服务间调用
+#### 125. 断路器模式实现 🔥 ✅
+- [x] 创建 CircuitBreaker 模块（Closed/Open/HalfOpen 状态机）
+- [x] 实现可配置的失败阈值和恢复超时
+- [x] 添加断路器状态查询 API（CircuitBreakerManager::all_stats/summary）
+- [x] 单元测试覆盖所有状态转换（16个测试用例，含并发测试）
+- [ ] 集成到微服务间调用（待各服务实现业务逻辑时集成）
 
-#### 126. 优雅停机处理 🔥
-- [ ] 实现 GracefulShutdown 信号处理（SIGTERM/SIGINT）
-- [ ] 添加连接排空逻辑（等待活跃请求完成）
-- [ ] WebSocket 连接优雅关闭通知
-- [ ] 超时强制关闭机制
+#### 126. 优雅停机处理 ✅ 🔥
+- [x] 实现 GracefulShutdown 信号处理（SIGTERM/SIGINT）
+- [x] 添加连接排空逻辑（等待活跃请求完成）
+- [x] WebSocket 连接优雅关闭通知（通过 broadcast channel 广播停机信号）
+- [x] 超时强制关闭机制（shutdown_timeout 包裹整体流程 + drain_timeout + callback_timeout）
+- [x] ConnectionGuard RAII 模式自动管理连接计数
+- [x] Builder 模式配置超时参数
+- [x] 13个单元测试覆盖所有场景（含并发、超时、幂等性等）
 
-#### 127. API 版本管理 🔥
-- [ ] 实现版本路由中间件（/api/v1/, /api/v2/）
-- [ ] 版本协商支持（Accept header / URL path）
-- [ ] 版本废弃警告 header
+#### 127. API 版本管理 ✅ 🔥
+- [x] 实现版本路由中间件（/api/v1/, /api/v2/）— versioned_routes() + version_detection_middleware
+- [x] 版本协商支持（Accept header / URL path）— ApiVersion::from_path/from_accept_header
+- [x] 版本废弃警告 header — deprecation_middleware（Deprecation + Sunset + X-API-Warn）
+- [x] ApiVersion 枚举支持 V1/V2/V3，可扩展
+- [x] 14个单元测试覆盖版本解析、排序、废弃判断等场景
 
-#### 128. 消息批量推送优化 🔥
-- [ ] 实现 WebSocket 消息批量发送
-- [ ] 添加消息聚合窗口（100ms 攒批）
-- [ ] 批量 ACK 确认机制
+#### 128. 消息批量推送优化 ✅ 🔥
+- [x] 实现 WebSocket 消息批量发送（MessageBatcher 模块）
+- [x] 添加消息聚合窗口（100ms 攒批，可配置）
+- [x] 批量 ACK 确认机制（BatchAckRequest）
+- [x] 按目标用户/会话分组批量发送
+- [x] 背压控制和统计信息（BatcherStats）
+- [x] 10个单元测试覆盖配置、序列化、统计等场景
 
-#### 129. 结构化日志增强（JSON格式） 🔥
-- [ ] 实现 JSON 格式日志输出（tracing-json）
-- [ ] 添加请求上下文自动注入（trace_id, user_id）
-- [ ] 日志采样策略（高频端点降采样）
+#### 129. 结构化日志增强（JSON格式） ✅ 🔥
+- [x] JSON 格式日志输出已由 tracing_setup.rs 和 log_level.rs 支持
+- [x] 请求上下文自动注入（TracingLayer + create_request_span）
+- [x] 日志采样策略（SamplingConfig + SamplingLayer，高频端点降采样）
+- [x] 结构化日志字段标准化（fields 模块）
+- [x] 16个单元测试覆盖采样配置、统计、上下文注入等场景
