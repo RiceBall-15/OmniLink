@@ -699,3 +699,86 @@
 - [ ] 代码注释完善
 - [ ] 模块依赖优化
 - [ ] 性能热点优化
+
+---
+
+### V2.9 前端弹性与用户体验增强 (2026-05-17) ✅
+
+**V2.9 完成任务数**: 8/8 (100%)
+**最新提交**: `702df32` (2026-05-17 05:40)
+
+#### 任务 138：WebSocket 指数退避重连优化 ✅
+- [x] 实现指数退避重连策略（1s, 2s, 4s, 8s, 16s, 30s max）
+- [x] 添加重连状态指示器组件
+- [x] 添加网络状态检测（navigator.onLine）
+- [x] 页面可见性变化时自动重连
+- [x] 重连成功后自动恢复订阅
+
+#### 任务 139：前端错误边界组件 ✅
+- [x] 创建 ErrorBoundary 组件
+- [x] 实现全局错误捕获
+- [x] 添加错误上报机制
+- [x] 实现优雅的错误回退 UI
+- [x] 添加重试按钮
+
+#### 任务 140：主题系统（深色/浅色模式）✅
+- [x] 创建 ThemeContext
+- [x] 实现深色模式样式
+- [x] 实现浅色模式样式
+- [x] 添加主题切换组件
+- [x] 持久化主题偏好到 localStorage
+
+#### 任务 141：通知铃铛组件 ✅
+- [x] 创建 NotificationBell 组件（bell icon + unread badge + dropdown panel）
+- [x] 实现未读消息计数显示
+- [x] 添加通知下拉面板
+- [x] 实现通知点击跳转
+- [x] 添加通知清除功能
+- [x] 扩展 notificationService 支持通知列表管理
+- [x] 创建 useClickOutside hook
+
+#### 任务 142：键盘快捷键支持 ✅
+- [x] 创建 useKeyboardShortcuts hook（支持修饰键组合）
+- [x] 实现搜索快捷键（Ctrl+K）
+- [x] 实现新消息快捷键（Ctrl+N）
+- [x] 实现会话切换快捷键（Ctrl+1-9）
+- [x] 添加快捷键帮助面板（KeyboardShortcutsPanel + '?' 键触发）
+- [x] 集成到 ChatPage
+
+#### 任务 143：离线状态检测与提示 ✅
+- [x] 创建 useNetworkStatus hook
+- [x] 实现离线状态横幅
+- [x] 离线时消息队列本地缓存
+- [x] 恢复在线后自动同步
+- [x] 网络质量指示器
+
+#### 任务 144：前端请求防抖与节流 ✅
+- [x] 创建 useDebounce hook（值防抖 + 回调防抖）
+- [x] 创建 useThrottle hook（值节流 + 回调节流）
+- [x] 应用到搜索输入（MessageSearch 组件）
+- [ ] 应用到滚动事件
+- [ ] 应用到窗口 resize 事件
+
+#### 任务 145：消息列表虚拟滚动优化 ✅
+- [x] 优化 VirtualScroll 组件性能
+- [x] 添加动态高度支持
+- [x] 实现滚动位置记忆
+- [x] 添加滚动到底部按钮
+- [x] 实现消息预加载
+
+#### 新增文件
+- `frontend/web/src/components/NotificationBell.tsx` - 通知铃铛组件
+- `frontend/web/src/components/NotificationBell.css` - 通知铃铛样式
+- `frontend/web/src/components/KeyboardShortcutsPanel.tsx` - 快捷键帮助面板
+- `frontend/web/src/components/KeyboardShortcutsPanel.css` - 快捷键帮助面板样式
+- `frontend/web/src/hooks/useClickOutside.ts` - 点击外部检测 hook
+- `frontend/web/src/hooks/useDebounce.ts` - 防抖 hook
+- `frontend/web/src/hooks/useThrottle.ts` - 节流 hook
+- `frontend/web/src/hooks/useKeyboardShortcuts.ts` - 键盘快捷键 hook
+
+#### 修改文件
+- `frontend/web/src/services/notificationService.ts` - 添加通知列表管理 API
+- `frontend/web/src/hooks/useNotification.ts` - 暴露通知 CRUD 方法
+- `frontend/web/src/pages/ChatPage.tsx` - 集成键盘快捷键
+- `frontend/web/src/components/MessageSearch.tsx` - 使用 useDebounce hook
+
