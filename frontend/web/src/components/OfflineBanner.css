@@ -1,0 +1,51 @@
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 13px;
+  animation: bannerSlide 0.3s ease-out;
+}
+
+@keyframes bannerSlide {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.offline-banner--offline {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+}
+
+.offline-banner--poor {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+}
+
+.offline-banner__content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.offline-banner__icon {
+  font-size: 14px;
+}
+
+.offline-banner__text {
+  font-weight: 500;
+}
+
+.offline-banner__subtext {
+  font-size: 11px;
+  opacity: 0.85;
+  margin-top: 2px;
+}

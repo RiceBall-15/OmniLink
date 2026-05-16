@@ -1,0 +1,123 @@
+.reconnection-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  animation: slideDown 0.3s ease-out;
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-width: 500px;
+  width: auto;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.reconnection-status--offline {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  border: 1px solid #f87171;
+  color: #991b1b;
+}
+
+.reconnection-status--connecting {
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+  border: 1px solid #60a5fa;
+  color: #1e40af;
+}
+
+.reconnection-status--reconnecting {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  border: 1px solid #f59e0b;
+  color: #92400e;
+}
+
+.reconnection-status--error {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  border: 1px solid #ef4444;
+  color: #991b1b;
+}
+
+.reconnection-status__icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.reconnection-status__spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.reconnection-status__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.reconnection-status__title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.reconnection-status__message {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.reconnection-status__progress {
+  margin-top: 6px;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.reconnection-status__progress-bar {
+  height: 100%;
+  background: currentColor;
+  opacity: 0.4;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.reconnection-status__action {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.reconnection-status__action:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
