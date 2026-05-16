@@ -34,6 +34,7 @@ pub mod structured_logging;
 // V2.8: 新增模块
 pub mod system_metrics;
 pub mod health_aggregator;
+pub mod message_delivery;
 
 pub use error::{AppError, Result};
 pub use auth::{Claims, TokenManager, PasswordManager, CryptoManager};

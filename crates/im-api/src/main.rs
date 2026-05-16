@@ -364,7 +364,12 @@ async fn main() -> anyhow::Result<()> {
             .route("/api/admin/retention/cleanup", post(data_retention::run_cleanup))
             .route("/api/admin/api-keys", post(api_key_handlers::create_api_key))
             .route("/api/admin/api-keys", get(api_key_handlers::get_api_keys))
-            .route("/api/admin/api-keys/:id", delete(api_key_handlers::deactivate_api_key));
+            .route("/api/admin/api-keys/:id", delete(api_key_handlers::deactivate_api_key))
+            // 消息投递可靠性管理
+            .route("/api/admin/delivery/status/:message_id", get(delivery::get_delivery_status))
+            .route("/api/admin/delivery/dead-letters", get(delivery::get_dead_letters))
+            .route("/api/admin/delivery/dead-letters/:message_id/retry", post(delivery::retry_dead_letter))
+            .route("/api/admin/delivery/dead-letters/:message_id", delete(delivery::delete_dead_letter));
 
         // 管理员用户管理 API (Task 99) & 仪表盘 (Task 107)
         let app = app
