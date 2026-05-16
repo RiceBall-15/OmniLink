@@ -1,0 +1,168 @@
+/* ===== 骨架屏基础样式 ===== */
+.skeleton {
+  background: #e5e7eb;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton--text {
+  border-radius: 4px;
+}
+
+.skeleton--circular {
+  border-radius: 50%;
+}
+
+.skeleton--rounded {
+  border-radius: 8px;
+}
+
+.skeleton--rectangular {
+  border-radius: 0;
+}
+
+/* 脉冲动画 */
+.skeleton--pulse {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* 波浪动画 */
+.skeleton--wave {
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: skeleton-wave 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-wave {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ===== 消息列表骨架屏 ===== */
+.skeleton-message-list {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.skeleton-message {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.skeleton-message--right {
+  justify-content: flex-end;
+}
+
+.skeleton-message__content {
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton-message--right .skeleton-message__content {
+  align-items: flex-end;
+}
+
+/* ===== 联系人列表骨架屏 ===== */
+.skeleton-contact-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton-contact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.skeleton-contact__info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== 聊天页面骨架屏 ===== */
+.skeleton-chat-page {
+  display: flex;
+  height: 100%;
+}
+
+.skeleton-chat-sidebar {
+  width: 320px;
+  border-right: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.skeleton-chat-sidebar__header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.skeleton-chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton-chat-main__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.skeleton-chat-main__input {
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* ===== 设置页面骨架屏 ===== */
+.skeleton-settings {
+  padding: 24px;
+  max-width: 600px;
+}
+
+.skeleton-settings__item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+/* ===== 深色模式 ===== */
+@media (prefers-color-scheme: dark) {
+  .skeleton {
+    background: #374151;
+  }
+
+  .skeleton--wave {
+    background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+    background-size: 200% 100%;
+  }
+
+  .skeleton-chat-sidebar {
+    border-right-color: #374151;
+  }
+
+  .skeleton-chat-main__header {
+    border-bottom-color: #374151;
+  }
+
+  .skeleton-chat-main__input {
+    border-top-color: #374151;
+  }
+
+  .skeleton-chat-sidebar__header {
+    border-bottom-color: #374151;
+  }
+}

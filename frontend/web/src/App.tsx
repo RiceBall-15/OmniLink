@@ -1,9 +1,10 @@
-import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { createRouteComponent } from './utils/codeSplitting'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { ChatPageSkeleton, SettingsPageSkeleton } from './components/Skeleton'
 
-// 懒加载页面组件
+// 懒加载页面组件（带骨架屏 Loading）
 const AuthPage = createRouteComponent(
   () => import('./pages/AuthPage'),
   { preload: true }
@@ -11,12 +12,12 @@ const AuthPage = createRouteComponent(
 
 const ChatPage = createRouteComponent(
   () => import('./pages/ChatPage'),
-  { preload: true }
+  { preload: true, fallback: <ChatPageSkeleton /> }
 )
 
 const SettingsPage = createRouteComponent(
   () => import('./pages/SettingsPage'),
-  { preload: false }
+  { preload: false, fallback: <SettingsPageSkeleton /> }
 )
 
 const AdminDashboard = createRouteComponent(
@@ -91,8 +92,9 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <Router>
-      <Routes>
+    <ErrorBoundary name="App">
+      <Router>
+        <Routes>
         {/* 公共路由 */}
         <Route
           path="/auth"
@@ -197,7 +199,8 @@ function App() {
           }
         />
       </Routes>
-    </Router>
+      </Router>
+    </ErrorBoundary>
   )
 }
 
