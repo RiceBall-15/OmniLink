@@ -1220,23 +1220,23 @@
 - [x] 连接质量查询 API - /api/quality/stats endpoint
 - [x] 单元测试（15+ 测试用例）
 
-#### 137. 消息通知投递管道 ⏳
-- [ ] 创建 NotificationPipeline 模块
-- [ ] 实现多通道投递（WebSocket、Push、Email）
-- [ ] 投递优先级队列（@提及 > 普通消息 > 系统通知）
-- [ ] 投递状态跟踪（pending/sent/delivered/failed）
-- [ ] 投递失败自动重试
-- [ ] 单元测试
+#### 137. 消息通知投递管道 ✅
+- [x] 创建 NotificationPipeline 模块（800+ 行）
+- [x] 实现多通道投递（WebSocket、Push、Email）- WebSocketDelivery + channel routing
+- [x] 投递优先级队列（@提及 > 普通消息 > 系统通知）- NotificationPriority: Low/Normal/High/Urgent
+- [x] 投递状态跟踪（pending/sent/delivered/failed）- DeliveryStatus enum
+- [x] 投递失败自动重试 - retry_failed_deliveries() with exponential backoff
+- [x] 单元测试（14+ 测试用例）- 包括速率限制、优先级排序、静默时间、重试机制
 
 ## 📈 V2.8 进度追踪
 
 **V2.8 总任务数**: 8
-**已完成**: 5
+**已完成**: 8
 **进行中**: 0
-**待处理**: 3
+**待处理**: 0
 **受阻**: 0
 
-**V2.8 完成率**: 62.5%
+**V2.8 完成率**: 100%
 
 ---
 
