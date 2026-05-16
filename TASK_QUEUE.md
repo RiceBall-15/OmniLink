@@ -892,7 +892,7 @@
 #### 93. API 响应压缩 ✅
 - [x] 实现 gzip/brotli 压缩中间件
 - [x] 添加压缩配置选项
-- [ ] 测试压缩效果
+- [x] 测试压缩效果（6个集成测试用例已验证：gzip、brotli、无压缩、压缩比、通配符编码、JSON content-type）
 
 #### 94. 错误处理标准化 ✅
 - [x] 统一所有服务的错误响应格式
@@ -1104,7 +1104,7 @@
 - [x] Grafana 仪表板模板（11个面板，含请求率/错误率/WS连接/DB池）
 - [x] 告警规则配置（7条告警规则：服务可用性/错误率/连接数/认证失败等）
 - [x] 日志聚合配置（Loki + Promtail 方案文档）
-- [ ] 分布式追踪集成（Jaeger/Zipkin，待实现）
+- [x] 分布式追踪集成（Jaeger/Zipkin）— ✅ 已完成 (common/src/tracing_setup.rs, TracingLayer + TraceContext + PerformanceTracker)
 
 #### 123. 部署文档与运维手册 ✅ (2026-05-16)
 - [x] 部署指南（Docker Compose / 单机 / 集群三种方式）
@@ -1120,3 +1120,35 @@
 - [x] 添加缺失的依赖（integration tests: base64）
 - [x] 统一错误处理模式（替换30+个unwrap调用为安全错误处理）
 - [x] 代码注释完善（添加to_json_value helper文档注释）
+
+---
+
+## V2.7：弹性与可观测性增强（2026-05-16 启动）
+
+#### 125. 断路器模式实现 🔥
+- [ ] 创建 CircuitBreaker 模块（Closed/Open/HalfOpen 状态机）
+- [ ] 实现可配置的失败阈值和恢复超时
+- [ ] 添加断路器状态查询 API
+- [ ] 单元测试覆盖所有状态转换
+- [ ] 集成到微服务间调用
+
+#### 126. 优雅停机处理 🔥
+- [ ] 实现 GracefulShutdown 信号处理（SIGTERM/SIGINT）
+- [ ] 添加连接排空逻辑（等待活跃请求完成）
+- [ ] WebSocket 连接优雅关闭通知
+- [ ] 超时强制关闭机制
+
+#### 127. API 版本管理 🔥
+- [ ] 实现版本路由中间件（/api/v1/, /api/v2/）
+- [ ] 版本协商支持（Accept header / URL path）
+- [ ] 版本废弃警告 header
+
+#### 128. 消息批量推送优化 🔥
+- [ ] 实现 WebSocket 消息批量发送
+- [ ] 添加消息聚合窗口（100ms 攒批）
+- [ ] 批量 ACK 确认机制
+
+#### 129. 结构化日志增强（JSON格式） 🔥
+- [ ] 实现 JSON 格式日志输出（tracing-json）
+- [ ] 添加请求上下文自动注入（trace_id, user_id）
+- [ ] 日志采样策略（高频端点降采样）
