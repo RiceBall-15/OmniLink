@@ -133,4 +133,29 @@ impl UserRepository {
 
         Ok(rows)
     }
+
+    /// 搜索用户（按用户名或邮箱模糊匹配）
+    pub async fn search(&self, query: &str, limit: i64, offset: i64) -> Result<Vec<User>> {
+        let pattern = format!("%{}%", query);
+        let users = sqlx::query_as::<_, User>(
+            "SELECT * FROM users WHERE username ILIKE $1 OR email ILIKE $1 ORDER BY username LIMIT $2 OFFSET $3"
+        )
+        .bind(&pattern)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(AppError::Database)?;
+
+        Ok(users)
+    }
+
+    /// 获取用户总数
+    pub async fn count(&self) -> Result<i64> {
+        let count = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM users")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(AppError::Database)?;
+        Ok(count)
+    }
 }
