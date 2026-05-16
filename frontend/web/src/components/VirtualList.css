@@ -1,0 +1,238 @@
+/* ===== 虚拟列表容器 ===== */
+.virtual-list {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.virtual-list__spacer {
+  position: relative;
+}
+
+.virtual-list__visible {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+/* ===== 会话列表项 ===== */
+.virtual-conv-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  gap: 12px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+  border-bottom: 1px solid #f1f5f9;
+  box-sizing: border-box;
+}
+
+.virtual-conv-item:hover {
+  background: #f8fafc;
+}
+
+.virtual-conv-item--selected {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+}
+
+.virtual-conv-item:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+}
+
+/* ===== 头像 ===== */
+.virtual-conv-item__avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+}
+
+.virtual-conv-item__avatar img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.virtual-conv-item__avatar-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.virtual-conv-item__type-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 12px;
+  background: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ===== 内容区 ===== */
+.virtual-conv-item__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.virtual-conv-item__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.virtual-conv-item__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.virtual-conv-item__time {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.virtual-conv-item__preview {
+  font-size: 13px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+/* ===== 未读徽章 ===== */
+.virtual-conv-item__badge {
+  flex-shrink: 0;
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== 空状态 ===== */
+.virtual-list__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 32px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.virtual-list__empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.virtual-list__empty-hint {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* ===== 加载状态 ===== */
+.virtual-list__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: #64748b;
+}
+
+.virtual-list__spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== 深色模式 ===== */
+@media (prefers-color-scheme: dark) {
+  .virtual-conv-item {
+    border-bottom-color: #1e293b;
+  }
+
+  .virtual-conv-item:hover {
+    background: #1e293b;
+  }
+
+  .virtual-conv-item--selected {
+    background: #1e3a5f;
+    border-left-color: #3b82f6;
+  }
+
+  .virtual-conv-item__name {
+    color: #e2e8f0;
+  }
+
+  .virtual-conv-item__time {
+    color: #64748b;
+  }
+
+  .virtual-conv-item__preview {
+    color: #94a3b8;
+  }
+
+  .virtual-conv-item__type-badge {
+    background: #1e293b;
+  }
+
+  .virtual-list__empty {
+    color: #64748b;
+  }
+
+  .virtual-list__loading {
+    color: #94a3b8;
+  }
+
+  .virtual-list__spinner {
+    border-color: #334155;
+    border-top-color: #3b82f6;
+  }
+}
