@@ -19,6 +19,7 @@ use im_api::handlers::auth;
 use im_api::handlers::message;
 use im_api::handlers::conversation;
 use im_api::handlers::health::health_check_with_deps;
+use im_api::handlers::health::aggregated_health_check;
 use im_api::handlers::encryption;
 use im_api::handlers::metrics::{get_metrics, get_prometheus_metrics, get_system_metrics, init_start_time};
 use im_api::handlers::audit;
@@ -156,6 +157,8 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         // 健康检查（标准化版本，包含依赖检查）
         .route("/health", get(health_check_with_deps))
+        // 聚合健康检查（支持 deep/shallow 模式）
+        .route("/api/health/status", get(aggregated_health_check))
         .route("/metrics", get(get_metrics))
         .route("/metrics/prometheus", get(get_prometheus_metrics))
 

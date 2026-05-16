@@ -1,7 +1,8 @@
-use axum::{extract::State, Json};
-use serde::Serialize;
+use axum::{extract::State, extract::Query, Json};
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::time::Instant;
+use common::health_aggregator::{HealthAggregator, ServiceHealthStatus};
 
 /// 标准化健康检查响应
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -104,6 +105,123 @@ async fn check_redis_tcp() -> DependencyStatus {
             error: Some(e.to_string()),
         },
     }
+}
+
+/// 聚合健康检查查询参数
+#[derive(Debug, Deserialize)]
+pub struct HealthQuery {
+    /// 检查模式：deep（检查所有依赖）或 shallow（仅检查自身）
+    #[serde(default = "default_mode")]
+    pub mode: String,
+}
+
+fn default_mode() -> String {
+    "deep".to_string()
+}
+
+/// 聚合健康检查响应
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct AggregatedHealthResponse {
+    /// 整体状态：healthy / degraded / unhealthy
+    pub status: String,
+    /// 各服务健康状态
+    pub services: Vec<HealthServiceStatus>,
+    /// 检查耗时（毫秒）
+    pub total_latency_ms: u64,
+    /// 时间戳
+    pub timestamp: i64,
+    /// 版本信息
+    pub version: String,
+}
+
+/// 单个服务健康状态
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct HealthServiceStatus {
+    /// 服务名称
+    pub name: String,
+    /// 是否可用
+    pub healthy: bool,
+    /// 响应时间（毫秒）
+    pub latency_ms: u64,
+    /// 错误信息
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// 聚合健康检查端点
+///
+/// 并发检查所有服务依赖（PostgreSQL、Redis），返回聚合健康报告。
+/// 支持 deep/shallow 检查模式。
+#[utoipa::path(
+    get,
+    path = "/api/health/status",
+    tag = "health",
+    params(
+        ("mode" = Option<String>, Query, description = "检查模式: deep 或 shallow"),
+    ),
+    responses(
+        (status = 200, description = "聚合健康报告", body = AggregatedHealthResponse),
+    )
+)]
+pub async fn aggregated_health_check(
+    State(pool): State<PgPool>,
+    Query(query): Query<HealthQuery>,
+) -> Json<AggregatedHealthResponse> {
+    let aggregator = HealthAggregator::new(5000);
+
+    let services = if query.mode == "shallow" {
+        // shallow 模式：只检查自身，不检查依赖
+        vec![ServiceHealthStatus {
+            name: "im-api".to_string(),
+            healthy: true,
+            latency_ms: 0,
+            error: None,
+            details: None,
+        }]
+    } else {
+        // deep 模式：并发检查所有依赖
+        let db_check = common::health_aggregator::check_postgres(&pool);
+        let redis_check = async {
+            match tokio::net::TcpStream::connect("127.0.0.1:6379").await {
+                Ok(_) => ServiceHealthStatus {
+                    name: "Redis".to_string(),
+                    healthy: true,
+                    latency_ms: 0,
+                    error: None,
+                    details: None,
+                },
+                Err(e) => ServiceHealthStatus {
+                    name: "Redis".to_string(),
+                    healthy: false,
+                    latency_ms: 0,
+                    error: Some(e.to_string()),
+                    details: None,
+                },
+            }
+        };
+
+        let (db_result, redis_result) = tokio::join!(db_check, redis_check);
+        vec![db_result, redis_result]
+    };
+
+    let report = aggregator.check_all(services).await;
+
+    Json(AggregatedHealthResponse {
+        status: report.status,
+        services: report
+            .services
+            .into_iter()
+            .map(|s| HealthServiceStatus {
+                name: s.name,
+                healthy: s.healthy,
+                latency_ms: s.latency_ms,
+                error: s.error,
+            })
+            .collect(),
+        total_latency_ms: report.total_latency_ms,
+        timestamp: report.timestamp,
+        version: report.version,
+    })
 }
 
 #[cfg(test)]
