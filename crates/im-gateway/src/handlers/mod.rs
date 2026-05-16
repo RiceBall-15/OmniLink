@@ -6,6 +6,7 @@
 
 pub mod ws;
 pub mod file_upload;
+pub mod user_management;
 
 use axum::{
     extract::{Json, Path, Query, State},
